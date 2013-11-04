@@ -134,9 +134,9 @@ public:
 		return mach_absolute_time();
 	}
 	
-	pthread_t createThread(pthread_fn_t fn) {
+	pthread_t createThread(pthread_fn_t fn, void* arg = NULL) {
 		pthread_t t;
-		if(::pthread_create(&t, NULL, fn, NULL)) {
+		if(::pthread_create(&t, NULL, fn, arg)) {
 			DEBUG("Failed to create thread");
 			abort();
 		}
@@ -170,27 +170,33 @@ public:
 	}
 	
 	static int fork() {
-		return ::fork();
+		static auto real_fork = (int (*)())dlsym(RTLD_NEXT, "fork");
+		return real_fork();
 	}
 	
 	static signal_handler_t signal(int signum, signal_handler_t handler) {
-		return ::signal(signum, handler);
+		static auto real_signal = (signal_handler_t (*)(int, signal_handler_t))dlsym(RTLD_NEXT, "signal");
+		return real_signal(signum, handler);
 	}
 	
 	static int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact) {
-		return ::sigaction(signum, act, oldact);
+		static auto real_sigaction = (int (*)(int, const struct sigaction*, struct sigaction*))dlsym(RTLD_NEXT, "sigaction");
+		return real_sigaction(signum, act, oldact);
 	}
 	
 	static int sigprocmask(int how, const sigset_t* set, sigset_t* oldset) {
-		return ::sigprocmask(how, set, oldset);
+		static auto real_sigprocmask = (int (*)(int, const sigset_t*, sigset_t*))dlsym(RTLD_NEXT, "sigprocmask");
+		return real_sigprocmask(how, set, oldset);
 	}
 	
 	static int sigsuspend(const sigset_t* mask) {
-		return ::sigsuspend(mask);
+		static auto real_sigsuspend = (int (*)(const sigset_t*))dlsym(RTLD_NEXT, "sigsuspend");
+		return real_sigsuspend(mask);
 	}
 	
 	static int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset) {
-		return ::pthread_sigmask(how, set, oldset);
+		static auto real_pthread_sigmask = (int (*)(int, const sigset_t*, sigset_t*))dlsym(RTLD_NEXT, "pthread_sigmask");
+		return real_pthread_sigmask(how, set, oldset);
 	}
 };
 

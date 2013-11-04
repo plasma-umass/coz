@@ -23,7 +23,7 @@ enum class Mode {
 
 struct Causal : public SigThief<Host, SIGUSR1, SIGUSR2> {
 private:
-	atomic_flag _initialized = ATOMIC_FLAG_INIT;
+	atomic<bool> _initialized = ATOMIC_VAR_INIT(false);
 	
 	Mode _mode = Mode::Idle;
 	uintptr_t _perturb_point;
@@ -40,16 +40,7 @@ private:
 	
 	pthread_t profiler_thread;
 	
-	Causal() {
-		if(!_initialized.test_and_set()) {
-			initialize();
-		}
-	}
-	
-	static void* startProfilerThread(void* arg) {
-		getInstance().profilerThread();
-		return NULL;
-	}
+	Causal() {}
 	
 	void slowdownExperiment(Probe* p, size_t delay, size_t duration, size_t min_trips = 10, size_t max_retries = 10) {	
 		// Measure the baseline progress rate
@@ -92,6 +83,11 @@ private:
 			}
 		}
 	}
+	
+	static void* startProfilerThread(void*) {
+		getInstance().profilerThread();
+		return NULL;
+	}
 
 public:
 	static Causal& getInstance() {
@@ -101,13 +97,16 @@ public:
 	}
 	
 	void initialize() {
-		DEBUG("Initializing");
-		profiler_thread = Host::createThread(startProfilerThread);
+		if(!_initialized.exchange(true)) {
+			DEBUG("Initializing");
+			profiler_thread = Host::createThread(startProfilerThread);
+		}
 	}
 	
 	void shutdown() {
-		DEBUG("Shutting down");
-		_initialized.clear();
+		if(_initialized.exchange(false)) {
+			DEBUG("Shutting down");
+		}
 	}
 	
 	void progress(uintptr_t ret, uintptr_t target) {

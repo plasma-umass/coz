@@ -34,10 +34,7 @@ struct Causal : public ModulePass {
 	Causal() : ModulePass(ID) {}
 	
 	bool isCausalRuntimeFunction(Function& f) {
-		return f.getName() == probe_fn_name
-			|| f.getName() == extern_enter_fn_name
-			|| f.getName() == extern_exit_fn_name
-			|| f.getName() == progress_fn_name;
+		return f.getName().find("__causal") == 0;
 	}
 	
 	virtual bool runOnModule(Module& m) {
@@ -58,7 +55,11 @@ struct Causal : public ModulePass {
 				}
 			} else {
 				runOnFunction(f);
-			}			
+			}
+			
+			if(f.getName() == "main") {
+				f.setName("__real_main");
+			}
 		}
 		return true;
 	}
