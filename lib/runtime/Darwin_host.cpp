@@ -5,7 +5,9 @@
 #include <signal.h>
 
 #include "causal.h"
-#include "interpose.h"
+
+#include "Darwin/host.h"
+#include "Darwin/interpose.h"
 
 int wrapped_fork() {
 	INTERPOSE(wrapped_fork, fork);

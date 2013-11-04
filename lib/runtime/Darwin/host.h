@@ -61,7 +61,7 @@ public:
 			mach_msg_type_number_t count = x86_THREAD_STATE64_COUNT;
 			kern_return_t krc = thread_get_state(_thread, x86_THREAD_STATE64, (thread_state_t)&state, &count);
 			if(krc != KERN_SUCCESS) {
-				DEBUG(4, "Failed to get thread PC");
+				DEBUG("Failed to get thread PC");
 				return 0;
 			}
 			return state.__rip;
@@ -71,13 +71,13 @@ public:
 			mach_msg_type_number_t count = x86_THREAD_STATE32_COUNT;
 			kern_return_t krc = thread_get_state(_thread, x86_THREAD_STATE32, (thread_state_t)&state, &count);
 			if(krc != KERN_SUCCESS) {
-				DEBUG(4, "Failed to get thread PC");
+				DEBUG("Failed to get thread PC");
 				return 0;
 			}
 			return state.__eip;
 			
 		} else {
-			DEBUG(4, "Unsupported architecture");
+			DEBUG("Unsupported architecture");
 			abort();
 		}
 	}
@@ -137,7 +137,7 @@ public:
 	pthread_t createThread(pthread_fn_t fn) {
 		pthread_t t;
 		if(::pthread_create(&t, NULL, fn, NULL)) {
-			DEBUG(4, "Failed to create thread");
+			DEBUG("Failed to create thread");
 			abort();
 		}
 		_ignored_threads.insert(t);
@@ -150,7 +150,7 @@ public:
 		mach_msg_type_number_t count;
 		kern_return_t krc = task_threads(mach_task_self(), &threads, &count);
 		if(krc != KERN_SUCCESS) {
-			DEBUG(4, "Failed to get task threads");
+			DEBUG("Failed to get task threads");
 			abort();
 		}
 		for(size_t i=0; i<count; i++) {

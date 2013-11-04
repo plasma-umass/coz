@@ -32,12 +32,11 @@ struct Probe {
 private:
 	uintptr_t _base;
 	uintptr_t _ret;
-	uintptr_t _target;
 	bool _in_place;
 	CallInst _saved;
 	
-	Probe(uintptr_t base, uintptr_t ret, uintptr_t target) : 
-			_base(base), _ret(ret), _target(target), _in_place(true) {
+	Probe(uintptr_t base, uintptr_t ret) : 
+			_base(base), _ret(ret), _in_place(true) {
 		if(Host::mprotectRange(_base, _ret, PROT_READ | PROT_WRITE | PROT_EXEC)) {
 			perror("Error un-protecting memory");
 			fprintf(stderr, "called mprotect(%p, %p)\n", (void*)_base, (void*)_ret);
@@ -50,7 +49,7 @@ public:
 		uintptr_t call = find_call(ret, target);
 		if(call == 0)
 			return NULL;
-		return new Probe(call, ret, target);
+		return new Probe(call, ret);
 	}
 	
 	uintptr_t getBase() {

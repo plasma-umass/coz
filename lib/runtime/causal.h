@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include <atomic>
+#include <mutex>
 #include <vector>
 
 #include "host.h"
@@ -14,21 +15,35 @@
 
 using namespace std;
 
+enum class Mode {
+	Idle,
+	Slowdown,
+	Speedup
+};
+
 struct Causal : public SigThief<Host, SIGUSR1, SIGUSR2> {
 private:
+	atomic_flag _initialized = ATOMIC_FLAG_INIT;
+	
+	Mode _mode = Mode::Idle;
+	uintptr_t _perturb_point;
+	size_t _delay_size;
+	
+	atomic<size_t> _progress_visits;
+	atomic<size_t> _perturb_visits;
+	
+	mutex _progress_points_mutex;
+	vector<Probe*> _progress_points;
+	
+	mutex _blocks_mutex;
+	vector<Probe*> _blocks;
+	
 	pthread_t profiler_thread;
 	
-	pthread_mutex_t blocks_lock = PTHREAD_MUTEX_INITIALIZER;
-	vector<Probe*> blocks;
-
-	uintptr_t perturbed_point = 0;
-	size_t delay_size = 0;
-	
-	atomic<size_t> progress_count;
-	atomic<size_t> perturbed_count;
-	
 	Causal() {
-		initialize();
+		if(!_initialized.test_and_set()) {
+			initialize();
+		}
 	}
 	
 	static void* startProfilerThread(void* arg) {
@@ -38,21 +53,21 @@ private:
 	
 	void slowdownExperiment(Probe* p, size_t delay, size_t duration, size_t min_trips = 10, size_t max_retries = 10) {	
 		// Measure the baseline progress rate
-		progress_count.store(0);
+		_progress_visits.store(0);
 		Host::wait(duration);
-		size_t control_count = progress_count.load();
+		size_t control_count = _progress_visits.load();
 		
 		// Measure the perturbed progress rate
-		delay_size = delay;
-		perturbed_point = p->getRet();
+		_delay_size = delay;
+		_perturb_point = p->getRet();
 		p->restore();
-		progress_count.store(0);
-		perturbed_count.store(0);
+		_progress_visits.store(0);
+		_perturb_visits.store(0);
 		Host::wait(duration);
-		perturbed_point = 0;
+		_perturb_point = 0;
 		//p->remove();
-		size_t treatment_count = progress_count.load();
-		size_t num_perturbs = perturbed_count.load();
+		size_t treatment_count = _progress_visits.load();
+		size_t num_perturbs = _perturb_visits.load();
 		
 		if(num_perturbs < min_trips || control_count < min_trips || treatment_count < min_trips) {
 			if(num_perturbs > 0 && max_retries > 0) {
@@ -61,8 +76,6 @@ private:
 		} else {
 			float control_progress_period = (float)duration / (float)control_count;
 			float treatment_progress_period = (float)duration / (float)treatment_count;
-			float treatment_perturb_period = (float)duration / (float)num_perturbs;
-			float control_perturb_period = treatment_perturb_period - delay;
 			
 			printf("%p: %f %f\n", (void*)p->getBase(), (float)delay, treatment_progress_period - control_progress_period);
 		}
@@ -71,10 +84,10 @@ private:
 	void profilerThread() {
 		while(true) {
 			// Sleep for 10ms
-			Host::wait(10 * Host::Time::Millisecond);
+			Host::wait(500 * Host::Time::Millisecond);
 			
-			if(blocks.size() > 0) {
-				Probe* p = blocks[rand() % blocks.size()];
+			if(_blocks.size() > 0) {
+				Probe* p = _blocks[rand() % _blocks.size()];
 				slowdownExperiment(p, 1000 * Host::Time::Nanosecond, 100 * Host::Time::Millisecond);
 			}
 		}
@@ -88,50 +101,64 @@ public:
 	}
 	
 	void initialize() {
+		DEBUG("Initializing");
 		profiler_thread = Host::createThread(startProfilerThread);
 	}
 	
-	/*void progress() {
-		progress_count++;
+	void shutdown() {
+		DEBUG("Shutting down");
+		_initialized.clear();
 	}
 	
-	void probe(uintptr_t ret, uintptr_t called_fn) {
-		if(ret == perturbed_point) {
-			perturbed_count++;
-			real_sleep(delay_size);
-		} else {
-			pthread_mutex_lock(&blocks_lock);
-			Probe* probe = Probe::get(ret, called_fn);
+	void progress(uintptr_t ret, uintptr_t target) {
+		if(_mode == Mode::Idle) {
+			_progress_points_mutex.lock();
+			Probe* probe = Probe::get(ret, target);
 			if(probe) {
-				blocks.push_back(probe);
 				probe->remove();
+				_progress_points.push_back(probe);
 			}
-			pthread_mutex_unlock(&blocks_lock);
+			_progress_points_mutex.unlock();
+		} else {
+			_progress_visits++;
 		}
-	}*/
-	
-	static void progress(uintptr_t ret, uintptr_t target) {
-		Probe* probe = Probe::get(ret, target);
-		if(probe)
-			probe->remove();
 	}
 	
-	static void probe(uintptr_t ret, uintptr_t target) {
-		Probe* probe = Probe::get(ret, target);
-		if(probe)
-			probe->remove();
+	void probe(uintptr_t ret, uintptr_t target) {
+		if(_mode == Mode::Slowdown && ret == _perturb_point) {
+			_perturb_visits++;
+			Host::wait(_delay_size);
+			
+		} else if(_mode == Mode::Speedup && ret == _perturb_point) {
+			DEBUG("TODO!");
+			
+		} else {
+			_blocks_mutex.lock();
+			Probe* probe = Probe::get(ret, target);
+			if(probe) {
+				probe->remove();
+				_blocks.push_back(probe);
+			}
+			_blocks_mutex.unlock();
+		}
 	}
 	
-	static void extern_enter(uintptr_t ret, uintptr_t target) {
+	void extern_enter(void* fn, uintptr_t ret, uintptr_t target) {
 		Probe* probe = Probe::get(ret, target);
-		if(probe)
+		if(probe) {
 			probe->remove();
+		} else {
+			DEBUG("Failed to find call to __causal_extern_enter() at %p", (void*)ret);
+		}
 	}
 	
-	static void extern_exit(uintptr_t ret, uintptr_t target) {
+	void extern_exit(uintptr_t ret, uintptr_t target) {
 		Probe* probe = Probe::get(ret, target);
-		if(probe)
+		if(probe) {
 			probe->remove();
+		} else {
+			DEBUG("Failed to find call to __causal_extern_exit() at %p", (void*)ret);
+		}
 	}
 };
 
