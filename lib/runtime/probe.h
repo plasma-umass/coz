@@ -8,6 +8,7 @@
 #include <sys/mman.h>
 
 #include <atomic>
+#include <map>
 #include <mutex>
 
 #include "util.h"
@@ -46,10 +47,19 @@ private:
 
 public:
 	static Probe* get(uintptr_t ret, uintptr_t target) {
-		uintptr_t call = find_call(ret, target);
-		if(call == 0)
-			return NULL;
-		return new Probe(call, ret);
+		static map<uintptr_t, Probe*> probes;
+		static mutex m;
+		m.lock();
+		if(probes.find(ret) == probes.end()) {
+			uintptr_t call = find_call(ret, target);
+			if(call == 0)
+				probes[ret] = NULL;
+			else
+				probes[ret] = new Probe(call, ret);
+		}
+		Probe* p = probes[ret];
+		m.unlock();
+		return p;
 	}
 	
 	uintptr_t getBase() {
@@ -74,7 +84,6 @@ public:
 	void restore() {
 		if(!_in_place) {
 			CallInst* p = (CallInst*)_base;
-			p->opcode = 0xCC;
 			p->offset = _saved.offset;
 			p->opcode = _saved.opcode;
 			_in_place = true;

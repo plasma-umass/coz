@@ -11,8 +11,8 @@
 using namespace std;
 
 enum {
-	WorkerCount = 5,
-	WorkItemCount = 40000,
+	WorkerCount = 4,
+	WorkItemCount = 100000,
 	WeightA = 2,
 	WeightB = 3,
 	WeightC = 1
@@ -36,7 +36,7 @@ void* worker(void* arg) {
 		}
 		
 		// Take an item off the queue and unlock it
-		work_item_t item = work_queue.back();
+		work_item_t item = work_queue.front();
 		work_queue.pop();
 		pthread_mutex_unlock(&work_queue_lock);
 		// Do work

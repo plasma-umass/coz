@@ -1,6 +1,6 @@
 CAUSAL_ROOT = ../..
 CXX = clang++
-CXXFLAGS = -std=c++11 -stdlib=libc++ -nostdinc++ -I/usr/src/libcxx/include -L/usr/src/libcxx/lib
+CXXFLAGS = -g -O0 -std=c++11 -stdlib=libc++ -nostdinc++ -I/usr/src/libcxx/include -L/usr/src/libcxx/lib
 CAUSAL_CXXFLAGS = -Xclang -load -Xclang LLVMCausal.dylib $(CXXFLAGS)
 
 default: work_queue
