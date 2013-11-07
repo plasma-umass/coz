@@ -1,6 +1,7 @@
 #if !defined(CAUSAL_LIB_RUNTIME_PROBE_H)
 #define CAUSAL_LIB_RUNTIME_PROBE_H
 
+#include <cxxabi.h>
 #include <errno.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -75,6 +76,26 @@ public:
 		Probe* p = probes[ret];
 		m.unlock();
 		return p;
+	}
+	
+	static bool removeProbe(uintptr_t ret, uintptr_t target) {
+		Probe* p = Probe::get(ret, target);
+		if(p) {
+			p->remove();
+			return true;
+		} else {
+			return false;
+		}
+	}
+	
+	static bool restoreProbe(uintptr_t ret) {
+		Probe* p = Probe::get(ret);
+		if(p) {
+			p->restore();
+			return true;
+		} else {
+			return false;
+		}
 	}
 	
 	bool isNew() {

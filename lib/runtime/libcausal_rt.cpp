@@ -83,3 +83,7 @@ extern "C" int main(int argc, char** argv) {
 	int result = __real_main(argc, argv);
 	exit(result);
 }
+
+void __causal_signal_entry(int signum, siginfo_t* info, void* p) {
+	Causal::getInstance().onSignal(signum, info, p);
+}
