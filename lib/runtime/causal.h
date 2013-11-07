@@ -8,6 +8,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <string>
 #include <vector>
 
 #include "host.h"
@@ -38,12 +39,13 @@ private:
 	
 	atomic<size_t> _progress_visits;
 	atomic<size_t> _perturb_visits;
+	atomic<size_t> _perturb_time;
 	
 	mutex _progress_points_mutex;
-	vector<Probe*> _progress_points;
+	vector<uintptr_t> _progress_points;
 	
 	mutex _blocks_mutex;
-	vector<Probe*> _blocks;
+	vector<uintptr_t> _blocks;
 	
 	pthread_t profiler_thread;
 	mutex _thread_blocker;
@@ -55,67 +57,71 @@ private:
 		pauseThreads();
 		_perturb_point = perturb->getRet();
 		perturb->restore();
-		for(Probe* p : _progress_points) {
-			p->restore();
+		for(uintptr_t p : _progress_points) {
+			Probe::get(p)->restore();
 		}
 		resumeThreads();
 	}
 	
-	void slowdownExperiment(Probe* perturb, size_t delay, size_t max_duration, size_t min_trips = 50) {	
+	void slowdownExperiment(Probe* p, size_t delay, size_t duration) {	
 		// Set up the mode and delay so probes are not removed, but no delay is added
 		_delay_size.store(0);
 		_mode.store(Mode::Slowdown);
 		
-		// Insert probes at the perturbed point, and all progress points
-		insertProbes(perturb);
+		// Insert probes and wait for threads to resume
+		insertProbes(p);
+		Host::wait(Host::Time::Millisecond);
 		
-		// Measure the baseline progress rate
-		size_t duration = 0;
-		size_t wait_size = Host::Time::Millisecond;
-		
-		// Clear counters, and start to measure the baseline
+		// Clear the counter and run the control experiment
 		_progress_visits.store(0);
-		_perturb_visits.store(0);
+		size_t real_duration = Host::wait(duration);
+		p->addResults(real_duration, _progress_visits);
 		
-		// Repeat the measurement until we have enough samples, or the maximum time has elapsed
-		do {
-			Host::wait(wait_size);
-			duration += wait_size;
-			wait_size *= 2;
-		} while((_progress_visits.load() < min_trips || _perturb_visits.load() < min_trips) 
-						&& duration + wait_size < max_duration / 2);
-		
-		// Read the results. If we didn't get enough samples, abort
-		size_t control_count = _progress_visits.load();
-		if(control_count < min_trips || _perturb_visits.load() < min_trips) {
-			//DEBUG("aborting experiment at %p (progress: %zu, perturb: %zu)", (void*)perturb->getBase(),
-			//		control_count, _perturb_visits.load());
-			return;
-		}
-		
-		// Measure the perturbed progress rate
+		// Clear counters again and run the perturbed experiment
 		_delay_size.store(delay);
 		_progress_visits.store(0);
 		_perturb_visits.store(0);
-		Host::wait(duration);
-		size_t treatment_count = _progress_visits.load();
-		size_t num_perturbs = _perturb_visits.load();
+		_perturb_time.store(0);
+		real_duration = Host::wait(duration);
+		p->addResults(real_duration, _progress_visits, _perturb_time, _perturb_visits);
 		
-		// Return to idle mode. Probes will be removed as they are encountered
+		// Return to idle mode (probes will be removed as encountered)
 		_mode.store(Mode::Idle);
+	}
+	
+	void measureBlock(Probe* p, size_t delay, size_t duration) {	
+		// Set up the mode and delay so probes are not removed, but no delay is added
+		_delay_size.store(0);
+		_mode.store(Mode::Slowdown);
 		
-		float control_progress_period = (float)duration / (float)control_count;
-		float treatment_progress_period = (float)duration / (float)treatment_count;
-		Dl_info info;
-		char* name;
-		if(dladdr((void*)perturb->getBase(), &info) == 0) {
-			name = "unknown";
-		} else {
-			name = abi::__cxa_demangle(info.dli_sname, NULL, NULL, NULL);
-		}
-		DEBUG("%s+%zu: impact = %f (progress: %zu, perturb: %zu)", name, perturb->getBase() - (uintptr_t)info.dli_saddr, 
-				(treatment_progress_period - control_progress_period) / delay,
-				treatment_count, num_perturbs);
+		// Insert probes and wait for threads to resume
+		insertProbes(p);
+		Host::wait(Host::Time::Millisecond);
+		
+		// Clear the counter and run the control experiment
+		_progress_visits.store(0);
+		size_t real_duration = Host::wait(duration);
+		p->addResults(real_duration, _progress_visits);
+		
+		// Clear counters again and run the perturbed experiment
+		_delay_size.store(delay);
+		_progress_visits.store(0);
+		_perturb_visits.store(0);
+		_perturb_time.store(0);
+		real_duration = Host::wait(duration);
+		p->addResults(real_duration, _progress_visits, _perturb_time, _perturb_visits);
+		
+		// Clear counters and run a speedup experiment
+		_progress_visits.store(0);
+		_perturb_visits.store(0);
+		_perturb_time.store(0);
+		_mode.store(Mode::Speedup);
+		
+		real_duration = Host::wait(duration);
+		DEBUG("%zu progress visits, slowdown of %ld in %zu visits", _progress_visits.load(), -_perturb_time, _perturb_visits.load());
+		p->addResults(real_duration, _progress_visits, -_perturb_time, _perturb_visits);
+		
+		_mode.store(Mode::Idle);
 	}
 	
 	void profilerThread() {
@@ -124,8 +130,9 @@ private:
 			//Host::wait(500 * Host::Time::Millisecond);
 
 			if(_blocks.size() > 0) {
-				Probe* p = _blocks[rand() % _blocks.size()];
-				slowdownExperiment(p, Host::Time::Millisecond, 500 * Host::Time::Millisecond);
+				uintptr_t p = _blocks[rand() % _blocks.size()];
+				measureBlock(Probe::get(p), 500 * Host::Time::Microsecond, 50 * Host::Time::Millisecond);
+				//slowdownExperiment(Probe::get(p), 500 * Host::Time::Microsecond, 50 * Host::Time::Millisecond);
 			}
 		}
 	}
@@ -140,7 +147,7 @@ private:
 		_thread_blocker.lock();
 		_thread_arrivals = ATOMIC_VAR_INIT(0);
 		for(pthread_t thread : Host::getThreads()) {
-			if(pthread_kill(thread, SIGUSR2) == 0) {
+			if(pthread_kill(thread, PauseSignal) == 0) {
 				count++;
 			}
 		}
@@ -160,7 +167,8 @@ private:
 	}
 	
 	void onDelay() {
-		DEBUG("TODO!");
+		_perturb_time += Host::wait(_delay_size.load());
+		_perturb_visits++;
 	}
 	
 	static void startSignalHandler(int signum, siginfo_t* info, void* p) {
@@ -184,8 +192,9 @@ public:
 	void initialize() {
 		if(!_initialized.exchange(true)) {
 			DEBUG("Initializing");
-			Host::setSignalHandler(SIGUSR1, startSignalHandler);
-			Host::setSignalHandler(SIGUSR2, startSignalHandler);
+			srand(Host::getTime());
+			Host::setSignalHandler(DelaySignal, startSignalHandler);
+			Host::setSignalHandler(PauseSignal, startSignalHandler);
 			profiler_thread = Host::createThread(startProfilerThread);
 		}
 	}
@@ -193,6 +202,10 @@ public:
 	void shutdown() {
 		if(_initialized.exchange(false)) {
 			DEBUG("Shutting down");
+			
+			for(uintptr_t p : _blocks) {
+				Probe::get(p)->showResults();
+			}
 		}
 	}
 	
@@ -202,7 +215,9 @@ public:
 			Probe* probe = Probe::get(ret, target);
 			if(probe) {
 				probe->remove();
-				_progress_points.push_back(probe);
+				if(probe->isNew()) {
+					_progress_points.push_back(ret);
+				}
 			}
 			_progress_points_mutex.unlock();
 		} else {
@@ -213,17 +228,22 @@ public:
 	void probe(uintptr_t ret, uintptr_t target) {
 		if(_mode == Mode::Slowdown && ret == _perturb_point) {
 			_perturb_visits++;
-			Host::wait(_delay_size);
+			_perturb_time += Host::wait(_delay_size.load());
 			
 		} else if(_mode == Mode::Speedup && ret == _perturb_point) {
-			DEBUG("TODO!");
+			for(pthread_t thread : Host::getThreads()) {
+				if(thread != pthread_self())
+					pthread_kill(thread, DelaySignal);
+			}
 			
 		} else {
 			_blocks_mutex.lock();
 			Probe* probe = Probe::get(ret, target);
 			if(probe) {
 				probe->remove();
-				_blocks.push_back(probe);
+				if(probe->isNew()) {
+					_blocks.push_back(ret);
+				}
 			}
 			_blocks_mutex.unlock();
 		}

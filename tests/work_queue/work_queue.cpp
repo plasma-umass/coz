@@ -4,18 +4,18 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <queue>
-#include <mach/mach_time.h>
+#include <time.h>
 
 #include <causal.h>
 
 using namespace std;
 
 enum {
-	WorkerCount = 4,
-	WorkItemCount = 100000,
-	WeightA = 2,
-	WeightB = 3,
-	WeightC = 1
+	WorkerCount = 2,
+	WorkItemCount = 30000,
+	WeightA = 1,
+	WeightB = 0,
+	WeightC = 0
 };
 
 void work_item_A();
@@ -45,26 +45,26 @@ void* worker(void* arg) {
 	}
 }
 
-void wait(uint64_t nanos) {
-	uint64_t end_time = mach_absolute_time() + nanos;
-	bool done = false;
-	do {
-		kern_return_t ret = mach_wait_until(end_time);
-		if(ret == KERN_SUCCESS)
-			done = true;
-	} while(!done);
-}
-
 void work_item_A() {
-	for(int i=0; i<1000000; i++) {}
+	struct timespec ts;
+	ts.tv_sec = 0;
+	ts.tv_nsec = 1000 * 1000;
+	//ts.tv_nsec = 800000; // Subtracted 200000ns
+	while(nanosleep(&ts, &ts) != 0) {}
 }
 
 void work_item_B() {
-	for(int i=0; i<1000000; i++) {}
+	struct timespec ts;
+	ts.tv_sec = 0;
+	ts.tv_nsec = 1000 * 1000;
+	while(nanosleep(&ts, &ts) != 0) {}
 }
 
 void work_item_C() {
-	for(int i=0; i<1000000; i++) {}
+	struct timespec ts;
+	ts.tv_sec = 0;
+	ts.tv_nsec = 1000 * 1000;
+	while(nanosleep(&ts, &ts) != 0) {}
 }
 
 void fill_work_queue() {

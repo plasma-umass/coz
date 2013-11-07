@@ -27,7 +27,8 @@ private:
 public:
 	enum Time : uint64_t {
 		Nanosecond = 1,
-		Millisecond = 1000 * 1000,
+		Microsecond = 1000 * Nanosecond,
+		Millisecond = 1000 * Microsecond,
 		Second = 1000 * Millisecond
 	};
 	
@@ -43,7 +44,11 @@ public:
 		CommonHost::sigaction(signum, &sa, NULL);
 	}
 	
-	static void wait(uint64_t nanos) {
+	static size_t wait(uint64_t nanos) {
+		if(nanos == 0) {
+			return 0;
+		}
+		
 		uint64_t end_time = mach_absolute_time() + nanos;
 		bool done = false;
 		do {
@@ -51,6 +56,8 @@ public:
 			if(ret == KERN_SUCCESS)
 				done = true;
 		} while(!done);
+		
+		return nanos + mach_absolute_time() - end_time;
 	}
 	
 	static size_t getTime() {
