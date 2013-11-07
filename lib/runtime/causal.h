@@ -12,90 +12,26 @@
 
 #include "engine.h"
 
-using namespace std;
+using namespace std;	
 
 struct Causal : CausalEngine {
 private:
 	atomic<bool> _initialized = ATOMIC_VAR_INIT(false);
+	BaselineResult _baseline;
+	map<uintptr_t, SlowdownResult> _slowdown_results;
+	multimap<uintptr_t, SpeedupResult> _speedup_results;
 	
 	Causal() {}
 	
-	/*void slowdownExperiment(Probe* p, size_t delay, size_t duration) {	
-		// Set up the mode and delay so probes are not removed, but no delay is added
-		_delay_size.store(0);
-		_mode.store(Mode::Slowdown);
-		
-		// Insert probes and wait for threads to resume
-		insertProbes(p);
-		Host::wait(Host::Time::Millisecond);
-		
-		// Clear the counter and run the control experiment
-		_progress_visits.store(0);
-		size_t real_duration = Host::wait(duration);
-		p->addResults(real_duration, _progress_visits);
-		
-		// Clear counters again and run the perturbed experiment
-		_delay_size.store(delay);
-		_progress_visits.store(0);
-		_perturb_visits.store(0);
-		_perturb_time.store(0);
-		real_duration = Host::wait(duration);
-		p->addResults(real_duration, _progress_visits, _perturb_time, _perturb_visits);
-		
-		// Return to idle mode (probes will be removed as encountered)
-		_mode.store(Mode::Idle);
-	}
-	
-	void measureBlock(Probe* p, size_t delay, size_t duration) {	
-		// Set up the mode and delay so probes are not removed, but no delay is added
-		_delay_size.store(0);
-		_mode.store(Mode::Slowdown);
-		
-		// Insert probes and wait for threads to resume
-		insertProbes(p);
-		Host::wait(Host::Time::Millisecond);
-		
-		// Clear the counter and run the control experiment
-		_progress_visits.store(0);
-		size_t real_duration = Host::wait(duration);
-		p->addResults(real_duration, _progress_visits);
-		
-		// Clear counters again and run the perturbed experiment
-		_delay_size.store(delay);
-		_progress_visits.store(0);
-		_perturb_visits.store(0);
-		_perturb_time.store(0);
-		real_duration = Host::wait(duration);
-		p->addResults(real_duration, _progress_visits, _perturb_time, _perturb_visits);
-		
-		// Clear counters and run a speedup experiment
-		_progress_visits.store(0);
-		_perturb_visits.store(0);
-		_perturb_time.store(0);
-		_mode.store(Mode::Speedup);
-		
-		real_duration = Host::wait(duration);
-		DEBUG("%zu progress visits, slowdown of %ld in %zu visits", _progress_visits.load(), -_perturb_time.load(), _perturb_visits.load());
-		p->addResults(real_duration, _progress_visits, -_perturb_time, _perturb_visits);
-		
-		_mode.store(Mode::Idle);
-	}*/
-	
 	void profilerThread() {
 		while(true) {
-			// Sleep for 10ms
-			Host::wait(100 * Host::Time::Millisecond);
+			Host::wait(10 * Time::ms);
 
-			/*if(_blocks.size() > 0) {
-				uintptr_t p = _blocks[rand() % _blocks.size()];
-				measureBlock(Probe::get(p), 500 * Host::Time::Microsecond, 50 * Host::Time::Millisecond);
-				//slowdownExperiment(Probe::get(p), 500 * Host::Time::Microsecond, 50 * Host::Time::Millisecond);
-			}*/
-			ProfileResult r = CausalEngine::collectProfile();
-			set<uintptr_t> unique = r.getUniqueBlocks();
-			DEBUG("%ld unique blocks:", unique.size());
-			for(uintptr_t b : unique) {
-				DEBUG("  %p", (void*)b);
+			ProfileResult profile = CausalEngine::collectProfile();
+			_baseline += CausalEngine::runBaseline(50 * Time::ms);
+			for(uintptr_t b : profile.getUniqueBlocks()) {
+				_slowdown_results[b] += CausalEngine::runSlowdown(b, 50 * Time::ms, 500 * Time::us);
+				_speedup_results.emplace(b, CausalEngine::runSpeedup(b, 50 * Time::ms, (rand() % 500 + 250) * Time::us));
 			}
 		}
 	}
@@ -124,9 +60,19 @@ public:
 		if(_initialized.exchange(false)) {
 			DEBUG("Shutting down");
 			
-			/*for(uintptr_t p : _blocks) {
-				Probe::get(p)->showResults();
-			}*/
+			fprintf(stderr, "Slowdown results:\n");
+			for(auto& r : _slowdown_results) {
+				uintptr_t block = r.first;
+				SlowdownResult& result = r.second;
+				fprintf(stderr, "  %s\n    %f\n", Probe::get(block).getName().c_str(), result.marginalImpact(_baseline));
+			}
+			
+			fprintf(stderr, "\nSpeedup results:\n");
+			for(auto& r : _speedup_results) {
+				uintptr_t block = r.first;
+				SpeedupResult& result = r.second;
+				fprintf(stderr, "%s,%f,%f\n", Probe::get(block).getName().c_str(), result.averageDelay(), result.speedup(_baseline));
+			}
 		}
 	}
 };

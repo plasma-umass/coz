@@ -11,11 +11,11 @@
 using namespace std;
 
 enum {
-	WorkerCount = 2,
-	WorkItemCount = 30000,
-	WeightA = 1,
-	WeightB = 0,
-	WeightC = 0
+	WorkerCount = 8,
+	WorkItemCount = 10000,
+	WeightA = 3,
+	WeightB = 2,
+	WeightC = 1
 };
 
 void work_item_A();

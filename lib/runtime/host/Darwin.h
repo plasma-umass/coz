@@ -20,18 +20,18 @@
 
 using namespace std;
 
+enum Time : uint64_t {
+	ns = 1,
+	us = 1000 * ns,
+	ms = 1000 * us,
+	s = 1000 * ms
+};
+
 class DarwinHost : public CommonHost {
 private:
 	set<pthread_t> _ignored_threads;
 
 public:
-	enum Time : uint64_t {
-		Nanosecond = 1,
-		Microsecond = 1000 * Nanosecond,
-		Millisecond = 1000 * Microsecond,
-		Second = 1000 * Millisecond
-	};
-	
 	static void* findSymbol(const char* sym) {
 		return dlsym(RTLD_DEFAULT, sym);
 	}
