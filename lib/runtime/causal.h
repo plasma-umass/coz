@@ -6,13 +6,22 @@
 #include <stdio.h>
 
 #include <atomic>
+#include <map>
 #include <mutex>
+#include <set>
 #include <string>
 #include <vector>
 
 #include "engine.h"
 
-using namespace std;	
+using namespace std;
+
+struct DebugInfo {
+	uintptr_t block;
+	const char* filename;
+	uint32_t start;
+	uint32_t end;
+};	
 
 struct Causal : CausalEngine {
 private:
@@ -20,6 +29,7 @@ private:
 	BaselineResult _baseline;
 	map<uintptr_t, SlowdownResult> _slowdown_results;
 	multimap<uintptr_t, SpeedupResult> _speedup_results;
+	multimap<uintptr_t, DebugInfo*> _debug_info;
 	
 	Causal() {}
 	
@@ -39,6 +49,18 @@ private:
 	static void* startProfilerThread(void*) {
 		getInstance().profilerThread();
 		return NULL;
+	}
+	
+	set<const DebugInfo*> findDebugInfo(uintptr_t ret) {
+		set<const DebugInfo*> result;
+		auto iter = _debug_info.upper_bound(ret);
+		iter--;
+		uintptr_t base = iter->first;
+		while(iter != _debug_info.begin() && iter->first == base) {
+			result.insert(iter->second);
+			iter--;
+		}
+		return result;
 	}
 
 public:
@@ -65,15 +87,27 @@ public:
 				uintptr_t block = r.first;
 				SlowdownResult& result = r.second;
 				fprintf(stderr, "  %s\n    %f\n", Probe::get(block).getName().c_str(), result.marginalImpact(_baseline));
+				for(const DebugInfo* info : findDebugInfo(block)) {
+					if(info->start != info->end)
+						fprintf(stderr, "    %s : %d - %d\n", info->filename, info->start, info->end);
+					else
+						fprintf(stderr, "    %s : %d\n", info->filename, info->start);
+				}
 			}
 			
-			fprintf(stderr, "\nSpeedup results:\n");
+			/*fprintf(stderr, "\nSpeedup results:\n");
 			for(auto& r : _speedup_results) {
 				uintptr_t block = r.first;
 				SpeedupResult& result = r.second;
 				fprintf(stderr, "%s,%f,%f\n", Probe::get(block).getName().c_str(), result.averageDelay(), result.speedup(_baseline));
-			}
+			}*/
 		}
+	}
+	
+	void debug_info(DebugInfo* info) {
+		// Compiler-omitted blocks will have an address of 1. Skip these.
+		if(info->block == 1) return;
+		_debug_info.emplace(info->block, info);
 	}
 };
 

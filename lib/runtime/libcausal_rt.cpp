@@ -79,17 +79,9 @@ extern "C" {
 
 extern "C" int __real_main(int argc, char** argv);
 
-struct DebugInfo {
-	void* block;
-	const char* filename;
-	uint32_t start;
-	uint32_t end;
-};
-
 extern "C" void __causal_register_debug_info(DebugInfo* info_array, uint32_t elements) {
 	for(size_t i=0; i<elements; i++) {
-		printf("%p:\n  %s:%d-%d\n\n", info_array[i].block,
-			info_array[i].filename, info_array[i].start, info_array[i].end);
+		Causal::getInstance().debug_info(&info_array[i]);
 	}
 }
 

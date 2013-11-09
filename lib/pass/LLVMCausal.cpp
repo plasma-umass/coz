@@ -159,7 +159,7 @@ struct Causal : public ModulePass {
 	}
 	
 	void saveDebugInfo(Module& m, BasicBlock& b, StringRef filename, uint32_t start, uint32_t end) {
-		if(filename.size() == 0) return;
+		if(filename.size() == 0 || start == 0 || end == 0) return;
 		
 		Constant* address;
 		if(&b == &b.getParent()->getEntryBlock()) {
@@ -180,44 +180,49 @@ struct Causal : public ModulePass {
 	}
 	
 	void collectDebugInfo(Module& m, BasicBlock& b) {
-		// Set the starting and previous instructions (same for now)
-		Instruction* start = &b.front();
+		// Set the starting point
+		BasicBlock::iterator i = b.begin();
 		
-		// Get debug metadata for the first instruction. Abort if not found
-		MDNode* start_md = start->getMetadata("dbg");
-		
-		// Get debug info for the starting point
-		StringRef filename;
-		unsigned int starting_line;
-		unsigned int ending_line;
-		bool found = false;
-		
-		if(start_md) {
-			found = true;
-			DILocation start_dbg = DILocation(start_md);
-			filename = start_dbg.getFilename();
-			starting_line = start_dbg.getLineNumber();
-			ending_line = starting_line;
+		// Seek until debug info is found
+		MDNode* md = NULL;
+		while(md == NULL && i != b.end()) {
+			md = i->getMetadata("dbg");
+			i = i->getNextNode();
 		}
+		// Abort if no debug info was found
+		if(i == b.end()) return;
 		
-		for(Instruction& i : b) {
-			MDNode* md = i.getMetadata("dbg");
+		DILocation dbg(md);
+		StringRef filename = dbg.getFilename();
+		unsigned int start = dbg.getLineNumber();
+		unsigned int end = start;
+		
+		// Traverse the remaining instructions
+		while(i != b.end()) {
+			// Get metadata for the current location
+			md = i->getMetadata("dbg");
 			if(md) {
-				DILocation dbg(md);
-				if(dbg.getFilename() != filename) {
-					if(found) saveDebugInfo(m, b, filename, starting_line, ending_line);
-					filename = dbg.getFilename();
-					starting_line = dbg.getLineNumber();
-					ending_line = dbg.getLineNumber();
-					found = true;
+				// Read debug info
+				dbg = DILocation(md);
+				// Does this debug info filename match the current filename?
+				if(dbg.getFilename() == filename && (dbg.getLineNumber() == end || dbg.getLineNumber() == end + 1)) {
+					// Yes. Just update the ending line number
+					end = dbg.getLineNumber();
+					// Update the starting line number, in case of odd zero lines
+					if(start == 0) start = end;
 				} else {
-					ending_line = dbg.getLineNumber();
+					// No. Save the old info and replace the filename, line number, etc.
+					saveDebugInfo(m, b, filename, start, end);
+					filename = dbg.getFilename();
+					start = dbg.getLineNumber();
+					end = start;
 				}
 			}
+			i++;
 		}
-		
-		if(found)
-			saveDebugInfo(m, b, filename, starting_line, ending_line);
+		// Update the starting line number, just in case
+		if(start == 0) start = end;
+		saveDebugInfo(m, b, filename, start, end);
 	}
 	
 	GlobalVariable* createDebugInfoArray(Module& m) {
