@@ -52,14 +52,24 @@ private:
 	}
 	
 	set<const DebugInfo*> findDebugInfo(uintptr_t ret) {
-		set<const DebugInfo*> result;
-		auto iter = _debug_info.upper_bound(ret);
-		iter--;
-		uintptr_t base = iter->first;
-		while(iter != _debug_info.begin() && iter->first == base) {
-			result.insert(iter->second);
-			iter--;
+		// Find the nearest block staring address less than ret
+		uintptr_t block = 0;
+		for(const auto& i : _debug_info) {
+			if(i.first > ret) break;
+			else block = i.first;
 		}
+		
+		// Return if nothing was found
+		if(block == 0) return set<const DebugInfo*>();
+		
+		// Get the range of equal elements. There may be multiple DebugInfos for this block
+		auto range = _debug_info.equal_range(block);
+		// Add all DebugInfos to the result set
+		set<const DebugInfo*> result;
+		for(auto iter = range.first; iter != range.second; iter++) {
+			result.insert(iter->second);
+		}
+		
 		return result;
 	}
 
@@ -89,7 +99,7 @@ public:
 				fprintf(stderr, "  %s\n    %f\n", Probe::get(block).getName().c_str(), result.marginalImpact(_baseline));
 				for(const DebugInfo* info : findDebugInfo(block)) {
 					if(info->start != info->end)
-						fprintf(stderr, "    %s : %d - %d\n", info->filename, info->start, info->end);
+						fprintf(stderr, "    %s : %d-%d\n", info->filename, info->start, info->end);
 					else
 						fprintf(stderr, "    %s : %d\n", info->filename, info->start);
 				}
