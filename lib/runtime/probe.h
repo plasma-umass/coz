@@ -24,14 +24,12 @@ struct CallInst {
 
 class Probe {
 private:
-	atomic<bool> _instrumented;	//< Is the instrumentation active?
 	uintptr_t _base;	//< The base address of the instrumentation call
 	uintptr_t _ret;		//< The return address from the instrumentation call
 	CallInst _saved;	//< The saved call instruction
 	
 	/// Private constructor
 	Probe(uintptr_t base, uintptr_t ret) : _base(base), _ret(ret) {
-		_instrumented.store(true);
 		_saved = *(CallInst*)base;
 		if(Host::mprotectRange(_base, _ret, PROT_READ | PROT_WRITE | PROT_EXEC)) {
 			perror("Error un-protecting memory");
@@ -100,18 +98,20 @@ public:
 	}
 	
 	void remove() {
-		if(_instrumented.exchange(false)) {
-			CallInst* c = (CallInst*)_base;
-			c->opcode = 0xCC;
+		CallInst* c = (CallInst*)_base;
+		if(__sync_val_compare_and_swap(&c->opcode, _saved.opcode, 0xcc) == _saved.opcode) {
 			c->offset = 0x0000441f;
+			__sync_synchronize();
 			c->opcode = 0x0f;
 		}
 	}
 	
 	void restore() {
-		if(!_instrumented.exchange(true)) {
-			CallInst* c = (CallInst*)_base;
-			*c = _saved;
+		CallInst* c = (CallInst*)_base;
+		if(__sync_val_compare_and_swap(&c->opcode, 0x0f, 0xcc) == 0x0f) {
+			c->offset = _saved.offset;
+			__sync_synchronize();
+			c->opcode = _saved.opcode;
 		}
 	}
 };

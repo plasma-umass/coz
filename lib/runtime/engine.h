@@ -8,6 +8,7 @@
 #include <random>
 #include <set>
 
+#include "context.h"
 #include "host.h"
 #include "probe.h"
 #include "sigthief.h"
@@ -18,9 +19,9 @@ extern void __causal_signal_entry(int signum, siginfo_t* info, void* p);
 // Constant definitions
 enum {
 	DelaySignal = SIGUSR1,
-	PauseSignal = SIGUSR2,
+	TrapSignal = SIGTRAP,
 	ProfileSize = 1000,
-	StabilizationTime = Time::ms
+	RelaxTime = 10 * Time::ms
 };
 
 /// The result returned from a baseline measurement of the progress rate
@@ -142,7 +143,7 @@ public:
 };
 
 /// Implements the mechanics of each type of performance experiment, and manages instrumentation
-class CausalEngine : public SigThief<Host, DelaySignal, PauseSignal> {
+class CausalEngine : public SigThief<Host, DelaySignal, TrapSignal> {
 public:
 	BaselineResult runBaseline(size_t duration) {
 		// Set up the mode and counter
@@ -151,11 +152,9 @@ public:
 		
 		// Restore instrumentation at all progress points
 		_progress_points_mutex.lock();
-		pauseThreads();
 		for(uintptr_t p : _progress_points) {
 			Probe::get(p).restore();
 		}
-		resumeThreads();
 		_progress_points_mutex.unlock();
 		
 		// Wait for the specified duration, then end the experiment
@@ -172,12 +171,10 @@ public:
 		
 		// Restore instrumentation for all progress points and the chosen block
 		_progress_points_mutex.lock();
-		pauseThreads();
 		Probe::get(block).restore();
 		for(uintptr_t p : _progress_points) {
 			Probe::get(p).restore();
 		}
-		resumeThreads();
 		_progress_points_mutex.unlock();
 		
 		// Wait for the specified duration, then end
@@ -194,12 +191,10 @@ public:
 		
 		// Restore instrumentation for all progress points and the chosen block
 		_progress_points_mutex.lock();
-		pauseThreads();
 		Probe::get(block).restore();
 		for(uintptr_t p : _progress_points) {
 			Probe::get(p).restore();
 		}
-		resumeThreads();
 		_progress_points_mutex.unlock();
 		
 		// Wait for the specified duration, then end
@@ -216,11 +211,9 @@ public:
 		
 		// Pause threads and install all block probes
 		_blocks_mutex.lock();
-		pauseThreads();
 		for(uintptr_t b : _blocks) {
 			Probe::get(b).restore();
 		}
-		resumeThreads();
 		_blocks_mutex.unlock();
 		
 		// Spin until the profile is complete
@@ -262,10 +255,6 @@ private:
 	atomic<size_t> _delay_count;	//< The number of delays added
 	atomic<size_t> _total_delay;	//< The total delay time added
 	
-	// Variables for pausing and resuming threads
-	atomic<size_t> _thread_arrivals;	//< The number threads that have reached the pause signal handler
-	mutex _thread_blocker;	//< The mutex used to block threads until resumeThreads() is called
-	
 	// Variables for collecting a conventional profile
 	uintptr_t _profile[ProfileSize];	//< The array of observed block probe addresses
 	atomic<size_t> _profile_index;		//< The next open index in the profile array
@@ -279,49 +268,28 @@ private:
 		_delay_size.store(delay);
 	}
 	
-	/// Pause this thread until the thread blocker mutex is released
-	void onPause() {
-		_thread_arrivals++;
-		_thread_blocker.lock();
-		_thread_blocker.unlock();
-	}
-	
-	void pauseThreads() {
-		size_t count = 0;
-		_thread_blocker.lock();
-		_thread_arrivals = ATOMIC_VAR_INIT(0);
-		for(pthread_t t : Host::getThreads()) {
-			if(pthread_kill(t, PauseSignal) == 0) {
-				count++;
-			}
-		}
-		while(_thread_arrivals.load() < count) {
-			__asm__("pause");
-		}
-	}
-	
-	void resumeThreads() {
-		_thread_blocker.unlock();
-		Host::wait(StabilizationTime);
-	}
-	
 	/// Delay the current thread and increment the delay counter
 	void onDelay() {
 		_total_delay += Host::wait(_delay_size);
 		_delay_count++;
 	}
 	
+	void onTrap(Context c) {
+		DEBUG("Saved!");
+		c.ip<uintptr_t>()--;
+	}
+	
 public:
 	/// Set up signal handlers at startup
 	void initialize() {
+		Host::setSignalHandler(SIGTRAP, __causal_signal_entry);
 		Host::setSignalHandler(DelaySignal, __causal_signal_entry);
-		Host::setSignalHandler(PauseSignal, __causal_signal_entry);
 	}
 	
 	/// Called by __causal_signal_entry. Pass control to the appropriate signal handler
 	void onSignal(int signum, siginfo_t* info, void* p) {
-		if(signum == PauseSignal) {
-			onPause();
+		if(signum == TrapSignal) {
+			onTrap(p);
 		} else if(signum == DelaySignal) {
 			onDelay();
 		} else {
