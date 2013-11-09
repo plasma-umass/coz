@@ -1,10 +1,17 @@
-CAUSAL_ROOT = ../..
+TEST_ROOT = ..
 
-installed:
-	@$(MAKE) -C $(CAUSAL_ROOT) install
+default: producer_consumer producer_consumer_clean
+	
+clean:
+	rm producer_consumer producer_consumer_clean
 
-producer_consumer: producer_consumer.cpp installed
-	clang++ -Xclang -load -Xclang LLVMCausal.dylib -I$(CAUSAL_ROOT)/include -o producer_consumer producer_consumer.cpp -lcausal_rt
+include $(TEST_ROOT)/tests.mk
+
+producer_consumer: producer_consumer.cpp $(CAUSAL_DEPS)
+	$(CAUSAL_COMPILE) -o producer_consumer producer_consumer.cpp
+	
+producer_consumer_clean: producer_consumer.cpp
+	$(CLEAN_COMPILE) -o producer_consumer_clean producer_consumer.cpp
 
 test: producer_consumer
 	./producer_consumer

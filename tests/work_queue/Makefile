@@ -1,21 +1,17 @@
-CAUSAL_ROOT = ../..
-CXX = clang++
-CXXFLAGS = -g -std=c++11 -stdlib=libc++ -nostdinc++ -I/usr/src/libcxx/include -L/usr/src/libcxx/lib -I$(CAUSAL_ROOT)/include
-CAUSAL_CXXFLAGS = -DCAUSAL_BUILD -Xclang -load -Xclang LLVMCausal.dylib $(CXXFLAGS)
+TEST_ROOT = ..
 
 default: work_queue work_queue_clean
 	
 clean:
-	rm work_queue
+	rm work_queue work_queue_clean
 
-installed:
-	@$(MAKE) -C $(CAUSAL_ROOT) install
+include $(TEST_ROOT)/tests.mk
 
-work_queue: work_queue.cpp installed /usr/local/lib/LLVMCausal.dylib /usr/local/lib/libcausal_rt.a
-	$(CXX) $(CAUSAL_CXXFLAGS) -o work_queue work_queue.cpp -lcausal_rt
+work_queue: work_queue.cpp $(CAUSAL_DEPS)
+	$(CAUSAL_COMPILE) -o work_queue work_queue.cpp
 	
 work_queue_clean: work_queue.cpp
-	$(CXX) $(CXXFLAGS) -o work_queue_clean work_queue.cpp
+	$(CLEAN_COMPILE) -o work_queue_clean work_queue.cpp
 
 test: work_queue
 	./work_queue

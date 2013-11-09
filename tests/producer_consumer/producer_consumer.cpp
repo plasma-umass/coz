@@ -4,8 +4,10 @@
 #include <pthread.h>
 #include <cassert>
 
+#include <causal.h>
+
 enum {
-	Items = 10000000,
+	Items = 100000,
 	QueueSize = 10,
 	ProducerCount = 5,
 	ConsumerCount = 3
@@ -20,8 +22,6 @@ pthread_mutex_t queue_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t producer_condvar = PTHREAD_COND_INITIALIZER;
 pthread_cond_t consumer_condvar = PTHREAD_COND_INITIALIZER;
 pthread_cond_t main_condvar = PTHREAD_COND_INITIALIZER;
-
-extern "C" __attribute__((noinline)) void causal_progress() {}
 
 void* producer(void* arg) {
 	for(size_t n = 0; n < Items / ProducerCount; n++) {
@@ -53,7 +53,7 @@ void* consumer(void* arg) {
 		consumed++;
 		pthread_mutex_unlock(&queue_lock);
 		pthread_cond_signal(&producer_condvar);
-		causal_progress();
+		CAUSAL_PROGRESS;
 	}
 }
 

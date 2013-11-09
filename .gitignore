@@ -1,7 +1,9 @@
 lib/pass/Release+Asserts
 lib/runtime/Release+Asserts
-tests/foo/foo
 tests/producer_consumer/producer_consumer
+tests/producer_consumer/producer_consumer.dSYM
+tests/producer_consumer/producer_consumer_clean
+tests/producer_consumer/producer_consumer_clean.dSYM
 tests/work_queue/work_queue
 tests/work_queue/work_queue.dSYM
 tests/work_queue/work_queue_clean
