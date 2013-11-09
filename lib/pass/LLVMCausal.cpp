@@ -121,10 +121,7 @@ struct Causal : public ModulePass {
 			}
 			if(insertion_point != NULL) {
 				CallInst::Create(probe_fn, "", insertion_point);
-				Constant* info = getDebugInfo(m, b);
-				if(info != NULL) {
-					debug_info_elements.push_back(info);
-				}
+				collectDebugInfo(m, b);
 			}
 		}
 	}
@@ -138,9 +135,8 @@ struct Causal : public ModulePass {
 	StructType* getDebugInfoType(Module& m) {
 		return StructType::get(
 			Type::getInt8PtrTy(m.getContext()),	// Block address
-			Type::getInt8PtrTy(m.getContext()), // Starting file name string pointer
+			Type::getInt8PtrTy(m.getContext()), // File name
 			Type::getInt32Ty(m.getContext()), 	// Starting line number
-			Type::getInt8PtrTy(m.getContext()), // Ending file name string pointer
 			Type::getInt32Ty(m.getContext()),		// Ending line number
 			NULL);
 	}
@@ -162,25 +158,66 @@ struct Causal : public ModulePass {
 		return ConstantExpr::getGetElementPtr(gv, indices);
 	}
 	
-	Constant* getDebugInfo(Module& m, BasicBlock& b) {
-		MDNode* start = b.front().getMetadata("dbg");
-		MDNode* end = b.back().getMetadata("dbg");
-		if(start && end) {
-			DILocation start_dbg(start);
-			DILocation end_dbg(end);
-			
-			return ConstantStruct::get(
-				getDebugInfoType(m),
-				BlockAddress::get(&b),
-				getStringPointer(m, start_dbg.getFilename()),
-				ConstantInt::get(Type::getInt32Ty(m.getContext()), start_dbg.getLineNumber(), false),
-				getStringPointer(m, end_dbg.getFilename()),
-				ConstantInt::get(Type::getInt32Ty(m.getContext()), end_dbg.getLineNumber(), false),
-				NULL);
-			
+	void saveDebugInfo(Module& m, BasicBlock& b, StringRef filename, uint32_t start, uint32_t end) {
+		if(filename.size() == 0) return;
+		
+		Constant* address;
+		if(&b == &b.getParent()->getEntryBlock()) {
+			address = ConstantExpr::getPointerCast(b.getParent(), Type::getInt8PtrTy(m.getContext()));
 		} else {
-			return NULL;
+			address = BlockAddress::get(&b);
 		}
+		
+		Constant* r = ConstantStruct::get(
+			getDebugInfoType(m),
+			address,
+			getStringPointer(m, filename),
+			ConstantInt::get(Type::getInt32Ty(m.getContext()), start, false),
+			ConstantInt::get(Type::getInt32Ty(m.getContext()), end, false),
+			NULL);
+			
+		debug_info_elements.push_back(r);
+	}
+	
+	void collectDebugInfo(Module& m, BasicBlock& b) {
+		// Set the starting and previous instructions (same for now)
+		Instruction* start = &b.front();
+		
+		// Get debug metadata for the first instruction. Abort if not found
+		MDNode* start_md = start->getMetadata("dbg");
+		
+		// Get debug info for the starting point
+		StringRef filename;
+		unsigned int starting_line;
+		unsigned int ending_line;
+		bool found = false;
+		
+		if(start_md) {
+			found = true;
+			DILocation start_dbg = DILocation(start_md);
+			filename = start_dbg.getFilename();
+			starting_line = start_dbg.getLineNumber();
+			ending_line = starting_line;
+		}
+		
+		for(Instruction& i : b) {
+			MDNode* md = i.getMetadata("dbg");
+			if(md) {
+				DILocation dbg(md);
+				if(dbg.getFilename() != filename) {
+					if(found) saveDebugInfo(m, b, filename, starting_line, ending_line);
+					filename = dbg.getFilename();
+					starting_line = dbg.getLineNumber();
+					ending_line = dbg.getLineNumber();
+					found = true;
+				} else {
+					ending_line = dbg.getLineNumber();
+				}
+			}
+		}
+		
+		if(found)
+			saveDebugInfo(m, b, filename, starting_line, ending_line);
 	}
 	
 	GlobalVariable* createDebugInfoArray(Module& m) {
