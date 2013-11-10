@@ -263,25 +263,25 @@ struct Causal : public ModulePass {
     );
 				
 		// find the current constructor table
-		GlobalVariable *ctors = m.getGlobalVariable("llvm.global_ctors", false);
+		GlobalVariable* ctors = m.getGlobalVariable("llvm.global_ctors", false);
 
 		// if found, copy the entries from the current ctor table to the new one
 		if(ctors) {
-			Constant *initializer = ctors->getInitializer();
-			ConstantArray *ctor_array_const = dyn_cast<ConstantArray>(initializer);
+			Constant* initializer = ctors->getInitializer();
+			ConstantArray* ctor_array_const = dyn_cast<ConstantArray>(initializer);
 
-			if(!ctor_array_const) {
-				errs() << "warning: llvm.global_ctors is not a constant array\n";
-			} else {
+			if(ctor_array_const) {
 				for(auto opi = ctor_array_const->op_begin(); opi != ctor_array_const->op_end(); opi++) {
 					ConstantStruct* entry = dyn_cast<ConstantStruct>(opi->get());
 					ctor_entries.push_back(entry);
 				}
+			} else {
+				errs() << "warning: llvm.global_ctors is not a constant array\n";
 			}
 		}
     
     // set up the constant initializer for the new constructor table
-    Constant *ctor_array_const = ConstantArray::get(
+    Constant* ctor_array_const = ConstantArray::get(
       ArrayType::get(
         ctor_entries[0]->getType(),
         ctor_entries.size()
@@ -290,7 +290,7 @@ struct Causal : public ModulePass {
     );
 
     // create the new constructor table
-    GlobalVariable *new_ctors = new GlobalVariable(
+    GlobalVariable* new_ctors = new GlobalVariable(
       m,
       ctor_array_const->getType(),
       true,
