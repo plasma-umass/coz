@@ -2,6 +2,7 @@ CAUSAL_ROOT = $(TEST_ROOT)/..
 PWD = $(shell pwd)
 TARGET ?= $(notdir $(PWD))
 ARGS ?= 
+LIBS ?= 
 
 CXXFLAGS = -g -std=c++11 -stdlib=libc++ -nostdinc++ \
 	-I/usr/src/libcxx/include -L/usr/src/libcxx/lib -I$(CAUSAL_ROOT)/include
@@ -31,11 +32,11 @@ installed:
 
 bin/%-causal: $(SOURCES) $(INCLUDES) $(CAUSAL_DEPS)
 	@mkdir -p bin
-	$(CAUSAL_COMPILE) -o $@ $(SOURCES)
+	$(CAUSAL_COMPILE) -o $@ $(SOURCES) $(addprefix -l,$(LIBS))
 
 bin/%-clean: $(SOURCES) $(INCLUDES)
 	@mkdir -p bin
-	$(CLEAN_COMPILE) -o $@ $(SOURCES)
+	$(CLEAN_COMPILE) -o $@ $(SOURCES) $(addprefix -l,$(LIBS))
 
 run-clean: bin/$(TARGET)-clean setup
 	$< $(ARGS)

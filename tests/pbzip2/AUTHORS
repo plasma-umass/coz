@@ -1,0 +1,219 @@
+Authors of pbzip2
+-----------------
+Jeff Gilchrist (http://gilchrist.ca/jeff/)
+
+- Using modified producer/consumer threading code from
+  Andrae Muys <andrae@humbug.org.au.au>
+- Uses libbzip2 by Julian Seward (http://www.bzip.org/)
+- Major contributions by Yavor Nikolov <nikolov.javor+pbzip2@gmail.com>
+
+
+Contributions
+-------------
+Bryan Stillwell <bryan@bokeoa.com> - code cleanup, RPM spec, and prep work for inclusion in Fedora Extras
+
+Dru Lemley [http://lemley.net/smp.html] - help with large file support
+
+Kir Kolyshkin <kir@sacred.ru> - autodetection for # of CPUs
+
+Joergen Ramskov <joergen@ramskov.org> - initial version of man page
+
+Peter Cordes <peter@cordes.ca> - code cleanup
+
+Kurt Fitzner <kfitzner@excelcia.org> - port to Windows compilers and decompression throttling
+
+Oliver Falk <oliver@linux-kernel.at> - RPM spec update
+
+Jindrich Novy <jnovy@redhat.com> - code cleanup and bug fixes
+
+Benjamin Reed <ranger@befunk.com> - autodetection for # of CPUs in OSX
+
+Chris Dearman <chris@mips.com> - fixed pthreads race condition that led to pthread resources issues when processing large numbers of files and random segfaults
+
+Richard Russon <ntfs@flatcap.org> - help fix decompression bug
+
+Paul Pluzhnikov <paul@parasoft.com> - fixed minor memory leak
+
+Aníbal Monsalve Salazar <anibal@debian.org> - creates and maintains Debian packages
+
+Steve Christensen - creates and maintains Solaris packages (sunfreeware.com)
+
+Alessio Cervellin - creates and maintains Solaris packages (blastwave.org)
+
+Ying-Chieh Liao <ijliao@FreeBSD.org> - created the FreeBSD port
+
+Andrew Pantyukhin <sat@FreeBSD.org> - maintains the FreeBSD ports and willing to resolve any FreeBSD-related problems
+
+Roland Illig <rillig@NetBSD.org> - creates and maintains NetBSD packages
+
+Matt Turner <mattst88@gmail.com> - code cleanup
+
+Álvaro Reguly <alvaro@reguly.com> - RPM spec update to support SUSE Linux
+
+Ivan Voras <ivoras@freebsd.org> - support for stdin and pipes during compression and CPU detect changes
+
+John Dalton <john@johndalton.info> - code cleanup and bug fix for stdin support
+
+Rene Georgi <rene.georgi@online.de> - code and Makefile cleanup, support for direct decompress and bzcat
+
+René Rhéaume & Jeroen Roovers <jer@xs4all.nl> - patch to support uclibc's lack of a getloadavg function
+
+Reinhard Schiedermeier <rs@cs.hm.edu> - support for tar --use-compress-prog=pbzip2
+
+Elbert Pol - creates and maintains OS/2 packages
+
+Nico Vrouwe <nico@gojelly.com> - support for CPU detection on Win32
+
+Eduardo Terol <EduardoTerol [at] gmx {dot} net> - creates and maintains Windows 32bit package
+
+Nikita Zhuk <nikita@zhuk.fi> - creates and maintains Mac OS X Automator action and workflow/service
+
+Jari Aalto <jari.aalto@cante.net> - added long options to man page and -h output, added --loadavg, --read long options
+
+Scott Emery <emery@sgi.com> - ignore fwrite return and pass chown errors in writeFileMetaData if effective uid root
+
+Steven Chamberlain <steven@pyro.eu.org> - code to support throttling compression to prevent memory exhaustion with slow output pipe
+
+Yavor Nikolov <nikolov.javor+pbzip2@gmail.com> - code to support throttling compression to
+                      prevent memory exhaustion with slow output, cleanup of debug output
+                    - fixed infinite loop on when fileWriter fails to create output file
+                      at start
+                    - allDone renamed to producerDone and added mutex synchronized-access
+                    - Changed fileWriter loop exit condition: now protected from
+                      simultaneous access
+                    - Mutex initialization/disposal refactored
+                    - Throttling loops using thread condition wait
+                    - Fatal error handling refactored
+                    - Removed allDone checks used to signal error (now handled by
+                      handle_error function)
+                    - Prevented dangling threads on switch from Multi to Single threaded
+                    - Inline hint added on a few functions
+                    - Some additional error_handlers placed instead of returns (kill any
+                      dangling threads)
+                    - Cleanup and termination changed in attempt to prevent
+                      signal-handling issues in mulit-threaded environment (still some
+                      problems are observed on signalling e.g. with Ctrl+C)
+                    - Signal-handling in child threads disabled. The goal is to have
+                      single thread only which accepts signals
+                    - Using abort instead of exit on error termination
+                    - Fixed command-line parsing problem (e.g. -m100 -p12 -> 120 CPUs)
+                      (Problem was unterminated strings afer strncpy).
+                    - Signal handlers setup refactored to separate function and
+                      switched from signal to sigaction as per POSIX recommendations
+                    - Added mutexes unlocking before error-termination.
+                    - Termination flag introduced (terminateFlag) to indicate abrupt
+                      termination and facilitate thread finishing in error conditon.
+                    - fileWriter: error_handler instead of exit on write error.
+                    - percentComplete progress printed only if changed.
+                    - signal handling redesigned: using sigwait in separate thread.
+                    - Makefile: -D_POSIX_PTHREAD_SEMANTICS (used in Solaris).
+                    - CHAR_BIT instead of 8 used in a warning message.
+                    - SIGUSR1 signal handling added and used to terminate signal handling
+                      thread. (Resolved issue with pthread_cancel on Windows-Cygwin)
+                    - Fixed wrongly issued exit code 1 instead of 0.
+                    - Corrected some error messages and added a few new ones at signal and
+                      terminator threads join.
+                    - Added support for thread stack size customization (-S# option)
+                      Needs USE_STACKSIZE_CUSTOMIZATION to be defined to enable that option
+                    - Added define of PTHREAD_STACK_MIN if such is not available in
+                      standard headers.
+                    - OutputBuffer usage redesigned as fixed-size circular buffer. Adding
+                      new elements to it refactored as separate function.
+                    - OutputBuffer resizing removed from producer_decompress since now
+                      buffer should be with fixed size.
+                    - Fixed debug print of OutputBuffer now referencing OutputBuffer in
+                      old-style absolute index (in fileWriter and others).
+                    - memstr function implementation simplified (delegated to standard
+                      library function which is doing the same more efficiently).
+                    - Changed some variables from int to size_t to get rid of compiler
+                      warnings (signed + unsigned expressions).
+                    - Sequential processing of input file/pipe/redirect implemented (capsulated
+                      as separate class: BZ2StreamScanner)
+                    - Parallel decompression enabled (now possible with the sequential in)
+                    - Refactored declarations moved to separate header file (pbzip2.h) to
+                      make global definitions available to other source modules
+                    - Progress reporting modified since we don't have number of
+                      blocks up-front with sequential input read (now based on bytes). fileSize
+                      moved as InFileSize global variable for that purpose
+                    - Progress computation in fileWriter moved to QuietMode != 0
+                      (not needed to do it if we won't print it)
+                    - disposeMemory helper function implemented to ease memory disposal
+                    - Processing functions of threads declared as extern "C" since pthread_t
+                      requires plain "C" calling convention instead of the default "C++"
+                    - pthread_mutex_{lock|unlock} replaced with safe_mutex_{lock|unlock}
+                      where appropriate (to prevent from issues like out of sys mutexes)
+                    - Makefile modified to include the new source files for BZ2StreamScanner
+                    - Makefile refined (library flags specified in LDFLAGS variable)
+                    - Makefile.solaris.sunstudio included as example makefile for Solaris
+                      and SunStudio 12 C++ compiler
+                    - bz2HeaderZero in main initialized to value 0x90 > 127 which is in general
+                      out of char type range. Changed to unsigned along with tmpBuff to avoid
+                      some compiler(e.g. c++0x)/runtime warnings/errors.
+                    - Some thread conditions signalling added on termination requested to ease
+                      termination of blocked on conditions threads
+                    - Other pthread_* calls (signal, wait) migrated to safe_* wrappers to
+                      handle error return codes (and simplify code where already handled)
+                    - Timed pthread cond waits refactored to separate function and moved to
+                      debug sections only; non-timed wait used in non-debug mode. Signalling
+                      consitions to wake threads waiting on these conditions guaranteed.
+                    - memstr function templetized to allow working with other data types but
+                      not only char (e.g. unsigned char)
+                    - safe_cond_broadcast implemented and additional signalling added at
+                      fileWriter end to prevent consumers blocking at end.
+                    - Signal error when the input file doesn't contain any bzip2 headers.
+                    - Fixed problems with not-handling zero-file length special header on compression
+                      and decompression.
+                    - Signalling error on stdin decompression when file doesn't start with
+                      correct bzip2 magic header.
+                    - Implemented outputBufferInit(size_t size) utility function for output
+                      buffer initialization/resetting.
+                    - Plain C headers moved to extern "C" section.
+                    - Modified file-names handling to avoid issues with file-sizes > 2040
+                    - Fixed out of array pointer for OutFilename in strncasecmp calls
+                    - A few other minor modifications
+  				    - consumer_decompress using low-level API now to improve performance of
+     				  long bzip2 streams
+   				    - Fixed issue in safe_cond_timed_wait which caused segmentation fault
+     				  when compiled in DEBUG mode
+   				    - Handle decompression of very long bz2 streams incrementally instead of
+    				  loading whole streams in memory at once
+   				    - Progress calculation changed: fixed issue when large file support is
+     				  disabled and enabled monitoring of segmented long bzip2 streams
+   				    - Fixed issue with Sun Studio compiler - required explicit declaration
+     				  of static const members in .cpp.
+   				    - consumer_decompress throttling loosed a bit to prevent potential
+     				  deadlock/infinite loop in certain situations. (Addition to all-empty-block
+     				  tails in OutputBuffer is non-blocking now).
+   				    - fixed error message for block size range (max size was wrong)
+   				    - consumer_decompress: fixed bug which caused hang while decompressing
+     				  prematurely truncated bzip2 stream.
+   				    - modified fileWriter to prevent from throttling when output buffers are full
+     				  (condition signalling added when block is ready to wake up sleeping writer early)
+                    - Debug print bug fixed in queue::remove.
+                    - Debuging and error handling improvements and refactoring.
+                    - Fixed hang on decompress of some truncated archives (bug #590225).
+                    - Implemented --ignore-trailing-garbage feature (bug #594868)
+                    - Fixed hang on decompress of some truncated archives (bug #590225)
+                    - Fixed hang on decompress with --ignore-trailing-garbage=1 and higher
+                      numCPU (e.g. > 2) (bug #740502)
+                    - Default extension on decompress of .tbz2 changed to .tar for
+                      bzip2 compatibility (bug #743639)
+                    - Print trailing garbage errors even when in quiet mode (bug #743635)
+                    - Fixed hang on decompress with --ignore-trailing-garbage=1 and higher
+                      numCPU (e.g. > 2) (bug #740502)
+                    - Default extension on decompress of .tbz2 changed to .tar for
+                      bzip2 compatibility (bug #743639)
+                    - Print trailing garbage errors even when in quiet mode (bug #743635)
+                    - Fixed excessive output permissions while compress/decompress
+                      is in progress (bug #807536)
+                    - Prevent deletion of input files on error (bug #874543)
+                    - Add more detailed kernel error messages - inspired by Gordon's patch (bug #874605)
+                    - Error-handling improvements - mainly for multi-archive scenarios (bug #883782)
+
+David James <davidjames at chromium.org> - provided patch to fix deadlock due to unsynchronized broadcast (bug #876686)
+Gordon - provided patch for improving I/O error messages (bug #874605)
+
+
+Special thanks for suggestions and testing
+-------------------------------------------
+Phillippe Welsh, James Terhune, Dru Lemley, Bryan Stillwell, George Chalissery, Kir Kolyshkin, Madhu Kangara, Mike Furr, Joergen Ramskov, Kurt Fitzner, Peter Cordes, Oliver Falk, Jindrich Novy, Benjamin Reed, Chris Dearman, Richard Russon, Aníbal Monsalve Salazar, Jim Leonard, Paul Pluzhniko, Robert Archard, Coran Fisher, Ken Takusagawa, David Pyke, Matt Turner, Damien Ancelin, Álvaro Reguly, Ivan Voras, John Dalton, Sami Liedes, Rene Georgi, René Rhéaume, Jeroen Roovers, Reinhard Schiedermeier, Kari Pahula, Elbert Pol, Nico Vrouwe, Eduardo Terol, Samuel Thibault, Michael Fuereder, Jari Aalto, Scott Emery, Steven Chamberlain, Yavor Nikolov, Nikita Zhuk, Joao Seabra, Conn Clark, Mark A. Haun, Tim Bielawa, Michal Gorny, Mikolaj Habdank, Christian Kujau, Marc-Christian Petersen, Piero Ottuzzi, Ephraim Ofir, Laszlo Ersek, Dima Tisnek.
