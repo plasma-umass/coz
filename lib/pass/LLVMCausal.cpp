@@ -5,12 +5,15 @@
 
 #define DEBUG_TYPE "causal"
 
+#include <stdint.h>
+
 #include <llvm/DebugInfo.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/TypeBuilder.h>
 #include <llvm/Pass.h>
 #include <llvm/PassManager.h>
 #include <llvm/PassRegistry.h>
@@ -18,20 +21,36 @@
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
 using namespace llvm;
+using namespace types;
+
+struct DebugInfo {
+	void* block;
+	const char* filename;
+	uint32_t start;
+	uint32_t end;
+};
+
+namespace llvm {
+	template<bool xcompile>
+	class TypeBuilder<DebugInfo, xcompile> {
+	public:
+		static StructType *get(LLVMContext &c) {
+			return StructType::get(
+				TypeBuilder<i<8>*, xcompile>::get(c),
+				TypeBuilder<i<8>*, xcompile>::get(c),
+				TypeBuilder<i<32>, xcompile>::get(c),
+				TypeBuilder<i<32>, xcompile>::get(c),
+				NULL);
+		}
+	};
+}
 
 struct Causal : public ModulePass {
 	static char ID;
 	
 	Constant* probe_fn;
-	const StringRef probe_fn_name = "__causal_probe";
-	
 	Constant* extern_enter_fn;
-	const StringRef extern_enter_fn_name = "__causal_extern_enter";
-	
 	Constant* extern_exit_fn;
-	const StringRef extern_exit_fn_name = "__causal_extern_exit";
-	
-	const StringRef progress_fn_name = "__causal_progress";
 	
 	std::vector<Constant*> debug_info_elements;
 	
@@ -42,13 +61,20 @@ struct Causal : public ModulePass {
 	}
 	
 	virtual bool runOnModule(Module& m) {
-		// Probe function has type void()
-		probe_fn = m.getOrInsertFunction(probe_fn_name, Type::getVoidTy(m.getContext()), NULL);
+		// Declare the basic block probe function
+		probe_fn = m.getOrInsertFunction(
+			"__causal_probe",
+			TypeBuilder<void(), true>::get(m.getContext()));
+		
 		// Extern enter function has type void(void*)
-		extern_enter_fn = m.getOrInsertFunction(extern_enter_fn_name, 
-			Type::getVoidTy(m.getContext()), Type::getInt8PtrTy(m.getContext()), NULL);
+		extern_enter_fn = m.getOrInsertFunction(
+			"__causal_extern_enter", 
+			TypeBuilder<void(i<8>*), true>::get(m.getContext()));
+		
 		// Extern exit function has type void()
-		extern_exit_fn = m.getOrInsertFunction(extern_exit_fn_name, Type::getVoidTy(m.getContext()), NULL);
+		extern_exit_fn = m.getOrInsertFunction(
+			"__causal_extern_exit",
+			TypeBuilder<void(), true>::get(m.getContext()));
 		
 		for(Function& f : m) {
 			if(f.isIntrinsic()) {
@@ -66,13 +92,11 @@ struct Causal : public ModulePass {
 			}
 		}
 		
-		GlobalVariable* info = createDebugInfoArray(m);
+		Constant* info = createDebugInfoArray(m);
+		
 		Constant* register_debug_info_fn = m.getOrInsertFunction(
 			"__causal_register_debug_info",
-			Type::getVoidTy(m.getContext()),
-			info->getType(),	// The debug info array pointer
-			Type::getInt32Ty(m.getContext()),	// The number of debug info elements
-			NULL);
+			TypeBuilder<void(DebugInfo*, i<32>), true>::get(m.getContext()));
 		
     Function* ctor = makeConstructor(m, "__causal_module_ctor");
     BasicBlock* ctor_bb = BasicBlock::Create(m.getContext(), "", ctor);
@@ -133,12 +157,13 @@ struct Causal : public ModulePass {
 	}
 	
 	StructType* getDebugInfoType(Module& m) {
-		return StructType::get(
+		return TypeBuilder<DebugInfo, true>::get(m.getContext());
+		/*return StructType::get(
 			Type::getInt8PtrTy(m.getContext()),	// Block address
 			Type::getInt8PtrTy(m.getContext()), // File name
 			Type::getInt32Ty(m.getContext()), 	// Starting line number
 			Type::getInt32Ty(m.getContext()),		// Ending line number
-			NULL);
+			NULL);*/
 	}
 	
 	Constant* getStringPointer(Module& m, StringRef s) {
@@ -225,12 +250,18 @@ struct Causal : public ModulePass {
 		saveDebugInfo(m, b, filename, start, end);
 	}
 	
-	GlobalVariable* createDebugInfoArray(Module& m) {
+	Constant* createDebugInfoArray(Module& m) {
 		Constant* init = ConstantArray::get(
 			ArrayType::get(getDebugInfoType(m), debug_info_elements.size()),
 			debug_info_elements);
 		
-		return new GlobalVariable(m, init->getType(), true, GlobalVariable::InternalLinkage, init, "__causal_debug_info");
+		GlobalVariable* gv = new GlobalVariable(m, init->getType(), true, GlobalVariable::InternalLinkage, init, "__causal_debug_info");
+		
+		std::vector<Constant*> indices;
+		indices.push_back(ConstantInt::get(Type::getInt32Ty(m.getContext()), 0, false));
+		indices.push_back(ConstantInt::get(Type::getInt32Ty(m.getContext()), 0, false));
+		
+		return ConstantExpr::getGetElementPtr(gv, indices);
 	}
 	
   Function* makeConstructor(Module& m, StringRef name) {
