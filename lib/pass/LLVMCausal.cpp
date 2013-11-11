@@ -49,8 +49,7 @@ struct Causal : public ModulePass {
 	static char ID;
 	
 	Constant* probe_fn;
-	Constant* extern_enter_fn;
-	Constant* extern_exit_fn;
+	Constant* extern_call_fn;
 	
 	std::vector<Constant*> debug_info_elements;
 	
@@ -67,14 +66,9 @@ struct Causal : public ModulePass {
 			TypeBuilder<void(), true>::get(m.getContext()));
 		
 		// Extern enter function has type void(void*)
-		extern_enter_fn = m.getOrInsertFunction(
-			"__causal_extern_enter", 
+		extern_call_fn = m.getOrInsertFunction(
+			"__causal_extern_call", 
 			TypeBuilder<void(i<8>*), true>::get(m.getContext()));
-		
-		// Extern exit function has type void()
-		extern_exit_fn = m.getOrInsertFunction(
-			"__causal_extern_exit",
-			TypeBuilder<void(), true>::get(m.getContext()));
 		
 		for(Function& f : m) {
 			if(f.isIntrinsic()) {
@@ -119,20 +113,10 @@ struct Causal : public ModulePass {
 			User* user = *iter;
 			if(isa<CallInst>(user)) {
 				CallInst* call = dyn_cast<CallInst>(user);
-				// Don't instrument the call if this function does not return, returns twice,
-				// is a tail call, or has the NoReturn attribute
-				if(call->doesNotReturn() || call->canReturnTwice() || 
-						call->isTailCall() || call->hasFnAttr(Attribute::NoReturn)) {
-					errs() << "Skipping call to function " << f.getName() << " in " << 
-						call->getParent()->getParent()->getName() << "\n";
-				} else {
-					// Cast the external function pointer to an i8* (a.k.a. void*)
-					Value* arg = new BitCastInst(&f, Type::getInt8PtrTy(f.getContext()), "_extern_fn", call);
-					// Call the extern_enter function before calling the external function
-					CallInst::Create(extern_enter_fn, arg, "", call);
-					// Call the extern_exit function after returning
-					CallInst::Create(extern_exit_fn, "", call->getNextNode());
-				}
+				// Cast the external function pointer to an i8* (a.k.a. void*)
+				Value* arg = new BitCastInst(&f, Type::getInt8PtrTy(f.getContext()), "_extern_fn", call);
+				// Call the extern_call function before the call
+				CallInst::Create(extern_call_fn, arg, "", call);
 			}
 		}
 	}

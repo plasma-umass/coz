@@ -381,12 +381,7 @@ public:
 	}
 	
 	/// Called by the instrumented program before calling an external function
-	void extern_enter(void* fn, uintptr_t ret, uintptr_t target) {
-		Probe::get(ret, target).remove();
-	}
-	
-	/// Called by the instrumented program after calling an external function
-	void extern_exit(uintptr_t ret, uintptr_t target) {
+	void extern_call(void* fn, uintptr_t ret, uintptr_t target) {
 		Probe::get(ret, target).remove();
 	}
 };

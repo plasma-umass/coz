@@ -35,13 +35,13 @@ private:
 	
 	void profilerThread() {
 		while(true) {
-			Host::wait(100 * Time::ms);
+			Host::wait(10 * Time::ms);
 			DEBUG("Here");
 			ProfileResult profile = CausalEngine::collectProfile();
 			_baseline += CausalEngine::runBaseline(50 * Time::ms);
 			for(uintptr_t b : profile.getUniqueBlocks()) {
 				_slowdown_results[b] += CausalEngine::runSlowdown(b, 50 * Time::ms, 500 * Time::us);
-				_speedup_results.emplace(b, CausalEngine::runSpeedup(b, 50 * Time::ms, (rand() % 10000 + 500) * Time::us));
+				//_speedup_results.emplace(b, CausalEngine::runSpeedup(b, 50 * Time::ms, (rand() % 10000 + 500) * Time::us));
 			}
 		}
 	}
@@ -111,12 +111,12 @@ public:
 				}
 			}
 			
-			/*fprintf(stderr, "\nSpeedup results:\n");
+			fprintf(stderr, "\nSpeedup results:\n");
 			for(auto& r : _speedup_results) {
 				uintptr_t block = r.first;
 				SpeedupResult& result = r.second;
 				fprintf(stderr, "%s,%f,%f\n", Probe::get(block).getName().c_str(), result.averageDelay(), result.speedup(_baseline));
-			}*/
+			}
 		}
 	}
 

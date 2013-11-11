@@ -21,14 +21,9 @@ extern "C" {
 		Causal::getInstance().probe(ret, (uintptr_t)__causal_probe);
 	}
 
-	void __causal_extern_enter(void* p) {
+	void __causal_extern_call(void* p) {
 		uintptr_t ret = (uintptr_t)__builtin_return_address(0);
-		Causal::getInstance().extern_enter(p, ret, (uintptr_t)__causal_extern_enter);
-	}
-
-	void __causal_extern_exit() {
-		uintptr_t ret = (uintptr_t)__builtin_return_address(0);
-		Causal::getInstance().extern_exit(ret, (uintptr_t)__causal_extern_exit);
+		Causal::getInstance().extern_call(p, ret, (uintptr_t)__causal_extern_call);
 	}
 }
 
