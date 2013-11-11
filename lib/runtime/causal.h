@@ -35,14 +35,20 @@ private:
 	
 	void profilerThread() {
 		while(true) {
-			Host::wait(10 * Time::ms);
-			DEBUG("Here");
-			ProfileResult profile = CausalEngine::collectProfile();
+			//Host::wait(10 * Time::ms);
+			//DEBUG("Here");
+			
+			// Find a block that appear to be executing
+			uintptr_t block = CausalEngine::getActiveBlock(100 * Time::ms);
+			
+			// Run a slowdown experiment on the chosen block
+			_slowdown_results[block] += CausalEngine::runSlowdown(block, 50 * Time::ms, 500 * Time::us);
+			
+			// Run a speedup experiment on the chosen block
+			//_speedup_results.emplace(b, CausalEngine::runSpeedup(b, 50 * Time::ms, (rand() % 10000 + 500) * Time::us));
+			
+			// Get the baseline progress rate
 			_baseline += CausalEngine::runBaseline(50 * Time::ms);
-			for(uintptr_t b : profile.getUniqueBlocks()) {
-				_slowdown_results[b] += CausalEngine::runSlowdown(b, 50 * Time::ms, 500 * Time::us);
-				//_speedup_results.emplace(b, CausalEngine::runSpeedup(b, 50 * Time::ms, (rand() % 10000 + 500) * Time::us));
-			}
 		}
 	}
 	

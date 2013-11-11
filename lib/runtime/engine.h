@@ -5,6 +5,8 @@
 #include <pthread.h>
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <mutex>
 #include <random>
 #include <set>
@@ -22,7 +24,7 @@ enum {
 	DelaySignal = SIGUSR1,
 	TrapSignal = SIGTRAP,
 	ProfileSize = 1000,
-	RelaxTime = 10 * Time::ms
+	TargetSeekTime = 100 * Time::ms
 };
 
 /// The result returned from a baseline measurement of the progress rate
@@ -120,29 +122,6 @@ public:
 	}
 };
 
-/// The result returned from a whole-program profile
-class ProfileResult {
-private:
-	uintptr_t* _profile;
-	default_random_engine _generator;
-	uniform_int_distribution<size_t> _rng;
-	
-public:
-	ProfileResult(uintptr_t* profile) : _profile(profile), _rng(0, ProfileSize - 1) {}
-	
-	uintptr_t getRandomBlock() {
-		return _profile[_rng(_generator)];
-	}
-	
-	set<uintptr_t> getUniqueBlocks() {
-		set<uintptr_t> unique;
-		for(size_t i=0; i<ProfileSize; i++) {
-			unique.insert(_profile[i]);
-		}
-		return unique;
-	}
-};
-
 /// Implements the mechanics of each type of performance experiment, and manages instrumentation
 class CausalEngine : public SigThief<Host, DelaySignal, TrapSignal, SIGSEGV, SIGBUS> {
 public:
@@ -205,27 +184,39 @@ public:
 		return SpeedupResult(real_duration, _total_delay, _progress_visits, _block_visits, _delay_count);
 	}
 	
-	ProfileResult collectProfile() {
-		// Reset the profile index
-		_profile_index.store(0);
-		_mode.store(Profile);
+	uintptr_t getActiveBlock(size_t target_time) {
+		// Use the estimated rate of block discovery to compute a trap probability
+		double p_trap = _period_estimate / target_time;
+		// Non-zero probability, please
+		if(p_trap < 0.001) p_trap = 0.001;
 		
-		// Pause threads and install all block probes
-		_blocks_mutex.lock();
-		for(uintptr_t b : _blocks) {
-			Probe::get(b).restore();
-		}
-		_blocks_mutex.unlock();
+		bernoulli_distribution dist(p_trap);
 		
-		// Spin until the profile is complete
-		while(_profile_index < ProfileSize) {
-			__asm__("pause");
-		}
+		// Set up for seeking mode
+		unique_lock<mutex> l(_blocks_mutex);
+		_mode.store(Seeking);
+		_chosen_block.store(0);
 		
-		// Return to idle mode and allow probes to clear on their own
-		_mode.store(Idle);
+		size_t start_time = Host::getTime();
+		do {
+			// Place traps on a random subset of blocks
+			for(uintptr_t b : _blocks) {
+				if(dist(_rng)) {
+					Probe::get(b).restore();
+				}
+			}
+			// Wait
+			_seeking_cv.wait_for(l, chrono::nanoseconds(2*target_time));
+		} while(_mode == Seeking);
 		
-		return ProfileResult(_profile);
+		// Estimate the period for this run
+		size_t elapsed = Host::getTime() - start_time;
+		double new_period_estimate = elapsed * p_trap;
+		
+		// Take a small step toward the new estimate (moving average)
+		_period_estimate = (4 * _period_estimate + new_period_estimate) / 5;
+		
+		return _chosen_block;
 	}
 	
 private:
@@ -235,7 +226,7 @@ private:
 		Baseline,
 		Slowdown,
 		Speedup,
-		Profile
+		Seeking
 	};
 	
 	atomic<Mode> _mode = ATOMIC_VAR_INIT(Mode::Idle);	//< The current mode
@@ -256,9 +247,10 @@ private:
 	atomic<size_t> _delay_count;	//< The number of delays added
 	atomic<size_t> _total_delay;	//< The total delay time added
 	
-	// Variables for collecting a conventional profile
-	uintptr_t _profile[ProfileSize];	//< The array of observed block probe addresses
-	atomic<size_t> _profile_index;		//< The next open index in the profile array
+	// Active block seeking variables
+	condition_variable _seeking_cv;			//< CV used to sleep while seeking (with _blocks_mutex)
+	default_random_engine _rng;					//< Random generator engine for setting traps
+	double _period_estimate = Time::s;	//< Estimate of the time between unique block executions (ns)
 	
 	void setUp(uintptr_t block = 0, size_t delay = 0) {
 		_progress_visits.store(0);
@@ -364,12 +356,15 @@ public:
 			}
 			Host::unlockThreads();
 			
-		} else if(_mode == Profile) {
-			// Increment the profile index, and save the previously set value
-			size_t index = _profile_index++;
-			// Add the probe's return address to the profile, if the profile isn't finished
-			if(index < ProfileSize)
-				_profile[index] = ret;
+		} else if(_mode == Seeking) {
+			// Lock the set of blocks
+			unique_lock<mutex> l(_blocks_mutex);
+			// Record the current block
+			_chosen_block.store(ret);
+			// End seeking mode
+			_mode.store(Idle);
+			// Inform the profiler thread that a block has been selected
+			_seeking_cv.notify_one();
 			
 		} else {
 			// Remove probes when in idle mode, or when the probe does not match the chosen block
