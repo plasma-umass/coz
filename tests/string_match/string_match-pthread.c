@@ -296,7 +296,7 @@ int main(int argc, char *argv[]) {
     // Setup splitter args
 
 	//dprintf("Encrypted Size is %ld\n",finfo_encrypt.st_size);
-	dprintf("Keys Size is %" PRId64 "\n",finfo_keys.st_size);
+	dprintf("Keys Size is %ld\n",finfo_keys.st_size);
 
     str_data_t str_data;
 

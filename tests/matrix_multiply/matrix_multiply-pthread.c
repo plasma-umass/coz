@@ -105,7 +105,7 @@ void matrixmult_splitter(void *data_in)
 			    out->length = data->matrix_len - i*req_rows;
 
 	    data->row_num += out->length;
-	    dprintf("Allocated rows is %" PRIdPTR " data->row_num is %d\n",out->length, data->row_num);
+	    dprintf("Allocated rows is % data->row_num is %d\n",out->length, data->row_num);
 	    fflush(stdout);
 
 	    CHECK_ERROR(pthread_create(&tid[i], &attr, matrixmult_map, (void*)out) != 0);
