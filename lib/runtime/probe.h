@@ -13,8 +13,6 @@
 #include <mutex>
 #include <string>
 
-#include "util.h"
-
 using namespace std;
 
 struct CallInst {
@@ -69,14 +67,14 @@ public:
 	
 	/// Use dynamic loader information to locate symbols for this block
 	string getName() {
-		string result;
 		Dl_info info;
-		if(dladdr((void*)_ret, &info) == 0) {
+		if(dladdr((void*)_ret, &info) == 0 || info.dli_sname == NULL) {
 			char buf[19];
 			sprintf(buf, "<%p>", (void*)_ret);
-			result = buf;
+			return string(buf);
 			
 		} else {
+			string result;
 			// A symbol was found. Try to demangle it
 			char* demangled = abi::__cxa_demangle(info.dli_sname, NULL, NULL, NULL);
 			if(demangled != NULL) {
@@ -92,9 +90,8 @@ public:
 			char buf[128];
 			sprintf(buf, " + %zu", offset);
 			result += buf;
+			return result;
 		}
-		
-		return result;
 	}
 	
 	void remove() {

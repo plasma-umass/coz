@@ -9,7 +9,28 @@ typedef void (*sigaction_handler_t)(int, siginfo_t*, void*);
 template<class Host, int... Signals> class SigThief;
 
 // Base case (no signals to steal)
-template<class Host> class SigThief<Host> : public Host {};
+template<class Host> class SigThief<Host> : public Host {
+public:
+	signal_handler_t signal(int signum, signal_handler_t handler) {
+		return Host::real_signal(signum, handler);
+	}
+
+	int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact) {
+		return Host::real_sigaction(signum, act, oldact);
+	}
+
+	int sigprocmask(int how, const sigset_t* set, sigset_t* oldset) {
+		return Host::real_sigprocmask(how, set, oldset);
+	}
+
+	int sigsuspend(const sigset_t* mask) {
+		return Host::real_sigsuspend(mask);
+	}
+
+	int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset) {
+		return Host::real_pthread_sigmask(how, set, oldset);
+	}
+};
 
 // Recursive case
 template<class Host, int First, int... Rest>

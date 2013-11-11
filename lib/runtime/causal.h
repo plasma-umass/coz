@@ -84,7 +84,12 @@ public:
 		if(!_initialized.exchange(true)) {
 			DEBUG("Initializing");
 			CausalEngine::initialize();
-			Host::createThread(startProfilerThread);
+
+			pthread_t profiler_thread;
+			if(Host::real_pthread_create(&profiler_thread, NULL, startProfilerThread, NULL)) {
+				perror("Failed to start profiler thread:");
+				abort();
+			}
 		}
 	}
 	
@@ -112,6 +117,16 @@ public:
 				fprintf(stderr, "%s,%f,%f\n", Probe::get(block).getName().c_str(), result.averageDelay(), result.speedup(_baseline));
 			}*/
 		}
+	}
+
+	int fork() {
+		int result = Host::real_fork();
+		if(result == 0) {
+			// TODO: Clear profiling data (it will stay with the parent process)
+			_initialized.store(false);
+			initialize();
+		}
+		return result;
 	}
 	
 	void debug_info(DebugInfo* info) {

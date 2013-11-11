@@ -1,6 +1,7 @@
 #if !defined(CAUSAL_LIB_RUNTIME_ENGINE_H)
 #define CAUSAL_LIB_RUNTIME_ENGINE_H
 
+#include <execinfo.h>
 #include <pthread.h>
 
 #include <atomic>
@@ -143,7 +144,7 @@ public:
 };
 
 /// Implements the mechanics of each type of performance experiment, and manages instrumentation
-class CausalEngine : public SigThief<Host, DelaySignal, TrapSignal> {
+class CausalEngine : public SigThief<Host, DelaySignal, TrapSignal, SIGSEGV, SIGBUS> {
 public:
 	BaselineResult runBaseline(size_t duration) {
 		// Set up the mode and counter
@@ -275,14 +276,43 @@ private:
 	}
 	
 	void onTrap(Context c) {
-		DEBUG("Saved!");
 		c.ip<uintptr_t>()--;
+	}
+
+	void onFault(void* addr, Context c) {
+		Dl_info sym_info;
+		dladdr(c.ip<void*>(), &sym_info);
+		printf("Fault in function %s (%p), accessing %p\n", sym_info.dli_sname, c.ip<void*>(), addr);
+		
+		void* buf[100];
+		size_t num = backtrace(buf, 100);
+		char** strings = backtrace_symbols(buf, num);
+
+		if(strings == NULL) {
+			perror("backtrace_symbols");
+			abort();
+		}
+
+		for(size_t i=0; i<num; i++) {
+			fprintf(stderr, "\t%s\n", strings[i]);
+		}
+
+		fprintf(stderr, "Threads:\n");
+		for(pthread_t t : Host::getThreads()) {
+			fprintf(stderr, "  %p\n", t);
+		}
+
+		DEBUG("Died! Waiting for gdb attach. PID=%d", getpid());
+		for(;;){}
 	}
 	
 public:
 	/// Set up signal handlers at startup
 	void initialize() {
-		Host::setSignalHandler(SIGTRAP, __causal_signal_entry);
+		Host::initialize();
+		Host::setSignalHandler(SIGSEGV, __causal_signal_entry);
+		Host::setSignalHandler(SIGBUS, __causal_signal_entry);
+		Host::setSignalHandler(TrapSignal, __causal_signal_entry);
 		Host::setSignalHandler(DelaySignal, __causal_signal_entry);
 	}
 	
@@ -292,6 +322,8 @@ public:
 			onTrap(p);
 		} else if(signum == DelaySignal) {
 			onDelay();
+		} else if(signum == SIGSEGV || signum == SIGBUS) {
+			onFault(info->si_addr, p);
 		} else {
 			DEBUG("Unexpected signal received!");
 			abort();
@@ -324,11 +356,13 @@ public:
 		} else if(_mode == Speedup && ret == _chosen_block) {
 			_block_visits++;
 			// Signal every other thread
+			Host::lockThreads();
 			for(pthread_t t : Host::getThreads()) {
 				if(t != pthread_self()) {
 					pthread_kill(t, DelaySignal);
 				}
 			}
+			Host::unlockThreads();
 			
 		} else if(_mode == Profile) {
 			// Increment the profile index, and save the previously set value

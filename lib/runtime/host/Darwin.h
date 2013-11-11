@@ -20,30 +20,13 @@
 
 using namespace std;
 
-enum Time : uint64_t {
-	ns = 1,
-	us = 1000 * ns,
-	ms = 1000 * us,
-	s = 1000 * ms
-};
-
 class DarwinHost : public CommonHost {
 private:
-	set<pthread_t> _ignored_threads;
+	pthread_t _profiler_thread;
 
 public:
-	static void* findSymbol(const char* sym) {
-		return dlsym(RTLD_DEFAULT, sym);
-	}
-	
-	static void setSignalHandler(int signum, sigaction_handler_t handler) {
-		struct sigaction sa;
-		sa.sa_sigaction = handler;
-		sigemptyset(&sa.sa_mask);
-		sa.sa_flags = SA_SIGINFO;
-		CommonHost::sigaction(signum, &sa, NULL);
-	}
-	
+	static void initialize() {}
+
 	static size_t wait(uint64_t nanos) {
 		if(nanos == 0) {
 			return 0;
@@ -63,17 +46,25 @@ public:
 	static size_t getTime() {
 		return mach_absolute_time();
 	}
-	
-	pthread_t createThread(pthread_fn_t fn, void* arg = NULL) {
+
+	int pthread_create(pthread_t* thread, const pthread_attr_t* attr, void* (*fn)(void*), void* arg) {
+		return CommonHost::real_pthread_create(thread, attr, fn, arg);
+	}
+
+	// Intercept the real_pthread_create call so we can remember to ignore the profiler thread
+	int real_phread_create(pthread_t* thread, const pthread_attr_t* attr, void* (*fn)(void*), void* arg) {
 		pthread_t t;
-		if(pthread_create(&t, NULL, fn, arg)) {
-			DEBUG("Failed to create thread");
-			abort();
+		int result = CommonHost::real_pthread_create(&t, attr, fn, arg);
+		if(result == 0) {
+			_profiler_thread = t;
+			if(thread != NULL) *thread = t;
 		}
-		_ignored_threads.insert(t);
-		return t;
+		return result;
 	}
 	
+	void lockThreads() {}
+	void unlockThreads() {}
+
 	vector<pthread_t> getThreads() {
 		// Get thread list from the kernel
 		thread_act_array_t threads;
@@ -88,9 +79,7 @@ public:
 		vector<pthread_t> result(count);
 		for(size_t i=0; i<count; i++) {
 			pthread_t pthread = pthread_from_mach_thread_np(threads[i]);
-			if(pthread != NULL && _ignored_threads.find(pthread) == _ignored_threads.end()) {
-				result.push_back(pthread);
-			}
+			if(pthread != _profiler_thread)	result.push_back(pthread);
 		}
 		return result;
 	}

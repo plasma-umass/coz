@@ -52,6 +52,10 @@ extern "C" {
 		real_exit(status);
 	}
 	
+	int pthread_create(pthread_t* thread, const pthread_attr_t* attr, void* (*fn)(void*), void* arg) {
+		return Causal::getInstance().pthread_create(thread, attr, fn, arg);
+	}
+
 	int fork() {
 		return Causal::getInstance().fork();
 	}
