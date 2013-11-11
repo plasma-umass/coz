@@ -90,6 +90,7 @@ public:
 				perror("Failed to start profiler thread:");
 				abort();
 			}
+			DEBUG("Profiler thread is %p", profiler_thread);
 		}
 	}
 	
