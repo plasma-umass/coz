@@ -1,4 +1,5 @@
 TEST_ROOT = ..
+LIBS = pthread
 ARGS = string_match_datafiles/key_file_500MB.txt > /dev/null
 
 include $(TEST_ROOT)/common.mk

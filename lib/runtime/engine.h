@@ -299,7 +299,7 @@ private:
 
 		fprintf(stderr, "Threads:\n");
 		for(pthread_t t : Host::getThreads()) {
-			fprintf(stderr, "  %p\n", t);
+			fprintf(stderr, "  %p\n", (void*)t);
 		}
 
 		DEBUG("Died! Waiting for gdb attach. PID=%d", getpid());

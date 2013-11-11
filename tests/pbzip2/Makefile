@@ -1,5 +1,5 @@
 TEST_ROOT = ..
-LIBS = bz2
+LIBS = bz2 pthread
 ARGS = -c < data/input.txt > data/output.txt
 
 include $(TEST_ROOT)/common.mk

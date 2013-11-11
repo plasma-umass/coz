@@ -1,4 +1,5 @@
 TEST_ROOT = ..
+LIBS = pthread
 ARGS = linear_regression_datafiles/key_file_500MB.txt
 
 include $(TEST_ROOT)/common.mk

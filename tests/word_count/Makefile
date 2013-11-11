@@ -1,4 +1,5 @@
 TEST_ROOT = ..
+LIBS = pthread
 ARGS = word_count_datafiles/word_100MB.txt
 
 include $(TEST_ROOT)/common.mk

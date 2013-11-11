@@ -4,15 +4,22 @@ TARGET ?= $(notdir $(PWD))
 ARGS ?= 
 LIBS ?= 
 
-CXXFLAGS = -g -std=c++11 -stdlib=libc++ -nostdinc++ \
-	-I/usr/src/libcxx/include -L/usr/src/libcxx/lib -I$(CAUSAL_ROOT)/include
+SHLIB_SUFFIX = so
+CXXFLAGS = -g -I$(CAUSAL_ROOT)/include
 
-CAUSAL_CXXFLAGS = -DCAUSAL_BUILD -Xclang -load -Xclang LLVMCausal.dylib $(CXXFLAGS) -lcausal_rt
+# Set platform-specific flags
+OS = $(shell uname -s)
+ifeq ($(OS),Darwin)
+SHLIB_SUFFIX = dylib
+CXXFLAGS += -stdlib=libc++ -nostdinc++ -I/usr/src/libcxx/include -L/usr/src/libcxx/lib
+endif
+
+CAUSAL_CXXFLAGS = -DCAUSAL_BUILD -Xclang -load -Xclang LLVMCausal.$(SHLIB_SUFFIX) $(CXXFLAGS) -lcausal_rt -ldl -lpthread
 
 CLEAN_COMPILE = clang++ $(CXXFLAGS)
 CAUSAL_COMPILE = clang++ $(CAUSAL_CXXFLAGS)
 
-CAUSAL_DEPS = /usr/local/lib/LLVMCausal.dylib /usr/local/lib/libcausal_rt.a $(CAUSAL_ROOT)/include/causal.h
+CAUSAL_DEPS = /usr/local/lib/LLVMCausal.$(SHLIB_SUFFIX) /usr/local/lib/libcausal_rt.a $(CAUSAL_ROOT)/include/causal.h
 
 BUILD_TARGETS = bin/$(TARGET)-causal bin/$(TARGET)-clean
 SOURCES = $(wildcard *.c) $(wildcard *.cpp)

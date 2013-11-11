@@ -1,4 +1,5 @@
 TEST_ROOT = ..
+LIBS = pthread
 ARGS = histogram_datafiles/large.bmp
 
 include $(TEST_ROOT)/common.mk
