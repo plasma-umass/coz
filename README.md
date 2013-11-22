@@ -47,11 +47,12 @@ reasonable defaults:
 ```bash
 cd llvm
 ./configure --prefix=/usr/local --enable-optimized --enable-assertions --enable-shared
+make install
 ```
 
 ### OSX Workarounds
 The causal profiler uses C++11 support, including some functionality
-only available in the LLVM project's libc++ runtime library. To obtain
+only available in the LLVM project's libc++ runtime library on OSX. To obtain
 and use libc++, follow the directions available at http://libcxx.llvm.org.
 
 ## Using the Profiler
@@ -59,7 +60,7 @@ The Makefile setup in `tests/common.mk` builds all test applications for
 causal profiling. To see the exact commands executed, move to an application
 directory under `tests` and run `make -n`.
 
-Profiler output includes results from both slowdodwn and speedup experiments.
+Profiler output includes results from both slowdown and speedup experiments.
 Slowdown results include symbol name, file name, and line number information
 for each block, if available. Speedup results are in CSV format, with columns
 for block name, block speedup, and performance change. These results can be
