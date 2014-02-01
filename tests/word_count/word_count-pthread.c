@@ -41,7 +41,7 @@
 #include "stddefines.h"
 #include "sort-pthread.h"
 
-#include "causal.h"
+//#include "causal.h"
 
 #define DEFAULT_DISP_NUM 10
 #define START_ARRAY_SIZE 2000
@@ -269,7 +269,7 @@ void *wordcount_map(void *args_in)
          break;
       }
 			
-			CAUSAL_PROGRESS;
+			//CAUSAL_PROGRESS;
    }
 
    // Add the last word
@@ -381,7 +381,7 @@ void *merge_sections(void *args_in)
          curr2++;
       }
 			
-			CAUSAL_PROGRESS;
+			//CAUSAL_PROGRESS;
    }
    
    // copy the remaining elements

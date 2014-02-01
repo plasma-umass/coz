@@ -287,7 +287,7 @@ extern "C"
 #include <limits.h>
 }
 
-#include "causal.h"
+//#include "causal.h"
 
 
 //
@@ -546,7 +546,7 @@ ssize_t do_write(int fd, const void *buf, size_t count)
 	{
 		bytesRemaining -= nbytes;
 		pbuf += nbytes;
-		CAUSAL_PROGRESS;
+		//CAUSAL_PROGRESS;
 	}
 
 	if (nbytes < 0)

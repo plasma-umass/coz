@@ -41,7 +41,7 @@ void* worker(void* arg) {
 		pthread_mutex_unlock(&work_queue_lock);
 		// Do work
 		item();
-		CAUSAL_PROGRESS;
+		//CAUSAL_PROGRESS;
 	}
 }
 
