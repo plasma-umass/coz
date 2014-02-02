@@ -11,8 +11,6 @@
 #include <map>
 #include <string>
 
-#include "probe.h"
-
 using namespace std;
 
 /// The real main function, renamed by the LLVM pass
@@ -30,6 +28,8 @@ bool initialized = false;
 /// Record basic block visits
 map<uintptr_t, size_t> block_visits;
 
+enum { DelaySize = 1000 * 200 };
+
 /// Possible execution modes
 enum ProfilerMode {
   BlockProfile,
@@ -42,7 +42,7 @@ enum ProfilerMode {
 ProfilerMode mode = BlockProfile;
 
 /// The return address from the selected block's probe call
-uintptr_t selected_block;
+uintptr_t selected_block = 0;
 
 /// The starting time for the main function
 size_t start_time;
@@ -81,9 +81,6 @@ int main(int argc, char** argv) {
   } else if(argc >= 4 && strcmp(argv[1], "speedup") == 0) {
     mode = Speedup;
     selected_block = getAddress(argv[2], atoi(argv[3]));
-    fprintf(stderr, "Speeding up block %s+%d at %p\n", argv[2], atoi(argv[3]), (void*)selected_block);
-    Probe& p = Probe::get(selected_block, (uintptr_t)__causal_probe);
-    p.remove();
     argc -= 3;
     argv[3] = argv[0];
     argv = &argv[3];
@@ -191,6 +188,13 @@ extern "C" void __causal_probe() {
   
   uintptr_t ret = (uintptr_t)__builtin_return_address(0);
   block_visits[ret]++;
+  
+  if(mode != Speedup || ret != selected_block) {
+    size_t end_time = getTime() + DelaySize;
+    while(getTime() < end_time) {
+      __asm__("pause");
+    }
+  }
 }
 
 /// Intercept calls to exit() to ensure shutdown() is run first
