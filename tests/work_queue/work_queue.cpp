@@ -46,25 +46,18 @@ void* worker(void* arg) {
 }
 
 void work_item_A() {
-	struct timespec ts;
-	ts.tv_sec = 0;
-	ts.tv_nsec = 1000 * 1000;
-	//ts.tv_nsec = 800000; // Subtracted 200000ns
-	while(nanosleep(&ts, &ts) != 0) {}
+	static int a = 0;
+  a++;
 }
 
 void work_item_B() {
-	struct timespec ts;
-	ts.tv_sec = 0;
-	ts.tv_nsec = 1000 * 1000;
-	while(nanosleep(&ts, &ts) != 0) {}
+	static int b = 0;
+  b++;
 }
 
 void work_item_C() {
-	struct timespec ts;
-	ts.tv_sec = 0;
-	ts.tv_nsec = 1000 * 1000;
-	while(nanosleep(&ts, &ts) != 0) {}
+	static int c = 0;
+  c++;
 }
 
 void fill_work_queue() {

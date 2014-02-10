@@ -7,7 +7,7 @@
 #include <causal.h>
 
 enum {
-	Items = 1000000,
+	Items = 100000,
 	QueueSize = 10,
 	ProducerCount = 5,
 	ConsumerCount = 3
