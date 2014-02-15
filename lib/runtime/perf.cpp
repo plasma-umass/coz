@@ -12,6 +12,8 @@
 
 #include "perf.h"
 
+__thread int perf_fd;
+
 long perf_event_open(struct perf_event_attr *hw_event, 
                      pid_t pid, int cpu,
                      int group_fd, unsigned long flags) {
@@ -30,20 +32,24 @@ void startSampling(size_t cycles, int signum) {
   pe.sample_period = cycles;
   pe.sample_type = PERF_SAMPLE_IP;
   
-  int fd = perf_event_open(&pe, 0, -1, -1, 0);
-  if (fd == -1) {
+  perf_fd = perf_event_open(&pe, 0, -1, -1, 0);
+  if (perf_fd == -1) {
     fprintf(stderr, "Error opening leader %llx\n", pe.config);
     abort();
   }
   
-  if(fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_ASYNC) == -1)
+  if(fcntl(perf_fd, F_SETFL, fcntl(perf_fd, F_GETFL, 0) | O_ASYNC) == -1)
     perror("fcntl:");
   
-  if(fcntl(fd, F_SETSIG, signum) == -1)
+  if(fcntl(perf_fd, F_SETSIG, signum) == -1)
     perror("fcntl:");
 
-  if(fcntl(fd, F_SETOWN, getpid()) == -1)
+  if(fcntl(perf_fd, F_SETOWN, getpid()) == -1)
     perror("fcntl:");
 
-  ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
+  ioctl(perf_fd, PERF_EVENT_IOC_ENABLE, 0);
+}
+
+void stopSampling() {
+  close(perf_fd);
 }

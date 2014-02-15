@@ -2,5 +2,6 @@
 #define CAUSAL_RUNTIME_PERF_H
 
 void startSampling(size_t cycles, int signum);
+void stopSampling();
 
 #endif

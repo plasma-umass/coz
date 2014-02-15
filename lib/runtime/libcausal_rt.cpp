@@ -20,25 +20,24 @@ uintptr_t getAddress(const char* function, int offset);
 
 typedef void* (*thread_fn_t)(void*);
 
+atomic<size_t> Causal::_delay_count = ATOMIC_VAR_INIT(0);
+__thread size_t Causal::_local_delay_count = 0; 
+
 /**
  * Entry point for a program run with causal. Execution mode is determined by
  * arguments, which are then stripped off before being passed to the real main
  * function. Causal options must come first. Options are:
- *   <program name> block_profile ...
- *     This mode collects a basic block profile. Execution time includes a
- *     slowdown in every basic block. Output is written to block.profile.
+ *   <program name> clean ...
+ *     Runs with no added slowdown. Also produces a blocks.profile file that
+ *     lists all basic blocks.
  *
- *   <program name> time_profile ...
- *     This mode collects an execution time profile with sampling. All blocks
- *     run with an inserted delay. Output is written to time.profile.
+ *   <program name> legacy <function> <offset> <slowdown> ...
+ *     This mode collects a profile with basic block counts and time sampling
+ *     while also adding <slowdown>ns to each execution of the selected block.
  *
- *   <program name> speedup <function> <offset> ...
- *     This mode slows down every basic block except one, indicated by symbol
- *     name and offset. Block identifiers must match output from block_profile.
- *
- *   <program name> causal <function> <offset> ...
- *     This mode creates the impression of a speedup in the indicated block. All
- *     blocks run with an added delay, including the indicated block.
+ *   <program name> causal <function> <offset> <slowdown> <causal delay> ...
+ *     This mode creates the impression of a speedup in the indicated block. The
+ *     selected block runs with the specified <slowdown>ns of added delay.
  */
 int main(int argc, char** argv) {
   // Initialize the profiler and pass arguments
@@ -58,31 +57,31 @@ int main(int argc, char** argv) {
  * arguments from argc and argv before the real main function is called.
  */
 void parseArgs(int& argc, char**& argv) {
-  if(argc >= 2 && strcmp(argv[1], "block_profile") == 0) {
-    Causal::instance().setMode(BlockProfile);
+  if(argc >= 2 && strcmp(argv[1], "clean") == 0) {
+    Causal::instance().setMode(Clean);
     argc--;
     argv[1] = argv[0];
     argv = &argv[1];
     
-  } else if(argc >= 2 && strcmp(argv[1], "time_profile") == 0) {
-    Causal::instance().setMode(TimeProfile);
-    argc--;
-    argv[1] = argv[0];
-    argv = &argv[1];
-    
-  } else if(argc >= 4 && strcmp(argv[1], "speedup") == 0) {
+  } else if(argc >= 5 && strcmp(argv[1], "legacy") == 0) {
     uintptr_t selected_block = getAddress(argv[2], atoi(argv[3]));
-    Causal::instance().setMode(Speedup, selected_block);
-    argc -= 3;
-    argv[3] = argv[0];
-    argv = &argv[3];
-    
-  } else if(argc >= 4 && strcmp(argv[1], "causal") == 0) {
+    size_t slowdown_size = atoi(argv[4]);
+    Causal::instance().setMode(LegacyProfile, selected_block);
+    Causal::instance().setSlowdownSize(slowdown_size);
+    argc -= 4;
+    argv[4] = argv[0];
+    argv = &argv[4];
+
+  } else if(argc >= 6 && strcmp(argv[1], "causal") == 0) {
     uintptr_t selected_block = getAddress(argv[2], atoi(argv[3]));
+    size_t slowdown_size = atoi(argv[4]);
+    size_t delay_size = atoi(argv[5]);
     Causal::instance().setMode(CausalProfile, selected_block);
-    argc -= 3;
-    argv[3] = argv[0];
-    argv = &argv[3];
+    Causal::instance().setDelaySize(delay_size);
+    Causal::instance().setSlowdownSize(slowdown_size);
+    argc -= 5;
+    argv[5] = argv[0];
+    argv = &argv[5];
   }
 }
 
