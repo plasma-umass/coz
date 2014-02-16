@@ -9,7 +9,7 @@
 
 #include <atomic>
 #include <fstream>
-#include <list>
+#include <set>
 #include <new>
 #include <sstream>
 
@@ -41,7 +41,8 @@ private:
   ProfilerMode _mode = Clean;
   
   /// A list of block addresses, if running in GetBlocks mode
-  std::list<uintptr_t> _blocks;
+  std::set<uintptr_t> _blocks;
+  std::mutex _blocks_mutex;
   
   /// The address of the basic block selected for speedup or causal profiling
   uintptr_t _selected_block = 0;
@@ -162,16 +163,15 @@ public:
     
     if(_mode == Clean) {
       // Save the block address in the blocks list
-      _blocks.push_back(ret);
+      _blocks_mutex.lock();
+      _blocks.insert(ret);
+      _blocks_mutex.unlock();
       // Find the inserted probe (call instruction)
-      Probe& p = Probe::get(ret);
-      // Remove the probe
-      p.remove();
+      Probe::remove(ret);
       
     } else if(ret != _selected_block) {
       // This isn't the block we're looking for. Remove the probe and return
-      Probe& p = Probe::get(ret);
-      p.remove();
+      Probe::remove(ret);
       return;
       
     } else {
@@ -190,8 +190,7 @@ public:
     }
     
     if(_mode == Clean || ret != _selected_block) {
-      Probe& p = Probe::get(ret);
-      p.remove();
+      Probe::remove(ret);
     }
     
     if(_mode == LegacyProfile && ret == _selected_block) {

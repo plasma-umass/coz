@@ -42,10 +42,10 @@ bin/%-clean: $(SOURCES) $(INCLUDES)
 	$(CLEAN_COMPILE) -o $@ $(SOURCES) $(addprefix -l,$(LIBS))
 
 run-clean: bin/$(TARGET)-clean setup
-	$< $(ARGS)
+	$< $(ARGS) > /dev/null
 
 run-causal: bin/$(TARGET)-causal setup
-	$< $(ARGS)
+	$< $(ARGS) > /dev/null
 
 experiment: bin/$(TARGET)-causal setup
 	$(TEST_ROOT)/experiment.py $< $(ARGS)

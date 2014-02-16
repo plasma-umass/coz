@@ -1,6 +1,6 @@
 TEST_ROOT = ..
 LIBS = pthread
-ARGS = 1024	> /dev/null
+ARGS = 1024
 
 include $(TEST_ROOT)/common.mk
 

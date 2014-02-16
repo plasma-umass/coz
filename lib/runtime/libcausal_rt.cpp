@@ -15,6 +15,7 @@ using namespace std;
 /// The real main function, renamed by the LLVM pass
 extern "C" int __real_main(int argc, char** argv);
 
+void onTrap(int signum);
 void parseArgs(int& argc, char**& argv);
 uintptr_t getAddress(const char* function, int offset);
 
@@ -40,6 +41,8 @@ __thread size_t Causal::_local_delay_count = 0;
  *     selected block runs with the specified <slowdown>ns of added delay.
  */
 int main(int argc, char** argv) {
+  signal(SIGILL, onTrap);
+  
   // Initialize the profiler and pass arguments
   Causal::instance().initialize();
   parseArgs(argc, argv);
@@ -50,6 +53,10 @@ int main(int argc, char** argv) {
   // Shut down the profiler
   Causal::instance().shutdown();
 	exit(result);
+}
+
+void onTrap(int signum) {
+  // do nothing
 }
 
 /**
