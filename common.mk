@@ -3,10 +3,8 @@ CC = clang
 CXX = clang++
 CFLAGS ?=
 CXXFLAGS ?= $(CFLAGS)
+CXXLIB = $(CXX) -shared -fPIC
 LINKFLAGS ?=
-
-# Set the default shared library filename suffix
-SHLIB_SUFFIX ?= so
 
 # Don't build into subdirectories by default
 DIRS ?=

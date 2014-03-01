@@ -37,7 +37,7 @@
 
 #include "stddefines.h"
 
-//#include "causal.h"
+#include "causal.h"
 
 #define DEF_NUM_POINTS 100000
 #define DEF_NUM_MEANS 100
@@ -203,7 +203,7 @@ void *find_clusters(void *arg)
          modified = true;
       }
 			
-			//CAUSAL_PROGRESS;
+			CAUSAL_PROGRESS;
    }
    
    return (void *)0;   

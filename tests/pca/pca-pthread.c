@@ -36,7 +36,7 @@
 #include <pthread.h>
 #include "stddefines.h"
 
-//#include "causal.h"
+#include "causal.h"
 
 #define DEF_GRID_SIZE 1000  // all values in the matrix are from 0 to this value 
 #define DEF_NUM_ROWS 3000
@@ -147,7 +147,7 @@ void *calc_mean(void *arg) {
          sum += matrix[i][j];
       }
       mean[i] = sum / num_cols;   
-			//CAUSAL_PROGRESS;
+			CAUSAL_PROGRESS;
    }
    
    return (void *)0;
@@ -178,7 +178,7 @@ void *calc_cov(void *arg) {
       i = next_row;
       next_row++;
       pthread_mutex_unlock(&row_lock);
-			//CAUSAL_PROGRESS;
+			CAUSAL_PROGRESS;
    }
    
    return (void *)0;   
