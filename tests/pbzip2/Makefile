@@ -1,8 +1,9 @@
-TEST_ROOT = ..
+ROOT = ../..
+TARGETS = pbzip2
 LIBS = bz2 pthread
 ARGS = -c < data/input.txt > data/output.txt
 
-include $(TEST_ROOT)/common.mk
+include $(ROOT)/common.mk
 
 setup: data/input.txt
 

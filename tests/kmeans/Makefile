@@ -1,4 +1,5 @@
-TEST_ROOT = ..
+ROOT = ../..
+TARGETS = kmeans
 LIBS = pthread
 
-include $(TEST_ROOT)/common.mk
+include $(ROOT)/common.mk

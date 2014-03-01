@@ -1,8 +1,9 @@
-TEST_ROOT = ..
+ROOT = ../..
+TARGETS = histogram
 LIBS = pthread
 ARGS = histogram_datafiles/large.bmp
 
-include $(TEST_ROOT)/common.mk
+include $(ROOT)/common.mk
 
 setup: histogram_datafiles/large.bmp
 

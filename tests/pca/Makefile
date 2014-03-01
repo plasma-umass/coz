@@ -1,5 +1,6 @@
-TEST_ROOT = ..
+ROOT = ../..
+TARGETS = pca
 LIBS = pthread
 ARGS = > /dev/null
 
-include $(TEST_ROOT)/common.mk
+include $(ROOT)/common.mk

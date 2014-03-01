@@ -1,8 +1,9 @@
-TEST_ROOT = ..
+ROOT = ../..
+TARGETS = string_match
 LIBS = pthread
 ARGS = string_match_datafiles/key_file_500MB.txt > /dev/null
 
-include $(TEST_ROOT)/common.mk
+include $(ROOT)/common.mk
 
 setup: string_match_datafiles/key_file_500MB.txt
 

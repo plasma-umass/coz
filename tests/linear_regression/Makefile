@@ -1,8 +1,9 @@
-TEST_ROOT = ..
+ROOT = ../..
+TARGETS = linear_regression
 LIBS = pthread
 ARGS = linear_regression_datafiles/key_file_500MB.txt
 
-include $(TEST_ROOT)/common.mk
+include $(ROOT)/common.mk
 
 setup: linear_regression_datafiles/key_file_500MB.txt
 

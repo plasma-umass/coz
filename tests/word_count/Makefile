@@ -1,8 +1,9 @@
-TEST_ROOT = ..
+ROOT = ../..
+TARGETS = word_count
 LIBS = pthread
 ARGS = word_count_datafiles/word_100MB.txt
 
-include $(TEST_ROOT)/common.mk
+include $(ROOT)/common.mk
 
 setup: word_count_datafiles/word_100MB.txt
 

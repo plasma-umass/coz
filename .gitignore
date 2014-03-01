@@ -1,22 +1,9 @@
-lib/pass/Release+Asserts
-lib/runtime/Release+Asserts
+libcausal.so
 
-tests/histogram/bin
-tests/histogram/histogram_datafiles
-tests/kmeans/bin
-tests/linear_regression/bin
-tests/linear_regression/linear_regression_datafiles
-tests/matrix_multiply/bin
+tests/*/bin
+tests/*/obj
+tests/*/*_datafiles
 tests/matrix_multiply/matrix_file_A.txt
 tests/matrix_multiply/matrix_file_B.txt
 tests/matrix_multiply/matrix_file_out_pthreads.txt
-tests/pbzip2/bin
 tests/pbzip2/data
-tests/pca/bin
-tests/producer_consumer/bin
-tests/string_match/bin
-tests/string_match/string_match_datafiles
-tests/unbalanced/bin
-tests/word_count/bin
-tests/word_count/word_count_datafiles
-tests/work_queue/bin

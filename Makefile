@@ -1,5 +1,7 @@
-LEVEL = ../..
-DIRS = lib
+ROOT = .
+DIRS = runtime
 
-include $(LEVEL)/Makefile.common
+include $(ROOT)/common.mk
 
+test: build
+	@$(MAKE) -C tests test
