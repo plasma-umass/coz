@@ -39,7 +39,7 @@
 
 #include "stddefines.h"
 
-#include "causal.h"
+//#include "causal.h"
 
 #define IMG_DATA_OFFSET_POS 10
 #define BITS_PER_PIXEL_POS 28
@@ -126,7 +126,7 @@ void *calc_hist(void *arg) {
       val = &(thread_arg->data[i+2]);
       red[*val]++;   
 			
-			CAUSAL_PROGRESS;
+			//CAUSAL_PROGRESS;
    }
    /*
    thread_arg->red = red;

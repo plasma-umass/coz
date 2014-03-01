@@ -1,5 +1,5 @@
-#if !defined(DEBUG_HPP)
-#define DEBUG_HPP
+#if !defined(CAUSAL_RUNTIME_DEBUG_H)
+#define CAUSAL_RUNTIME_DEBUG_H
 
 #if defined(NDEBUG)
 #define DEBUG(...)

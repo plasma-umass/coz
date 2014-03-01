@@ -1,143 +1,186 @@
-#if !defined(CAUSAL_LIB_RUNTIME_CAUSAL_H)
-#define CAUSAL_LIB_RUNTIME_CAUSAL_H
+#if !defined(CAUSAL_RUNTIME_CAUSAL_H)
+#define CAUSAL_RUNTIME_CAUSAL_H
 
-#include <pthread.h>
+#include <dlfcn.h>
+#include <signal.h>
 #include <stdint.h>
-#include <stdio.h>
+#include <stdlib.h>
 
-#include <atomic>
 #include <map>
-#include <mutex>
-#include <set>
-#include <string>
-#include <vector>
+#include <new>
 
-#include "engine.h"
+#include "perf.h"
+#include "util.h"
 
-using namespace std;
+enum {
+  SamplingPeriod = 10000000,
+  DelaySize = 1000
+};
 
-struct DebugInfo {
-	uintptr_t block;
-	const char* filename;
-	uint32_t start;
-	uint32_t end;
-};	
+/// Possible execution modes
+enum ProfilerMode {
+  BlockProfile,
+  TimeProfile,
+  Speedup,
+  CausalProfile
+};
 
-struct Causal : CausalEngine {
+class Causal {
 private:
-	atomic<bool> _initialized = ATOMIC_VAR_INIT(false);
-	BaselineResult _baseline;
-	map<uintptr_t, SlowdownResult> _slowdown_results;
-	multimap<uintptr_t, SpeedupResult> _speedup_results;
-	multimap<uintptr_t, DebugInfo*> _debug_info;
-	
-	Causal() {}
-	
-	void profilerThread() {
-		while(true) {
-			// Find a block that appears to be executing
-			uintptr_t block = CausalEngine::getActiveBlock(100 * Time::ms);
-			
-			// Run a slowdown experiment on the chosen block
-			_slowdown_results[block] += CausalEngine::runSlowdown(block, 50 * Time::ms, 500 * Time::us);
-			
-			// Run a speedup experiment on the chosen block
-			_speedup_results.emplace(b, CausalEngine::runSpeedup(b, 50 * Time::ms, (rand() % 10000 + 500) * Time::us));
-			
-			// Get the baseline progress rate
-			_baseline += CausalEngine::runBaseline(50 * Time::ms);
-		}
-	}
-	
-	static void* startProfilerThread(void*) {
-		getInstance().profilerThread();
-		return NULL;
-	}
-	
-	set<const DebugInfo*> findDebugInfo(uintptr_t ret) {
-		// Find the nearest block staring address less than ret
-		uintptr_t block = 0;
-		for(const auto& i : _debug_info) {
-			if(i.first > ret) break;
-			else block = i.first;
-		}
-		
-		// Return if nothing was found
-		if(block == 0) return set<const DebugInfo*>();
-		
-		// Get the range of equal elements. There may be multiple DebugInfos for this block
-		auto range = _debug_info.equal_range(block);
-		// Add all DebugInfos to the result set
-		set<const DebugInfo*> result;
-		for(auto iter = range.first; iter != range.second; iter++) {
-			result.insert(iter->second);
-		}
-		
-		return result;
-	}
+  /// Has the profiler been initialized?
+  bool _initialized = false;
+  
+  /// The starting time for the program
+  size_t _start_time;
+  
+  /// The current execution mode
+  ProfilerMode _mode = BlockProfile;
+  
+  /// The address of the basic block selected for speedup or causal profiling
+  uintptr_t _selected_block = 0;
+  
+  /// Record basic block visits
+  std::map<uintptr_t, size_t> _block_visits;
+  
+  /// Count of all inserted delays when causal profiling is enabled
+  std::atomic<size_t> _delay_count = ATOMIC_VAR_INIT(0);
+  
+  Causal() {}
+  
+  static void sampleSignal(int signum) {
+    /*static __thread unsigned int magic;
+    static __thread size_t period;
+    static __thread size_t n;
+    
+    if(magic != 0xDEADBEEF) {
+      period = 1;
+      n = 0;
+      magic = 0xDEADBEEF;
+    }*/
+    
+    while(instance().localDelayCount() < instance()._delay_count) {
+      instance().localDelayCount()++;
+      wait(DelaySize);
+      /*n++;
+      if(n == period) {
+        n = 0;
+        wait(DelaySize * period++);
+      }*/
+    }
+  }
 
 public:
-	static Causal& getInstance() {
-		static char buf[sizeof(Causal)];
-		static Causal* instance = new(buf) Causal();
-		return *instance;
-	}
-	
-	void initialize() {
-		if(!_initialized.exchange(true)) {
-			DEBUG("Initializing");
-			CausalEngine::initialize();
+  static Causal& instance() {
+    static char buf[sizeof(Causal)];
+    static Causal* theInstance = new(buf) Causal();
+    return *theInstance;
+  }
+  
+  std::atomic<size_t>& localDelayCount() {
+    /// Delays added to the current thread
+    static __thread std::atomic<size_t> count;
+    return count;
+  }
+  
+  void setMode(ProfilerMode mode, uintptr_t block=0) {
+    _mode = mode;
+    _selected_block = block;
+  }
+  
+  void addThread() {
+    //if(_mode == CausalProfile) {
+      localDelayCount().store(_delay_count.load());
+      startSampling(SamplingPeriod, 42);
+    //}
+  }
+  
+  void removeThread() {
+    
+  }
+  
+  void probe(uintptr_t ret) {
+    if(!_initialized)
+      return;
+  
+    _block_visits[ret]++;
 
-			pthread_t profiler_thread;
-			if(Host::real_pthread_create(&profiler_thread, NULL, startProfilerThread, NULL)) {
-				perror("Failed to start profiler thread:");
-				abort();
-			}
-			DEBUG("Profiler thread is %p", profiler_thread);
-		}
-	}
-	
-	void shutdown() {
-		if(_initialized.exchange(false)) {
-			DEBUG("Shutting down");
-			
-			fprintf(stderr, "Slowdown results:\n");
-			for(auto& r : _slowdown_results) {
-				uintptr_t block = r.first;
-				SlowdownResult& result = r.second;
-				fprintf(stderr, "  %s\n    %f\n", Probe::get(block).getName().c_str(), result.marginalImpact(_baseline));
-				for(const DebugInfo* info : findDebugInfo(block)) {
-					if(info->start != info->end)
-						fprintf(stderr, "    %s : %d-%d\n", info->filename, info->start, info->end);
-					else
-						fprintf(stderr, "    %s : %d\n", info->filename, info->start);
-				}
-			}
-			
-			fprintf(stderr, "\nSpeedup results:\n");
-			for(auto& r : _speedup_results) {
-				uintptr_t block = r.first;
-				SpeedupResult& result = r.second;
-				fprintf(stderr, "%s,%f,%f\n", Probe::get(block).getName().c_str(), result.averageDelay(), result.speedup(_baseline));
-			}
-		}
-	}
+    if(_mode != Speedup || ret != _selected_block) {
+      wait(DelaySize);
+    }
+  
+    if(_mode == CausalProfile) {
+      if(ret == _selected_block) {
+        _delay_count++;
+        localDelayCount()++;
+      }
+    }
+  }
+  
+  void initialize() {
+    signal(42, Causal::sampleSignal);
+    _initialized = true;
+    _start_time = getTime();
+    srand((unsigned int)getTime());
+  }
+  
+  /**
+  * Find the function containing a given address and write the symbol and offset
+  * to a file. Returns false if no symbol was found.
+  */
+  bool writeBlockName(FILE* fd, uintptr_t address) {
+    Dl_info info;
 
-	int fork() {
-		int result = Host::real_fork();
-		if(result == 0) {
-			// TODO: Clear profiling data (it will stay with the parent process)
-			_initialized.store(false);
-			initialize();
-		}
-		return result;
-	}
-	
-	void debug_info(DebugInfo* info) {
-		// Compiler-omitted blocks will have an address of 1. Skip these.
-		if(info->block == 1) return;
-		_debug_info.emplace(info->block, info);
-	}
+    // Return false if the dladdr() call fails
+    if(dladdr((void*)address, &info) == 0)
+      return false;
+
+    // Return false if dladdr() didn't find a symbol and address
+    if(info.dli_sname == NULL || info.dli_saddr == NULL)
+      return false;
+
+    fprintf(fd, "%s,%lu", info.dli_sname, address - (uintptr_t)info.dli_saddr);
+    return true;
+  }
+  
+  void shutdown() {
+    static bool finished = false;
+  
+    if(!finished) {
+      finished = true;
+      size_t runtime = getTime() - _start_time;
+  
+      FILE* versions = fopen("versions.profile", "a");
+  
+      if(_mode == BlockProfile) {
+        FILE* blocks = fopen("block.profile", "w");
+        for(const auto& e : _block_visits) {
+          if(writeBlockName(blocks, e.first))
+            fprintf(blocks, ",%lu\n", e.second);
+        }
+        fflush(blocks);
+        fclose(blocks);
+    
+        // Write the mode, selected block (none), and runtime to versions.profile
+        fprintf(versions, "block_profile,NA,NA,%lu\n", runtime);
+    
+      } else if(_mode == TimeProfile) {
+        // TODO
+      } else if(_mode == Speedup) {
+        // Write the mode, selected block, and runtime to versions.profile
+        fprintf(versions, "speedup,");
+        writeBlockName(versions, _selected_block);
+        fprintf(versions, ",%lu\n", runtime);
+    
+      } else if(_mode == CausalProfile) {
+        fprintf(versions, "causal,");
+        writeBlockName(versions, _selected_block);
+        fprintf(versions, ",%lu\n", runtime - DelaySize * _delay_count);
+      }
+  
+      fflush(versions);
+      fclose(versions);
+    }
+  }
 };
 
 #endif

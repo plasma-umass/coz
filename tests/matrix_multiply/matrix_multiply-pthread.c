@@ -43,7 +43,7 @@
 #include "map_reduce.h"
 #include "stddefines.h"
 
-#include "causal.h"
+//#include "causal.h"
 
 typedef struct {
     int row_num;
@@ -156,7 +156,7 @@ void *matrixmult_map(void *args_in)
 		    //printf("THe location is %d %d, value is %d\n",x_loc, y_loc, value);
 		    data->output[x_loc*data->matrix_len + i] = value;
 				
-				CAUSAL_PROGRESS;
+				//CAUSAL_PROGRESS;
 	    }
 	    row_count++;	
     }

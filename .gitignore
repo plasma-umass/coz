@@ -16,6 +16,7 @@ tests/pca/bin
 tests/producer_consumer/bin
 tests/string_match/bin
 tests/string_match/string_match_datafiles
+tests/unbalanced/bin
 tests/word_count/bin
 tests/word_count/word_count_datafiles
 tests/work_queue/bin

@@ -1,6 +1,6 @@
 LEVEL = ../../../..
 LIBRARYNAME = causal_rt
-SOURCES = libcausal_rt.cpp
+SOURCES = libcausal_rt.cpp perf.cpp
 LIBS = dl
 
 CXXFLAGS += -g -std=c++11

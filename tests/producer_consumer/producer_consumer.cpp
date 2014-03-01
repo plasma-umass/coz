@@ -7,7 +7,7 @@
 #include <causal.h>
 
 enum {
-	Items = 1000000,
+	Items = 100000,
 	QueueSize = 10,
 	ProducerCount = 5,
 	ConsumerCount = 3
@@ -53,7 +53,7 @@ void* consumer(void* arg) {
 		consumed++;
 		pthread_mutex_unlock(&queue_lock);
 		pthread_cond_signal(&producer_condvar);
-		CAUSAL_PROGRESS;
+		//CAUSAL_PROGRESS;
 	}
 }
 
