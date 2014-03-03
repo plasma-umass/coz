@@ -11,57 +11,41 @@ optimizations. This allows the profiler to establish causality:
 developers had assumed they were getting all along.
 
 ## Requirements
-Our prototype causal profiler runs on Linux and Mac OSX. The profiler
-relies on the LLVM infrastructure to insert profiling instrumentation.
-Development is done using LLVM 3.3, but other recent releases should be
-compatible.
+Our prototype causal profiler runs with unmodified Linux executables. Building and running the causal profiler requires:
+
+- [Clang 3.1 or newer](http://clang.llvm.org) or another compiler with C++11 support
+- [libudis86](http://udis86.sourceforge.net) version 1.7.2 or newer
+- [Linux](http://kernel.org) version 2.6.32 or newer, including the `perf_event` API
 
 ## Building
-To build the profiler, you first need the source for LLVM 3.3.
-
-### Getting LLVM source code
-Check out the LLVM source code:
-```svn co http://llvm.org/svn/llvm-project/llvm/trunk llvm```
-
-*Recommended* - Check out clang:
-```bash
-cd llvm/tools
-svn co http://llvm.org/svn/llvm-project/cfe/trunk clang
-cd ../projects
-svn co http://llvm/org/svn/llvm-project/compiler-rt/trunk compiler-rt
-cd ../..
-```
-
-### Getting Causal
-The code for this project should be cloned into the `llvm/projects`
-directory. Starting from your original location:
-```bash
-cd llvm/projects
-git clone http://github.com/plasma-umass/causal causal
-cd ../..
-```
-
-### Configure and build
-LLVM has many different configuration options. The options below are 
-reasonable defaults:
-```bash
-cd llvm
-./configure --prefix=/usr/local --enable-optimized --enable-assertions --enable-shared
-make install
-```
-
-### OSX Workarounds
-The causal profiler uses C++11 support, including some functionality
-only available in the LLVM project's libc++ runtime library on OSX. To obtain
-and use libc++, follow the directions available at http://libcxx.llvm.org.
+To build the profiler, just clone this repository and run `make release`. This is just a prototype, so installing profiling support system-wide is not recommended.
 
 ## Using the Profiler
-The Makefile setup in `tests/common.mk` builds all test applications for
-causal profiling. To see the exact commands executed, move to an application
-directory under `tests` and run `make -n`.
+This repository includes sample applications in the `tests` directory, which you can run with the profiler by typing `make tests` at the project root. To profile arbitrary applications, just preload the causal profiler library:
 
-Profiler output includes results from both slowdown and speedup experiments.
-Slowdown results include symbol name, file name, and line number information
-for each block, if available. Speedup results are in CSV format, with columns
-for block name, block speedup, and performance change. These results can be
-loaded using your favorite spreadsheet or graphing program.
+    LD_PRELOAD=/path/to/causal/libcausal.so <your command here>
+
+A driver script will be available soon.
+
+## Interpreting Results
+TODO: Results processing scripts
+
+## How it Works
+
+- On startup, read configuration from environment variables
+  - CAUSAL_INCLUDE: colon-separated list of file names (or name substrings). Only the main executable will be profiled by default.
+  - Coming later: CAUSAL_PROGRESS_POINTS: colon-separated list of extra progress points
+    - file-throughput
+    - file-latency
+- Read /proc/self/maps to locate all executable memory
+- Open each executable ELF file and locate each function
+- Disassemble each function to locate all basic blocks
+  - Each basic block goes into a map from address range -> block stats
+- Start sampling every N cycles in each thread. On each cycle:
+  - If in idle mode (the initial state):
+    - Locate the basic block where the sample occurred
+    - If the block is in one of the included binaries, set this as the selected block and enter "speedup" mode
+  - In speedup mode:
+    - On each visit to the selected block, a global trip count is incremented.
+    - Each thread keeps a local pause count. On every cycle sample, the thread must pause for (<global trip count> - <local pause count>) * <delay size>
+    - Trip counts are collected using watchpoint sampling

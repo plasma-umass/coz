@@ -13,8 +13,12 @@
     return _fn; \
   }
 
+extern "C" int main(int argc, char** argv);
+
 class Real {
 public:
+  MAKE_WRAPPER(main, RTLD_NEXT);
+  
   MAKE_WRAPPER(exit, RTLD_NEXT);
   MAKE_WRAPPER(_exit, RTLD_NEXT);
   MAKE_WRAPPER(_Exit, RTLD_NEXT);

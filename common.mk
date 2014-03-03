@@ -45,9 +45,9 @@ export INDENT
 LIBFLAGS = $(addprefix -l, $(LIBS))
 INCFLAGS = $(addprefix -I, $(INCLUDE_DIRS))
 
-SHARED_LIB_TARGETS = $(filter %.$(SHLIB_SUFFIX), $(TARGETS))
+SHARED_LIB_TARGETS = $(filter %.so, $(TARGETS))
 STATIC_LIB_TARGETS = $(filter %.a, $(TARGETS))
-OTHER_TARGETS = $(filter-out %.$(SHLIB_SUFFIX), $(filter-out %.a, $(TARGETS)))
+OTHER_TARGETS = $(filter-out %.so, $(filter-out %.a, $(TARGETS)))
 
 release: DEBUG=
 release: $(ROOT)/.release build
