@@ -10,10 +10,13 @@
 #include <map>
 #include <new>
 
+#include "basic_block.h"
+#include "interval.h"
 #include "perf.h"
 #include "util.h"
 
 enum {
+  SamplingSignal = 42,
   SamplingPeriod = 10000000,
   DelaySize = 1000
 };
@@ -28,18 +31,22 @@ enum ProfilerMode {
 
 class Causal {
 public:
-  void initialize(int& argc, char**& argv) {
-    srand((unsigned int)getTime());
+  void initialize() {
+    // Record the time at the beginning of execution
     _start_time = getTime();
-    signal(42, Causal::sampleSignal);
-    addThread();
+    // Set up the sampling signal handler
+    signal(SamplingSignal, Causal::sampleSignal);
     
     _initialized.store(true);
   }
   
+  void addBlock(interval i, basic_block block) {
+    _blocks.insert(std::pair<interval, basic_block>(i, block));
+  }
+  
   void shutdown() {
-    fprintf(stderr, "Got %lu samples\n", _samples.load());
     if(_initialized.exchange(false) == true) {
+      fprintf(stderr, "Got %lu samples\n", _samples.load());
     }
   }
   
@@ -70,6 +77,8 @@ private:
   size_t _start_time;
   /// The number of cycle samples
   std::atomic<size_t> _samples = ATOMIC_VAR_INIT(0);
+  /// The map of basic blocks
+  std::map<interval, basic_block> _blocks;
 };
 
 #endif
