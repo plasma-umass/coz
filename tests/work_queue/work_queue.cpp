@@ -12,7 +12,7 @@ using namespace std;
 
 enum {
 	WorkerCount = 2,
-	WorkItemCount = 3000,
+	WorkItemCount = 1000000,
 	WeightA = 3,
 	WeightB = 2,
 	WeightC = 1

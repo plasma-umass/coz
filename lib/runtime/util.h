@@ -24,10 +24,16 @@ static size_t getTime() {
 }
 
 static void wait(size_t ns) {
-  size_t end_time = getTime() + ns;
+  struct timespec ts;
+  ts.tv_nsec = ns % (1000 * 1000 * 1000);
+  ts.tv_sec = (ns - ts.tv_nsec) / (1000 * 1000 * 1000);
+  
+  while(nanosleep(&ts, &ts) != 0) {}
+  
+  /*size_t end_time = getTime() + ns;
   while(getTime() < end_time) {
     __asm__("pause");
-  }
+  }*/
 }
 
 #endif
