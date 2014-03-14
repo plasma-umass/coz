@@ -68,7 +68,7 @@ int phdrCallback(struct dl_phdr_info* info, size_t sz, void* data) {
   map<uintptr_t, string>& libs = *reinterpret_cast<map<uintptr_t, string>*>(data);
   if(libs.size() == 0) {
     // Get the full path to the main executable
-    char* main_exe = realpath(__progname_full, NULL);
+    char* main_exe = realpath(__progname_full, nullptr);
     // The first callback will pass the relocation of the main executable
     libs[info->dlpi_addr] = string(main_exe);
     // Free the full path
@@ -98,7 +98,7 @@ void processELFFile(string path, uintptr_t loaded_base) {
   }
   
   // Map the ELF file
-  ELFHeader* header = (ELFHeader*)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  ELFHeader* header = (ELFHeader*)mmap(nullptr, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
   if(header == MAP_FAILED) {
     WARNING("Failed to map file %s", path.c_str());
     return;
@@ -187,8 +187,8 @@ bool checkELFMagic(ELFHeader* header) {
 void processFunction(string path, string fn_name, interval loaded) {
   // Get a demangled version of the function name
   string demangled;
-  char* demangled_cstr = abi::__cxa_demangle(fn_name.c_str(), NULL, NULL, NULL);
-  if(demangled_cstr == NULL) {
+  char* demangled_cstr = abi::__cxa_demangle(fn_name.c_str(), nullptr, nullptr, nullptr);
+  if(demangled_cstr == nullptr) {
     demangled = fn_name;
   } else {
     demangled = demangled_cstr;
@@ -227,11 +227,9 @@ void processFunction(string path, string fn_name, interval loaded) {
         // Add the branch target
         branch_target target = i.target();
         if(target.dynamic()) {
-          WARNING("Unhandled dynamic branch target in %s : %s+%lu: %s", 
-                  fn->getFileName().c_str(),
-                  fn->getName().c_str(),
-                  i.base() - loaded.getBase(),
-                  i.toString());
+          // TODO: Finish processing basic blocks, then just include all uncovered
+          // memory as a (probably inaccurate) "basic block"
+          WARNING("Unhandled dynamic branch target in %s", fn->getName().c_str());
         } else {
           uintptr_t t = target.value();
           

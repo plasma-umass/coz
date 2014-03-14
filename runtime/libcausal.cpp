@@ -72,9 +72,9 @@ void readProfilerArgs(int& argc, char**& argv) {
       for(int j = i; j < argc - args_to_remove; j++) {
         argv[j] = argv[j + args_to_remove];
       }
-      // Overwrite later arguments with NULL
+      // Overwrite later arguments with null
       for(int j = argc - args_to_remove; j < argc; j++) {
-        argv[j] = NULL;
+        argv[j] = nullptr;
       }
       // Update argc
       argc -= args_to_remove;
@@ -85,7 +85,7 @@ void readProfilerArgs(int& argc, char**& argv) {
   
   // If the main executable hasn't been excluded, include its full path as a pattern
   if(include_main_exe) {
-    char* main_exe = realpath(argv[0], NULL);
+    char* main_exe = realpath(argv[0], nullptr);
     Causal::getInstance().addFilePattern(main_exe);
     free(main_exe);
   }

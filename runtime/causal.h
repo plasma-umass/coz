@@ -43,7 +43,7 @@ public:
     sa.sa_sigaction = Causal::sampleSignal;
     sa.sa_flags = SA_SIGINFO;
     sigemptyset(&sa.sa_mask);
-    sigaction(SamplingSignal, &sa, NULL);
+    sigaction(SamplingSignal, &sa, nullptr);
     
     _initialized.store(true);
   }
