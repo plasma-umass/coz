@@ -1,16 +1,21 @@
 #include "inspect.h"
 
+#include <cxxabi.h>
 #include <elf.h>
 #include <fcntl.h>
+#include <link.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 
 #include <cstdint>
+#include <map>
 #include <set>
+#include <stack>
 #include <string>
 
 #include "arch.h"
 #include "basic_block.h"
+#include "causal.h"
 #include "disassembler.h"
 #include "log.h"
 
@@ -31,56 +36,53 @@ _X86_64(typedef Elf64_Sym ELFSymbol);
 #endif
 
 void readMappings(set<string> scope);
-void processELFFile(string path, uintptr_t base, uintptr_t limit);
+int phdrCallback(struct dl_phdr_info* info, size_t sz, void* data);
+void processELFFile(string path, uintptr_t loaded);
 bool checkELFMagic(ELFHeader* header);
-void processFunction(string path, string func_name, uintptr_t base, uintptr_t limit);
+void processFunction(string path, string func_name, interval loaded);
+
+/// Path for the main executable, as passed to exec()
+extern "C" char* __progname_full;
 
 /**
  * Locate and register all basic blocks with the profiler
  */
-void registerBasicBlocks(set<string> scope) {
-  readMappings(scope);
-}
-
-/**
- * Read /proc/self/maps to locate all mapped regions of memory
- */
-void readMappings(set<string> scope) {
-  FILE* map = fopen("/proc/self/maps", "r");
-
-  int rc; 
-  do {
-    uintptr_t base, limit;
-    char perms[4];
-    size_t offset;
-    uint8_t dev_major, dev_minor;
-    int inode;
-    char path[512];
-
-    rc = fscanf(map, "%lx-%lx %s %lx %hhx:%hhx %d %s\n",
-      &base, &limit, perms, &offset, &dev_major, &dev_minor, &inode, path);
-
-    if(rc == 8 && perms[2] == 'x') {
-      // Found an executable mapping! Process it if it matches any of the scope
-      // patterns
-      string path_string(path);
-      for(const string& pat : scope) {
-        fprintf(stderr, "%s: %s\n", pat.c_str(), path_string.c_str());
-        if(path_string.find(pat) != string::npos) {
-          processELFFile(path_string, base, limit);
-          break;
-        }
-      }
+void registerBasicBlocks() {
+  // Collect mapping information for all shared libraries
+  map<uintptr_t, string> libs;
+  dl_iterate_phdr(phdrCallback, reinterpret_cast<void*>(&libs));
+  // Loop over libs
+  for(const auto& e : libs) {
+    // Check if each library should be included
+    if(Causal::getInstance().includeFile(e.second) ) {
+      INFO("Processing file %s", e.second.c_str());
+      processELFFile(e.second, e.first);
     }
-  } while(rc == 8);
-
-  fclose(map);
+  }
 }
 
 /**
- * Open and map an ELF file, then process its symbols
+ * Callback invoked for each loaded binary or library
  */
-void processELFFile(string path, uintptr_t base, uintptr_t limit) {
+int phdrCallback(struct dl_phdr_info* info, size_t sz, void* data) {
+  map<uintptr_t, string>& libs = *reinterpret_cast<map<uintptr_t, string>*>(data);
+  if(libs.size() == 0) {
+    // Get the full path to the main executable
+    char* main_exe = realpath(__progname_full, NULL);
+    // The first callback will pass the relocation of the main executable
+    libs[info->dlpi_addr] = string(main_exe);
+    // Free the full path
+    free(main_exe);
+  } else {
+    libs[info->dlpi_addr] = string(info->dlpi_name);
+  }
+  return 0;
+}
+
+/**
+ * Open and map an ELF file, then process its function symbols
+ */
+void processELFFile(string path, uintptr_t loaded_base) {
   // Open the loaded file from disk
   int fd = ::open(path.c_str(), O_RDONLY);
   if(fd == -1) {
@@ -148,13 +150,15 @@ void processELFFile(string path, uintptr_t base, uintptr_t limit) {
         // Only handle function symbols with a defined value
         if(ELFSymbolType(symbol.st_info) == STT_FUNC && symbol.st_value != 0) {
           const char* fn_name = strtab + symbol.st_name;
+
+          interval fn_loaded(symbol.st_value, symbol.st_value + symbol.st_size);  
           
-          if(header->e_type == ET_DYN) {
-            processFunction(path, fn_name, base + symbol.st_value, 
-              base + symbol.st_value + symbol.st_size);
-          } else {
-            processFunction(path, fn_name, symbol.st_value, symbol.st_value + symbol.st_size);
-          }
+          // Adjust the function load address for dynamic shared libraries
+          if(header->e_type == ET_DYN)
+            fn_loaded += loaded_base;
+          
+          // Process the function
+          processFunction(path, fn_name, fn_loaded);
         }
       }
     }
@@ -177,6 +181,82 @@ bool checkELFMagic(ELFHeader* header) {
     header->e_ident[2] == 'L' && header->e_ident[3] == 'F';
 }
 
-void processFunction(string path, string fn_name, uintptr_t base, uintptr_t limit) {
-  fprintf(stderr, "Found function %s at %p\n", fn_name.c_str(), (void*)base);
+/**
+ * Process a function symbol with a known load address
+ */
+void processFunction(string path, string fn_name, interval loaded) {
+  // Get a demangled version of the function name
+  string demangled;
+  char* demangled_cstr = abi::__cxa_demangle(fn_name.c_str(), NULL, NULL, NULL);
+  if(demangled_cstr == NULL) {
+    demangled = fn_name;
+  } else {
+    demangled = demangled_cstr;
+  }
+  
+  // Allocate a function info object for basic blocks to share
+  function_info* fn = new function_info(path, fn_name, demangled, loaded);
+  
+  // Disassemble to find starting addresses of all basic blocks
+  set<uintptr_t> block_bases;
+  stack<uintptr_t> q;
+  q.push(loaded.getBase());
+
+  while(q.size() > 0) {
+    uintptr_t p = q.top();
+    q.pop();
+
+    // Skip null or already-seen pointers
+    if(p == 0 || block_bases.find(p) != block_bases.end())
+      continue;
+
+    // This is a new block starting address
+    block_bases.insert(p);
+
+    disassembler i(p, loaded.getLimit());
+    bool block_ended = false;
+    do {
+      // Any branch ends a basic block
+      if(i.branches()) {
+        block_ended = true;
+        
+        // If the block falls through, start a new block at the next instruction
+        if(i.fallsThrough())
+          q.push(i.limit());
+        
+        // Add the branch target
+        branch_target target = i.target();
+        if(target.dynamic()) {
+          WARNING("Unhandled dynamic branch target in %s : %s+%lu: %s", 
+                  fn->getFileName().c_str(),
+                  fn->getName().c_str(),
+                  i.base() - loaded.getBase(),
+                  i.toString());
+        } else {
+          uintptr_t t = target.value();
+          
+          if(loaded.contains(t))
+            q.push(t);
+        }
+      }
+      
+      i.next();
+    } while(!block_ended && !i.done());
+  }
+  
+  // Create basic block objects and register them with the profiler
+  size_t index = 0;
+  uintptr_t prev_base = 0;
+  for(uintptr_t base : block_bases) {
+    if(prev_base != 0) {
+      interval block_range(prev_base, base);
+      Causal::getInstance().addBlock(basic_block(fn, index, block_range));
+      index++;
+    }
+    prev_base = base;
+  }
+  
+  // Add the final basic block that adds at the function's limit address
+  interval block_range(prev_base, loaded.getLimit());
+  Causal::getInstance().addBlock(basic_block(fn, index, block_range));
 }

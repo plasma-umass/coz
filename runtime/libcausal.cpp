@@ -7,12 +7,15 @@
 
 #include "causal.h"
 #include "inspect.h"
+#include "log.h"
 #include "real.h"
 #include "thread_wrapper.h"
 
 using namespace std;
 
 typedef int (*main_fn_t)(int, char**, char**);
+
+set<string> readProfilerScope(int& argc, char**& argv);
 
 /// The program's real main function, 
 main_fn_t real_main;
@@ -45,13 +48,47 @@ int wrapped_main(int argc, char** argv, char** other) {
 }
 
 /**
- * Get a set of strings to match against /proc/self/maps
+ * Process all profiler-specific arguments
  */
-set<string> readProfilerScope(int& argc, char**& argv) {
-  set<string> result;
-  // Just search the main executable for now. Parse args in the future
-  result.insert(realpath(argv[0], NULL));
-  return result;
+void readProfilerArgs(int& argc, char**& argv) {
+  bool include_main_exe = true;
+  
+  for(int i = 0; i < argc; i++) {
+    int args_to_remove = 0;
+    
+    string arg(argv[i]);
+    if(arg == "--causal-profile") {
+      // Add the next argument as a file pattern for the profiler
+      Causal::getInstance().addFilePattern(argv[i+1]);
+      args_to_remove = 2;
+    } else if(arg == "--causal-exclude-main") {
+      // Don't include the main executable in the profile
+      include_main_exe = false;
+      args_to_remove = 1;
+    }
+    
+    if(args_to_remove > 0) {
+      // Shift later arguments back `to_remove` spaces in `argv`
+      for(int j = i; j < argc - args_to_remove; j++) {
+        argv[j] = argv[j + args_to_remove];
+      }
+      // Overwrite later arguments with NULL
+      for(int j = argc - args_to_remove; j < argc; j++) {
+        argv[j] = NULL;
+      }
+      // Update argc
+      argc -= args_to_remove;
+      // Decrement i, since argv[i] now holds an unprocessed argument
+      i--;
+    }
+  }
+  
+  // If the main executable hasn't been excluded, include its full path as a pattern
+  if(include_main_exe) {
+    char* main_exe = realpath(argv[0], NULL);
+    Causal::getInstance().addFilePattern(main_exe);
+    free(main_exe);
+  }
 }
 
 /**
@@ -62,10 +99,10 @@ extern "C" int __libc_start_main(main_fn_t main_fn, int argc, char** argv,
   
   // Initialize the profiler object
   Causal::getInstance().initialize();
-  // Get the set of paths to include in the profile
-  set<string> scope = readProfilerScope(argc, argv);
+  // Process all profiler-specific arguments
+  readProfilerArgs(argc, argv);
   // Find all basic blocks and register them with the profiler
-  registerBasicBlocks(scope);
+  registerBasicBlocks();
   
   // Find the real __libc_start_main
   auto real_libc_start_main = (decltype(__libc_start_main)*)dlsym(RTLD_NEXT, "__libc_start_main");
