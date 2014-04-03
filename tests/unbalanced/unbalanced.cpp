@@ -10,47 +10,49 @@
 
 using namespace std;
 
-enum {
-  ThreadCount = 4
-};
+enum { N = 5000 };
 
-int getNthPrime(int n) {
-  list<int> primes;
-  primes.push_back(2);
-	int x = 3;
-  while(primes.size() < n) {
-    bool looks_prime = true;
-    for(list<int>::iterator d = primes.begin(); looks_prime && d != primes.end(); d++)
-      looks_prime &= (x % *d) != 0;
-    if(looks_prime)
-      primes.push_back(n);
-    x += 2;
+static void wait(size_t ns) {
+  struct timespec ts;
+  ts.tv_nsec = ns % (1000 * 1000 * 1000);
+  ts.tv_sec = (ns - ts.tv_nsec) / (1000 * 1000 * 1000);
+  
+  while(nanosleep(&ts, &ts) != 0) {}
+}
+
+void foo() {
+  static int x = 0;
+  for(int i=0; i<N; i++) {
+    x++;
   }
-  return primes.back();
+}
+
+void bar() {
+  static int y = 0;
+  for(int i=0; i<N; i++) {
+    wait(250);
+    y++;
+  }
 }
 
 void* thread1(void* arg) {
-  getNthPrime(600);
+  foo();
   return NULL;
 }
 
 void* thread2(void* arg) {
-  getNthPrime(700);
+  bar();
   return NULL;
 }
 
 int main(int argc, char** argv) {
-	pthread_t threads[ThreadCount];
-	for(size_t i=0; i<ThreadCount; i++) {
-    if(i % 2 == 0)
-      pthread_create(&threads[i], NULL, thread1, NULL);
-    else
-      pthread_create(&threads[i], NULL, thread2, NULL);
-	}
-	
-	for(size_t i=0; i<ThreadCount; i++) {
-		pthread_join(threads[i], NULL);
-	}
+  pthread_t t1, t2;
+  
+  pthread_create(&t1, NULL, thread1, NULL);
+  pthread_create(&t2, NULL, thread2, NULL);
+  
+  pthread_join(t1, NULL);
+  pthread_join(t2, NULL);
 	
 	return 0;
 }

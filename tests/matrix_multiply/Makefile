@@ -1,7 +1,13 @@
+<<<<<<< HEAD
 ROOT = ../..
 TARGETS = matrix_multiply
 LIBS = pthread dl
 ARGS = 1024	> /dev/null
+=======
+TEST_ROOT = ..
+LIBS = pthread
+ARGS = 1024
+>>>>>>> 4d5628d162b7cdfa13645b696cfc187126b21929
 
 include $(ROOT)/common.mk
 
