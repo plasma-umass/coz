@@ -1,13 +1,7 @@
-<<<<<<< HEAD
 ROOT = ../..
 TARGETS = string_match
 LIBS = pthread dl
 ARGS = string_match_datafiles/key_file_500MB.txt > /dev/null
-=======
-TEST_ROOT = ..
-LIBS = pthread
-ARGS = string_match_datafiles/key_file_50MB.txt
->>>>>>> 4d5628d162b7cdfa13645b696cfc187126b21929
 
 include $(ROOT)/common.mk
 
