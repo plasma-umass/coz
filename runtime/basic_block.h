@@ -1,6 +1,7 @@
 #if !defined(CAUSAL_RUNTIME_BASIC_BLOCK_H)
 #define CAUSAL_RUNTIME_BASIC_BLOCK_H
 
+#include <atomic>
 #include <string>
 
 #include "interval.h"
@@ -31,10 +32,35 @@ public:
   size_t getIndex() const { return _index; }
   const interval& getInterval() const { return _range; }
   
+  void addVisits(long long visits) { _visits += visits; }
+  void positiveSample() { _positive_samples++; }
+  void negativeSample() { _negative_samples++; }
+  
+  void printInfo(size_t cycle_period) {
+    size_t visits = _visits.load();
+    size_t positive_samples = _positive_samples.load();
+    size_t total_samples = positive_samples + _negative_samples.load();
+    float percent_time = (float)positive_samples / total_samples;
+    float single_run_time = percent_time * cycle_period / visits;
+    
+    fprintf(stderr, "Block %s:%lu:\n\tvisits: %lu\n\tpercent total runtime: %f%%\n\tsingle runtime: %f cycles\n",
+            getFunction()->getName().c_str(), getIndex(),
+            visits,
+            percent_time * 100,
+            single_run_time);
+  }
+  
 private:
   function_info* _fn;
   size_t _index;
   interval _range;
+  
+  /// Visits to this block during its time as the selected block
+  std::atomic<size_t> _visits;
+  /// Cycle samples *in this block* during its time as the selected block
+  std::atomic<size_t> _positive_samples;
+  /// Cycle samples *in some other block* during this block's time as the selected block
+  std::atomic<size_t> _negative_samples;
 };
 
 #endif

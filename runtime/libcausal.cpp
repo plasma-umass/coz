@@ -21,20 +21,12 @@ set<string> readProfilerScope(int& argc, char**& argv);
 main_fn_t real_main;
 
 /**
- * Entry point for all new threads
+ * Called by the application to register a progress counter
  */
-void* thread_entry(void* arg) {
-  // Copy the wrapped thread function and argument
-  thread_wrapper* wrapper = (thread_wrapper*)arg;
-  thread_wrapper local_wrapper = *wrapper;
-  // Delete the allocated wrapper object
-  delete wrapper;
-  // Register this thread with causal
-  Causal::getInstance().addThread();
-  // Run the real thread function
-  void* result = local_wrapper.run();
-  // Exit
-  pthread_exit(result);
+extern "C" void __causal_register_counter(int kind, size_t* counter,
+                                          const char* file, int line) {
+  INFO("Counter registered from %s:%d", file, line);
+  Causal::getInstance().addCounter(counter);
 }
 
 /**
@@ -112,6 +104,23 @@ extern "C" int __libc_start_main(main_fn_t main_fn, int argc, char** argv,
   int result = real_libc_start_main(wrapped_main, argc, argv, init, fini, rtld_fini, stack_end);
   
   return result;
+}
+
+/**
+ * Entry point for all new threads
+ */
+void* thread_entry(void* arg) {
+  // Copy the wrapped thread function and argument
+  thread_wrapper* wrapper = (thread_wrapper*)arg;
+  thread_wrapper local_wrapper = *wrapper;
+  // Delete the allocated wrapper object
+  delete wrapper;
+  // Register this thread with causal
+  Causal::getInstance().addThread();
+  // Run the real thread function
+  void* result = local_wrapper.run();
+  // Exit
+  pthread_exit(result);
 }
 
 /**

@@ -248,7 +248,7 @@ void processFunction(string path, string fn_name, interval loaded) {
   for(uintptr_t base : block_bases) {
     if(prev_base != 0) {
       interval block_range(prev_base, base);
-      Causal::getInstance().addBlock(basic_block(fn, index, block_range));
+      Causal::getInstance().addBlock(new basic_block(fn, index, block_range));
       index++;
     }
     prev_base = base;
@@ -256,5 +256,5 @@ void processFunction(string path, string fn_name, interval loaded) {
   
   // Add the final basic block that adds at the function's limit address
   interval block_range(prev_base, loaded.getLimit());
-  Causal::getInstance().addBlock(basic_block(fn, index, block_range));
+  Causal::getInstance().addBlock(new basic_block(fn, index, block_range));
 }

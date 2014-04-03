@@ -2,6 +2,7 @@
 #define CAUSAL_RUNTIME_PERF_H
 
 void startSampling(size_t cycles, int signum);
-void stopSampling();
+long long getTripCount(uintptr_t pc);
+void shutdownPerf();
 
 #endif
