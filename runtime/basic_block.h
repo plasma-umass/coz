@@ -34,18 +34,21 @@ public:
   
   void addVisits(long long visits) { _visits += visits; }
   void positiveSample() { _positive_samples++; }
-  void negativeSample() { _negative_samples++; }
+  void selectedSample() { _selected_samples++; }
   
-  void printInfo(size_t cycle_period) {
-    size_t visits = _visits.load();
-    size_t positive_samples = _positive_samples.load();
-    size_t total_samples = positive_samples + _negative_samples.load();
-    float percent_time = (float)positive_samples / total_samples;
-    float single_run_time = (float)positive_samples * (float)cycle_period / (float)visits;
+  bool observed() { return _visits > 0 || _positive_samples > 0; }
+  
+  void printInfo(size_t sample_period, size_t total_samples) {
+    size_t sampled_visits = _visits.load();
+    float estimated_visits = (float)(sampled_visits * _selected_samples.load()) / total_samples;
     
-    fprintf(stderr, "Block %s:%lu:\n\tvisits: %lu\n\tpercent total runtime: %f%%\n\tsingle runtime: %f cycles\n",
+    size_t positive_samples = _positive_samples.load();
+    float percent_time = (float)positive_samples / total_samples;
+    float single_run_time = (float)positive_samples * sample_period / estimated_visits;
+    
+    fprintf(stderr, "Block %s:%lu:\n\tvisits: %f\n\tpercent total runtime: %f%%\n\tsingle runtime: %f cycles\n",
             getFunction()->getName().c_str(), getIndex(),
-            visits,
+            estimated_visits,
             percent_time * 100,
             single_run_time);
   }
@@ -56,11 +59,11 @@ private:
   interval _range;
   
   /// Visits to this block during its time as the selected block
-  std::atomic<size_t> _visits;
+  std::atomic<size_t> _visits = ATOMIC_VAR_INIT(0);
   /// Cycle samples *in this block* during its time as the selected block
-  std::atomic<size_t> _positive_samples;
+  std::atomic<size_t> _positive_samples = ATOMIC_VAR_INIT(0);
   /// Cycle samples *in some other block* during this block's time as the selected block
-  std::atomic<size_t> _negative_samples;
+  std::atomic<size_t> _selected_samples = ATOMIC_VAR_INIT(0);
 };
 
 #endif

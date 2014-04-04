@@ -9,10 +9,12 @@
 #include <ucontext.h>
 
 #include <atomic>
+#include <iterator>
 #include <map>
 #include <new>
 #include <set>
 #include <string>
+#include <unordered_set>
 #include <utility>
 
 #include "basic_block.h"
@@ -23,7 +25,7 @@
 
 enum {
   SamplingSignal = 42,
-  SamplingPeriod = 50000000,
+  SamplingPeriod = 1000000,
   DelaySize = 1000
 };
 
@@ -82,6 +84,12 @@ public:
   void shutdown() {
     if(_initialized.exchange(false) == true) {
       // shut down
+      for(const auto& e : _blocks) {
+        basic_block* b = e.second;
+        if(b->observed()) {
+          b->printInfo(SamplingPeriod, _total_samples);
+        }
+      }
     }
   }
   
@@ -103,21 +111,44 @@ private:
   Causal() {}
   
   void sample(uintptr_t addr) {
+    // Find the block corresponding to the sampled PC and record an observation
+    auto sample_block_iter = _blocks.find(addr);
+    if(sample_block_iter != _blocks.end()) {
+      sample_block_iter->second->positiveSample();
+    }
+    // Increment the total number of PC samples
+    _total_samples++;
+    
     // If there is no selected block, attempt to choose the currently executing one
-    if(_selected_block == nullptr && _samples-- <= 0) {
+    if(_selected_block == nullptr) {
+      basic_block* b = nullptr;
+      basic_block* zero = nullptr;
+      
+      size_t attempts = 0;
+      do {
+        size_t i = rand() % _blocks.size();
+        auto iter = _blocks.begin();
+        std::advance(iter, i);
+        b = iter->second;
+        attempts++;
+      } while(attempts < 10 && !b->observed());
+      
+      /*
       // Attempt to locate the block in the map of valid blocks
       auto i = _blocks.find(addr);
       // If found, try to select the block
       if(i != _blocks.end()) {
         basic_block* zero = nullptr;
-        basic_block* b = i->second;
-        if(_selected_block.compare_exchange_weak(zero, b)) {
-          fprintf(stderr, "Selected block %s:%lu\n",
-                  b->getFunction()->getName().c_str(),
-                  b->getIndex());
-          // Reset the sample counter
-          _samples.store(0);
-        }
+        basic_block* b = i->second;*/
+      
+      if(_selected_block.compare_exchange_weak(zero, b)) {
+        /*fprintf(stderr, "Selected block %s:%lu\n",
+                b->getFunction()->getName().c_str(),
+                b->getIndex());*/
+        // Reset the sample counter
+        _samples.store(0);
+        // Get the trip count to activate trip counting
+        getTripCount(b->getInterval().getBase());
       }
     }
     
@@ -128,18 +159,12 @@ private:
       long long visits = getTripCount(b->getInterval().getBase());
       // Record trips
       b->addVisits(visits);
-      // Record a cycle sample for this block
-      if(b->getInterval().contains(addr)) {
-        b->positiveSample();
-      } else {
-        b->negativeSample();
-      }
+      b->selectedSample();
       
       // If the block has been selected for 100 samples, select a new one
       if(_samples++ == 100) {
         _selected_block.store(nullptr);
-        getTripCount(0);
-        b->printInfo(SamplingPeriod);
+        //b->printInfo(SamplingPeriod, _total_samples);
       }
     }
   }
@@ -175,10 +200,13 @@ private:
   std::set<std::string> _file_patterns;
   /// Has the profiler been initialized?
   std::atomic<bool> _initialized = ATOMIC_VAR_INIT(false);
+  /// The total number of PC samples
+  std::atomic<size_t> _total_samples = ATOMIC_VAR_INIT(0);
   /// The address of the basic block selected for "speedup". If the selected block
   /// is 0, then the profiler is idle
   std::atomic<basic_block*> _selected_block = ATOMIC_VAR_INIT(nullptr);
-  std::atomic<long long> _samples = ATOMIC_VAR_INIT(1);
+  /// The number of PC samples collected with the current selected block
+  std::atomic<size_t> _samples = ATOMIC_VAR_INIT(0);
   /// The starting time for the program
   size_t _start_time;
   /// The map of basic blocks
