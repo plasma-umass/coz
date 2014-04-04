@@ -26,6 +26,10 @@ public:
   MAKE_WRAPPER(pthread_create, RTLD_NEXT);
   MAKE_WRAPPER(pthread_exit, RTLD_NEXT);
   MAKE_WRAPPER(pthread_join, RTLD_NEXT);
+  
+  MAKE_WRAPPER(sigaction, RTLD_NEXT);
+  MAKE_WRAPPER(signal, RTLD_NEXT);
+  MAKE_WRAPPER(sigprocmask, RTLD_NEXT);
 };
 
 #endif

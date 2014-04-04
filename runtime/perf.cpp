@@ -3,12 +3,15 @@
 #include <linux/hw_breakpoint.h>
 #include <linux/perf_event.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/syscall.h>
+#include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "perf.h"
@@ -19,10 +22,46 @@ long perf_event_open(struct perf_event_attr *hw_event,
   return syscall(__NR_perf_event_open, hw_event, pid, cpu, group_fd, flags);
 }
 
+pid_t gettid() {
+  return syscall(__NR_gettid);
+}
+
+__thread timer_t timer;
+
+void startSampling(size_t cycles, int signum) {
+  struct sigevent ev;
+  memset(&ev, 0, sizeof(struct sigevent));
+  
+  // Signal a specific thread when the timer expires
+  ev.sigev_notify = SIGEV_THREAD_ID;
+  ev.sigev_signo = signum;
+  ev._sigev_un._tid = gettid();
+  
+  // Create a timer for this thread
+  if(timer_create(CLOCK_REALTIME, &ev, &timer) != 0) {
+    perror("timer_create:");
+    abort();
+  }
+  
+  // Set up the timer's interval
+  struct itimerspec ts;
+  // Set the intial timer value
+  ts.it_value.tv_nsec = cycles % (1000 * 1000 * 1000);
+  ts.it_value.tv_sec = (cycles - ts.it_value.tv_nsec) / (1000 * 1000 * 1000);
+  // Set the timer's interval
+  ts.it_interval = ts.it_value;
+  
+  // Start the timer
+  if(timer_settime(timer, 0, &ts, NULL) != 0) {
+    perror("timer_settime:");
+    abort();
+  }
+}
+
 /// The file descriptor for the cycle sampler perf event
 __thread int cycle_sample_fd;
 
-void startSampling(size_t cycles, int signum) {
+void startSampling_old(size_t cycles, int signum) {
   struct perf_event_attr pe;
   memset(&pe, 0, sizeof(struct perf_event_attr));
   
@@ -30,6 +69,7 @@ void startSampling(size_t cycles, int signum) {
   pe.config = PERF_COUNT_HW_CPU_CYCLES;
   pe.size = sizeof(struct perf_event_attr);
   pe.inherit = 0;
+  pe.comm = 0;
   
   pe.sample_period = cycles;
   pe.sample_type = PERF_SAMPLE_IP;
@@ -69,9 +109,7 @@ long long getTripCount(uintptr_t pc) {
       // Close the old trip counter's perf event file
       close(trip_count_fd);
     }
-    
-    fprintf(stderr, "%p: Initializing trip counter at %p\n", pthread_self(), (void*)pc);
-    
+
     // Set up a new perf event file
     struct perf_event_attr pe;
     memset(&pe, 0, sizeof(struct perf_event_attr));
@@ -109,7 +147,8 @@ long long getTripCount(uintptr_t pc) {
 }
 
 void shutdownPerf() {
-  close(cycle_sample_fd);
+  timer_delete(timer);
+  //close(cycle_sample_fd);
   trip_count_pc = 0;
   if(trip_count_thread_id == pthread_self()) {
     close(trip_count_fd);

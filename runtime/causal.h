@@ -2,6 +2,7 @@
 #define CAUSAL_RUNTIME_CAUSAL_H
 
 #include <dlfcn.h>
+#include <execinfo.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -17,11 +18,12 @@
 #include "basic_block.h"
 #include "interval.h"
 #include "perf.h"
+#include "real.h"
 #include "util.h"
 
 enum {
   SamplingSignal = 42,
-  SamplingPeriod = 10000000,
+  SamplingPeriod = 50000000,
   DelaySize = 1000
 };
 
@@ -43,7 +45,12 @@ public:
     sa.sa_sigaction = Causal::sampleSignal;
     sa.sa_flags = SA_SIGINFO;
     sigemptyset(&sa.sa_mask);
-    sigaction(SamplingSignal, &sa, nullptr);
+    //sigaddset(&sa.sa_mask, SamplingSignal);
+    Real::sigaction()(SamplingSignal, &sa, nullptr);
+    
+    sa.sa_sigaction = Causal::onError;
+    sa.sa_flags = SA_SIGINFO;
+    Real::sigaction()(SIGSEGV, &sa, nullptr);
     
     _initialized.store(true);
   }
@@ -97,7 +104,7 @@ private:
   
   void sample(uintptr_t addr) {
     // If there is no selected block, attempt to choose the currently executing one
-    if(_selected_block == nullptr) {
+    if(_selected_block == nullptr && _samples-- <= 0) {
       // Attempt to locate the block in the map of valid blocks
       auto i = _blocks.find(addr);
       // If found, try to select the block
@@ -129,17 +136,37 @@ private:
       }
       
       // If the block has been selected for 100 samples, select a new one
-      if(_samples++ == 1000) {
+      if(_samples++ == 100) {
         _selected_block.store(nullptr);
+        getTripCount(0);
         b->printInfo(SamplingPeriod);
       }
     }
-    
   }
   
   static void sampleSignal(int signum, siginfo_t* info, void* p) {
-    ucontext_t* c = (ucontext_t*)p;
-    getInstance().sample(c->uc_mcontext.gregs[REG_RIP]);
+    
+    void* buf[3];
+    int frames = backtrace(buf, 3);
+    
+    //ucontext_t* c = (ucontext_t*)p;
+    //getInstance().sample(c->uc_mcontext.gregs[REG_RIP]);
+    
+    getInstance().sample((uintptr_t)buf[2]);
+  }
+  
+  static void onError(int signum, siginfo_t* info, void* p) {
+    fprintf(stderr, "Segfault at %p\n", info->si_addr);
+    
+    void* buf[256];
+    int frames = backtrace(buf, 256);
+    char** syms = backtrace_symbols(buf, frames);
+    
+    for(int i=0; i<frames; i++) {
+      fprintf(stderr, "  %d: %s\n", i, syms[i]);
+    }
+    
+    abort();
   }
   
   /// Pointer to the current counter (only one for now)
@@ -151,7 +178,7 @@ private:
   /// The address of the basic block selected for "speedup". If the selected block
   /// is 0, then the profiler is idle
   std::atomic<basic_block*> _selected_block = ATOMIC_VAR_INIT(nullptr);
-  std::atomic<size_t> _samples = ATOMIC_VAR_INIT(0);
+  std::atomic<long long> _samples = ATOMIC_VAR_INIT(1);
   /// The starting time for the program
   size_t _start_time;
   /// The map of basic blocks

@@ -41,7 +41,7 @@ public:
     size_t positive_samples = _positive_samples.load();
     size_t total_samples = positive_samples + _negative_samples.load();
     float percent_time = (float)positive_samples / total_samples;
-    float single_run_time = percent_time * cycle_period / visits;
+    float single_run_time = (float)positive_samples * (float)cycle_period / (float)visits;
     
     fprintf(stderr, "Block %s:%lu:\n\tvisits: %lu\n\tpercent total runtime: %f%%\n\tsingle runtime: %f cycles\n",
             getFunction()->getName().c_str(), getIndex(),

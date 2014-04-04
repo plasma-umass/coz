@@ -1,6 +1,6 @@
 ROOT = ..
 TARGETS = $(ROOT)/libcausal.so
-LIBS = pthread dl udis86
+LIBS = pthread dl udis86 rt
 
 CFLAGS =
 

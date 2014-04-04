@@ -34,6 +34,7 @@ extern "C" void __causal_register_counter(int kind, size_t* counter,
  * function. This allows Causal to shut down when the real main function returns.
  */
 int wrapped_main(int argc, char** argv, char** other) {
+  Causal::getInstance().addThread();
   int result = real_main(argc, argv, other);
   Causal::getInstance().shutdown();
   return result;
@@ -88,7 +89,6 @@ void readProfilerArgs(int& argc, char**& argv) {
  */
 extern "C" int __libc_start_main(main_fn_t main_fn, int argc, char** argv,
     void (*init)(), void (*fini)(), void (*rtld_fini)(), void* stack_end) {
-  
   // Initialize the profiler object
   Causal::getInstance().initialize();
   // Process all profiler-specific arguments
@@ -104,6 +104,41 @@ extern "C" int __libc_start_main(main_fn_t main_fn, int argc, char** argv,
   int result = real_libc_start_main(wrapped_main, argc, argv, init, fini, rtld_fini, stack_end);
   
   return result;
+}
+
+extern "C" sighandler_t signal(int signum, sighandler_t handler) {
+  if(signum == SamplingSignal) {
+    return NULL;
+  } else {
+    return Real::signal()(signum, handler);
+  }
+}
+
+extern "C" int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact) {
+  if(signum == SamplingSignal) {
+    return 0;
+  } else if(act != NULL && sigismember(&act->sa_mask, SamplingSignal)) {
+    struct sigaction my_act = *act;
+    sigdelset(&my_act.sa_mask, SamplingSignal);
+    return Real::sigaction()(signum, &my_act, oldact);
+  } else {
+    return Real::sigaction()(signum, act, oldact);
+  }
+}
+
+/**
+ * Intercept calls to sigprocmask to ensure the sampling signal is left unmasked
+ */
+extern "C" int sigprocmask(int how, const sigset_t* set, sigset_t* oldset) {
+  if(how == SIG_BLOCK || how == SIG_SETMASK) {
+    if(set != NULL && sigismember(set, SamplingSignal)) {
+      sigset_t myset = *set;
+      sigdelset(&myset, SamplingSignal);
+      return Real::sigprocmask()(how, &myset, oldset);
+    }
+  }
+  
+  return Real::sigprocmask()(how, set, oldset);
 }
 
 /**

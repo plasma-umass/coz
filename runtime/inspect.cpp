@@ -57,6 +57,8 @@ void registerBasicBlocks() {
     if(Causal::getInstance().includeFile(e.second) ) {
       INFO("Processing file %s", e.second.c_str());
       processELFFile(e.second, e.first);
+    } else {
+      INFO("Skipping file %s", e.second.c_str());
     }
   }
 }
