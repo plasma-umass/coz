@@ -118,6 +118,7 @@ private:
     if(sample_block_iter != _blocks.end()) {
       sample_block_iter->second->positiveSample();
     }
+    
     // Increment the total number of PC samples
     _total_samples++;
     
@@ -161,13 +162,12 @@ private:
   
   static void sampleSignal(int signum, siginfo_t* info, void* p) {
     
-    void* buf[3];
-    int frames = backtrace(buf, 3);
+    //void* buf[3];
+    //int frames = backtrace(buf, 3);
+    //getInstance().sample((uintptr_t)buf[2]);
     
-    //ucontext_t* c = (ucontext_t*)p;
-    //getInstance().sample(c->uc_mcontext.gregs[REG_RIP]);
-    
-    getInstance().sample((uintptr_t)buf[2]);
+    ucontext_t* c = (ucontext_t*)p;
+    getInstance().sample(c->uc_mcontext.gregs[REG_RIP]);
   }
   
   static void onError(int signum, siginfo_t* info, void* p) {

@@ -28,7 +28,7 @@ pid_t gettid() {
 
 __thread timer_t timer;
 
-void startSampling(size_t cycles, int signum) {
+void startSampling_new(size_t cycles, int signum) {
   struct sigevent ev;
   memset(&ev, 0, sizeof(struct sigevent));
   
@@ -61,15 +61,13 @@ void startSampling(size_t cycles, int signum) {
 /// The file descriptor for the cycle sampler perf event
 __thread int cycle_sample_fd;
 
-void startSampling_old(size_t cycles, int signum) {
+void startSampling(size_t cycles, int signum) {
   struct perf_event_attr pe;
   memset(&pe, 0, sizeof(struct perf_event_attr));
   
   pe.type = PERF_TYPE_HARDWARE;
   pe.config = PERF_COUNT_HW_CPU_CYCLES;
   pe.size = sizeof(struct perf_event_attr);
-  pe.inherit = 0;
-  pe.comm = 0;
   
   pe.sample_period = cycles;
   pe.sample_type = PERF_SAMPLE_IP;
@@ -147,8 +145,8 @@ long long getTripCount(uintptr_t pc) {
 }
 
 void shutdownPerf() {
-  timer_delete(timer);
-  //close(cycle_sample_fd);
+  //timer_delete(timer);
+  close(cycle_sample_fd);
   trip_count_pc = 0;
   if(trip_count_thread_id == pthread_self()) {
     close(trip_count_fd);

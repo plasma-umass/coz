@@ -46,7 +46,7 @@ public:
     float percent_time = (float)positive_samples / total_samples;
     float single_run_time = (float)positive_samples * sample_period / estimated_visits;
     
-    fprintf(stderr, "Block %s:%lu:\n\tvisits: %f\n\tpercent total runtime: %f%%\n\tsingle runtime: %f cycles\n",
+    fprintf(stderr, "Block %s:%lu:\n\tvisits: %f\n\tpercent total runtime: %f%%\n\tsingle runtime: %f ns\n",
             getFunction()->getName().c_str(), getIndex(),
             estimated_visits,
             percent_time * 100,
