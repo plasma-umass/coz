@@ -11,7 +11,7 @@
 using namespace std;
 
 enum {
-	WorkerCount = 8,
+	WorkerCount = 16,
 	WorkItemCount = 100000000,
 	WeightA = 3,
 	WeightB = 2,
@@ -21,6 +21,10 @@ enum {
 void work_item_A();
 void work_item_B();
 void work_item_C();
+
+int a = 0;
+int b = 0;
+int c = 0;
 
 typedef void (*work_item_t)();
 queue<work_item_t> work_queue;
@@ -46,17 +50,14 @@ void* worker(void* arg) {
 }
 
 void work_item_A() {
-	static int a = 0;
   a++;
 }
 
 void work_item_B() {
-	static int b = 0;
   b++;
 }
 
 void work_item_C() {
-	static int c = 0;
   c++;
 }
 
@@ -85,5 +86,9 @@ int main(int argc, char** argv) {
 		pthread_join(workers[i], NULL);
 	}
 	
+	fprintf(stderr, "A: %d\n", a);
+	fprintf(stderr, "B: %d\n", b);
+	fprintf(stderr, "C: %d\n", c);
+
 	return 0;
 }

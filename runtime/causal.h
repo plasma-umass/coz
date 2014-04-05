@@ -12,6 +12,7 @@
 #include <iterator>
 #include <map>
 #include <new>
+#include <random>
 #include <set>
 #include <string>
 #include <unordered_set>
@@ -122,7 +123,7 @@ private:
     
     // If there is no selected block, pick one at random
     if(_selected_block == nullptr) {
-      size_t i = rand() % _blocks.size();
+      size_t i = _rng() % _blocks.size();
       auto iter = _blocks.begin();
       std::advance(iter, i);
       basic_block* b = iter->second;
@@ -200,6 +201,8 @@ private:
   size_t _start_time;
   /// The map of basic blocks
   std::map<interval, basic_block*> _blocks;
+  /// Random number generator
+  std::mt19937 _rng;
 };
 
 #endif
