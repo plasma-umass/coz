@@ -40,7 +40,7 @@ public:
   
   void printInfo(size_t sample_period, size_t total_samples) {
     size_t sampled_visits = _visits.load();
-    float estimated_visits = (float)(sampled_visits * _selected_samples.load()) / total_samples;
+    float estimated_visits = (float)(sampled_visits * total_samples) / _selected_samples.load();
     
     size_t positive_samples = _positive_samples.load();
     float percent_time = (float)positive_samples / total_samples;

@@ -26,6 +26,7 @@
 enum {
   SamplingSignal = 42,
   SamplingPeriod = 1000000,
+  SelectionSamples = 100,
   DelaySize = 1000
 };
 
@@ -119,28 +120,16 @@ private:
     // Increment the total number of PC samples
     _total_samples++;
     
-    // If there is no selected block, attempt to choose the currently executing one
+    // If there is no selected block, pick one at random
     if(_selected_block == nullptr) {
-      basic_block* b = nullptr;
+      size_t i = rand() % _blocks.size();
+      auto iter = _blocks.begin();
+      std::advance(iter, i);
+      basic_block* b = iter->second;
+      // Expected value for compare and swap
       basic_block* zero = nullptr;
       
-      size_t attempts = 0;
-      do {
-        size_t i = rand() % _blocks.size();
-        auto iter = _blocks.begin();
-        std::advance(iter, i);
-        b = iter->second;
-        attempts++;
-      } while(attempts < 10 && !b->observed());
-      
-      /*
-      // Attempt to locate the block in the map of valid blocks
-      auto i = _blocks.find(addr);
-      // If found, try to select the block
-      if(i != _blocks.end()) {
-        basic_block* zero = nullptr;
-        basic_block* b = i->second;*/
-      
+      // Attempt to select the randomly chosen block
       if(_selected_block.compare_exchange_weak(zero, b)) {
         /*fprintf(stderr, "Selected block %s:%lu\n",
                 b->getFunction()->getName().c_str(),
@@ -159,12 +148,12 @@ private:
       long long visits = getTripCount(b->getInterval().getBase());
       // Record trips
       b->addVisits(visits);
+      // Count PC samples that occur while this block is selected
       b->selectedSample();
       
-      // If the block has been selected for 100 samples, select a new one
-      if(_samples++ == 100) {
+      // Switch to a new block after SelectionSamples samples
+      if(_samples++ == SelectionSamples) {
         _selected_block.store(nullptr);
-        //b->printInfo(SamplingPeriod, _total_samples);
       }
     }
   }
