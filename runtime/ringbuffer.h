@@ -1,8 +1,8 @@
 #if !defined(CAUSAL_RUNTIME_RINGBUFFER_H)
 #define CAUSAL_RUNTIME_RINGBUFFER_H
 
-#include <stdint.h>
-#include <string.h>
+#include <cstdint>
+#include <cstring>
 
 template<size_t Size> class RingBuffer {
 public:

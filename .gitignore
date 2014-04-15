@@ -1,6 +1,7 @@
 .debug
 .release
 libcausal.so
+nbproject
 runtime/obj
 
 tests/*/obj
@@ -11,6 +12,9 @@ tests/histogram/histogram
 tests/kmeans/kmeans
 tests/linear_regression/linear_regression
 tests/matrix_multiply/matrix_multiply
+tests/matrix_multiply/matrix_file_A.txt
+tests/matrix_multiply/matrix_file_B.txt
+tests/matrix_multiply/matrix_file_out_pthreads.txt
 tests/pbzip2/pbzip2
 tests/pca/pca
 tests/producer_consumer/producer_consumer

@@ -5,7 +5,6 @@
 #include <set>
 #include <string>
 
-#include "causal.h"
 #include "inspect.h"
 #include "log.h"
 #include "real.h"
