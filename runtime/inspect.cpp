@@ -15,9 +15,9 @@
 
 #include "arch.h"
 #include "basic_block.h"
-#include "causal.h"
 #include "disassembler.h"
 #include "log.h"
+#include "profiler.h"
 
 using namespace std;
 
@@ -54,7 +54,7 @@ void registerBasicBlocks() {
   // Loop over libs
   for(const auto& e : libs) {
     // Check if each library should be included
-    if(Causal::getInstance().includeFile(e.second) ) {
+    if(shouldIncludeFile(e.second) ) {
       INFO("Processing file %s", e.second.c_str());
       processELFFile(e.second, e.first);
     } else {
@@ -250,7 +250,7 @@ void processFunction(string path, string fn_name, interval loaded) {
   for(uintptr_t base : block_bases) {
     if(prev_base != 0) {
       interval block_range(prev_base, base);
-      Causal::getInstance().addBlock(new basic_block(fn, index, block_range));
+      registerBasicBlock(new basic_block(fn, index, block_range));
       index++;
     }
     prev_base = base;
@@ -258,5 +258,5 @@ void processFunction(string path, string fn_name, interval loaded) {
   
   // Add the final basic block that adds at the function's limit address
   interval block_range(prev_base, loaded.getLimit());
-  Causal::getInstance().addBlock(new basic_block(fn, index, block_range));
+  registerBasicBlock(new basic_block(fn, index, block_range));
 }

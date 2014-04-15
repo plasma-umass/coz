@@ -1,11 +1,15 @@
 #if !defined(CAUSAL_RUNTIME_UTIL_H)
-#define CAUSAUL_RUNTIME_UTIL_H
+#define CAUSAL_RUNTIME_UTIL_H
 
 #if defined(__APPLE__)
 #include <mach/mach_time.h>
 #else
 #include <time.h>
 #endif
+
+#include <signal.h>
+
+#include "real.h"
 
 /**
  * Get the current time in nanoseconds
@@ -34,6 +38,16 @@ static void wait(size_t ns) {
   while(getTime() < end_time) {
     __asm__("pause");
   }*/
+}
+
+static void setSignalHandler(int signum, void (*handler)(int, siginfo_t*, void*)) {
+  // Set up the cycle sampler's signal handler
+  struct sigaction sa;
+  sa.sa_sigaction = handler;
+  sa.sa_flags = SA_SIGINFO;
+  sigemptyset(&sa.sa_mask);
+  sigaddset(&sa.sa_mask, signum);
+  Real::sigaction()(signum, &sa, nullptr);
 }
 
 #endif
