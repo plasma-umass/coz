@@ -6,6 +6,7 @@
 #include <link.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <cstdint>
 #include <map>
@@ -55,10 +56,10 @@ void registerBasicBlocks() {
   for(const auto& e : libs) {
     // Check if each library should be included
     if(shouldIncludeFile(e.second) ) {
-      INFO("Processing file %s", e.second.c_str());
+      INFO << "Processing file " << e.second;
       processELFFile(e.second, e.first);
     } else {
-      INFO("Skipping file %s", e.second.c_str());
+      INFO << "Skipping file " << e.second;
     }
   }
 }
@@ -88,27 +89,27 @@ void processELFFile(string path, uintptr_t loaded_base) {
   // Open the loaded file from disk
   int fd = ::open(path.c_str(), O_RDONLY);
   if(fd == -1) {
-    WARNING("Failed to open file %s", path.c_str());
+    WARNING << "Failed to open file " << path;
     return;
   }
 
   // Get file size
   struct stat sb;
   if(fstat(fd, &sb) == -1) {
-    WARNING("Failed to get size for file %s", path.c_str());
+    WARNING << "Failed to get size for file " << path;
     return;
   }
   
   // Map the ELF file
   ELFHeader* header = (ELFHeader*)mmap(nullptr, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
   if(header == MAP_FAILED) {
-    WARNING("Failed to map file %s", path.c_str());
+    WARNING << "Failed to map file " << path;
     return;
   }
   
   // Check for the ELF magic bytes
   if(!checkELFMagic(header)) {
-    WARNING("Bad magic in file %s", path.c_str());
+    WARNING << "Bad magic in file " << path;
     return;
   }
   
@@ -118,8 +119,8 @@ void processELFFile(string path, uintptr_t loaded_base) {
   ELFSectionHeader* sections = (ELFSectionHeader*)(file_base + header->e_shoff);
   
   // Validate the section header size
-  REQUIRE(header->e_shentsize == sizeof(ELFSectionHeader), 
-    "ELF section header size does not match loaded file");
+  REQUIRE(header->e_shentsize == sizeof(ELFSectionHeader))
+      << "ELF section header size does not match loaded file";
 
   // Get the number of section headers
   size_t section_count = header->e_shnum;
@@ -137,7 +138,8 @@ void processELFFile(string path, uintptr_t loaded_base) {
       const char* strtab = (const char*)(file_base + strtab_section.sh_offset);
  
       // Validate the symbol entry size
-      REQUIRE(section.sh_entsize == sizeof(ELFSymbol), "ELF symbol size does not match loaded file");
+      REQUIRE(section.sh_entsize == sizeof(ELFSymbol)) 
+          << "ELF symbol size does not match loaded file";
  
       // Get the base pointer to this section's data
       ELFSymbol* symbols = (ELFSymbol*)(file_base + section.sh_offset);
@@ -168,11 +170,11 @@ void processELFFile(string path, uintptr_t loaded_base) {
   
   // Unmap the ELF file
   if(munmap(header, sb.st_size) == -1)
-    WARNING("Failed to unmap ELF file");
+    WARNING << "Failed to unmap ELF file";
 
   // Close the ELF file
   if(close(fd) == -1)
-    WARNING("Failed to close ELF file");
+    WARNING << "Failed to close ELF file";
 }
 
 /**
@@ -231,7 +233,7 @@ void processFunction(string path, string fn_name, interval loaded) {
         if(target.dynamic()) {
           // TODO: Finish processing basic blocks, then just include all uncovered
           // memory as a (probably inaccurate) "basic block"
-          WARNING("Unhandled dynamic branch target in %s", fn->getName().c_str());
+          WARNING << "Unhandled dynamic branch target in " << fn->getName();
         } else {
           uintptr_t t = target.value();
           

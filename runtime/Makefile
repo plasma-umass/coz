@@ -1,6 +1,7 @@
 ROOT = ..
 TARGETS = $(ROOT)/libcausal.so
 LIBS = pthread dl udis86 rt
+INCLUDE_DIRS = $(ROOT)/deps/cppgoodies/include
 
 CFLAGS =
 

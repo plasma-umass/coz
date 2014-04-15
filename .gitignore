@@ -4,6 +4,8 @@ libcausal.so
 nbproject
 runtime/obj
 
+deps
+
 tests/*/obj
 tests/*/*_datafiles
 tests/pbzip2/data

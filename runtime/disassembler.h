@@ -38,7 +38,7 @@ public:
 				case 16: return _op.lval.sword + _pc;
 				case 32: return _op.lval.sdword + _pc;
 				case 64: return _op.lval.sqword + _pc;
-				default: WARNING("Unsupported JIMM operand size: %hhu", _op.size);
+				default: WARNING << "Unsupported JIMM operand size: " << _op.size;
 					return 0;
 			}
 		} else if(_op.type == UD_OP_MEM) {
@@ -49,13 +49,13 @@ public:
 			} else if(_op.base == UD_NONE) {
 				p = 0;
 			} else {
-				WARNING("Unsupported memory operand base");
+				WARNING << "Unsupported memory operand base";
 				return 0;
 			}
 			
 			// Decode the index and scale portion, if any
 			if(_op.index != UD_NONE) {
-        WARNING("Memory operands with an index register are not supported");
+        WARNING << "Memory operands with an index register are not supported";
 				return 0;
 			}
       
@@ -71,7 +71,7 @@ public:
 			}
 			return *(uintptr_t*)p;
 		}
-		WARNING("Unsupported jump target operand type");
+		WARNING << "Unsupported jump target operand type";
 		return 0;
 	}
 };

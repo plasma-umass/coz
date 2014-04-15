@@ -106,3 +106,9 @@ $(RECURSIVE_TARGETS)::
 	  echo "$(INDENT)[$@] Entering $$dir"; \
 	  $(MAKE) -C $$dir $@ DEBUG=$(DEBUG); \
 	done
+
+$(ROOT)/deps/cppgoodies/include:
+	@ echo $(INDENT)[git] Checking out cppgoodies
+	@rm -rf $(ROOT)/deps/cppgoodies
+	@mkdir -p $(ROOT)/deps
+	@git clone https://github.com/ccurtsinger/cppgoodies.git $(ROOT)/deps/cppgoodies
