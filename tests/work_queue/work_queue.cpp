@@ -11,7 +11,7 @@
 using namespace std;
 
 enum {
-	WorkerCount = 16,
+	WorkerCount = 1,
 	WorkItemCount = 100000000,
 	WeightA = 3,
 	WeightB = 2,

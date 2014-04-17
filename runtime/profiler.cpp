@@ -11,6 +11,7 @@
 #include "basic_block.h"
 #include "inspect.h"
 #include "interval.h"
+#include "log.h"
 #include "perf.h"
 #include "profiler.h"
 #include "util.h"
@@ -33,6 +34,9 @@ void onError(int, siginfo_t*, void*);
  */
 set<string> filePatterns;
 
+/// A map from symbols to function info
+map<string, function_info*> functions;
+
 /// A map from memory ranges to basic blocks
 map<interval, basic_block*> blocks;
 
@@ -51,8 +55,34 @@ thread_local std::default_random_engine rng;
 /// Atomic flag cleared when shutdown procedure is run
 atomic_flag shutDown = ATOMIC_FLAG_INIT;
 
-/// Count of all samples collected
+/// Count of all cycle samples collected
 atomic<size_t> totalSamples = ATOMIC_VAR_INIT(0);
+
+/// Global round number
+atomic<size_t> profilingRound = ATOMIC_VAR_INIT(0);
+
+/// The thread-local round number. When out of sync with round, the thread will update trip count sampling
+thread_local size_t localProfilingRound = 0;
+
+/// The basic block currently selected for causal profiling
+atomic<basic_block*> selectedBlock = ATOMIC_VAR_INIT(nullptr);
+
+/// The number of samples collected for the current selection
+atomic<size_t> selectedSamples = ATOMIC_VAR_INIT(0);
+
+/// The current thread's selected block
+thread_local basic_block* localSelectedBlock = nullptr;
+
+/// Is the profiler operating with a fixed block instead of sampling blocks?
+bool useFixedBlock = false;
+
+/// The fixed block
+basic_block* fixedBlock = nullptr;
+
+/// Trip count sampling foo
+atomic<size_t> tripCountEstimate = ATOMIC_VAR_INIT(0);
+thread_local size_t tripCountPeriod = 0;
+thread_local uint64_t lastTripCountTime = 0;
 
 /**
  * Parse profiling-related command line arguments, remove them from argc and
@@ -62,6 +92,8 @@ atomic<size_t> totalSamples = ATOMIC_VAR_INIT(0);
  */
 void profilerInit(int& argc, char**& argv) {
   bool include_main_exe = true;
+  string fixed_block_symbol;
+  size_t fixed_block_offset;
   
   // Loop over all arguments
   for(int i = 0; i < argc; i++) {
@@ -76,6 +108,11 @@ void profilerInit(int& argc, char**& argv) {
       // Don't include the main executable in the profile
       include_main_exe = false;
       args_to_remove = 1;
+    } else if(arg == "--causal-select-block") {
+      useFixedBlock = true;
+      fixed_block_symbol = argv[i+1];
+      fixed_block_offset = atoi(argv[i+2]);
+      args_to_remove = 3;
     }
     
     if(args_to_remove > 0) {
@@ -101,25 +138,51 @@ void profilerInit(int& argc, char**& argv) {
     free(main_exe);
   }
   
-  // Collect basic blocks (in inspect.cpp)
-  registerBasicBlocks();
+  // Collect basic blocks and functions (in inspect.cpp)
+  inspectExecutables();
+  
+  // Is the selected block fixed?
+  if(useFixedBlock) {
+    auto fn_iter = functions.find(fixed_block_symbol);
+    if(fn_iter == functions.end()) {
+      FATAL << "Unable to locate requested fixed profiling block: symbol not found";
+    }
+    
+    function_info* fn = fn_iter->second;
+    uintptr_t fixed_block_address = fn->getInterval().getBase() + fixed_block_offset;
+    auto b_iter = blocks.find(fixed_block_address);
+    
+    if(b_iter == blocks.end()) {
+      FATAL << "Unable to locate requested fixed profiling block: block not found";
+    }
+    
+    fixedBlock = b_iter->second;
+  }
   
   // Set the starting time
   startTime = getTime();
   
   // Set up signal handlers
-  setSignalHandler(CycleSampleSignal, cycleSampleReady);
-  setSignalHandler(TripSampleSignal, tripSampleReady);
+  setSignalHandler(CycleSampleSignal, cycleSampleReady, TripSampleSignal);
+  setSignalHandler(TripSampleSignal, tripSampleReady, CycleSampleSignal);
   setSignalHandler(SIGSEGV, onError);
+  setSignalHandler(SIGFPE, onError);
 }
 
 void profilerShutdown() {
   if(shutDown.test_and_set() == false) {
-    // shut down
-    for(const auto& e : blocks) {
-      basic_block* b = e.second;
-      if(b->observed()) {
-        b->printInfo(CycleSamplePeriod, totalSamples);
+    if(useFixedBlock) {
+      // Just print stats for the fixed block
+      fixedBlock->printInfo(CycleSamplePeriod, totalSamples);
+      
+      fprintf(stderr, "Estimated trips to selected block: %lu\n", tripCountEstimate.load());
+      
+    } else {
+      for(const auto& e : blocks) {
+        basic_block* b = e.second;
+        if(b->observed()) {
+          b->printInfo(CycleSamplePeriod, totalSamples);
+        }
       }
     }
   }
@@ -142,57 +205,84 @@ bool shouldIncludeFile(const string& filename) {
   return false;
 }
 
+void registerFunction(function_info* fn) {
+  functions.insert(pair<string, function_info*>(fn->getRawSymbolName(), fn));
+}
+
 void registerBasicBlock(basic_block* block) {
   blocks.insert(pair<interval, basic_block*>(block->getInterval(), block));
 }
 
 void registerCounter(int kind, size_t* counter, const char* file, int line) {
-  fprintf(stderr, "Counter registered\n");
+  INFO << "Counter registered from " << file << ":" << line;
 }
 
 void processCycleSample(PerfSampler::Sample& s) {
-  fprintf(stderr, "cycle at %p\n", (void*)s.getIP());
-  /*auto sample_block_iter = _blocks.find(s.getIP());
-  if(sample_block_iter != _blocks.end()) {
+  // Keep track of the total number of cycle samples
+  totalSamples++;
+
+  // Try to locate the basic block that contains the IP from this sample
+  auto sample_block_iter = blocks.find(s.getIP());
+  // If a block was found...
+  if(sample_block_iter != blocks.end()) {
+    // Get the block
     basic_block* b = sample_block_iter->second;
-
+    // Record a cycle sample in the block
     b->positiveSample();
+    
+    // If there is no selected block, try to set it to this one
+    if(selectedBlock == nullptr) {
+      // Is the profiler running with a single fixed block?
+      if(useFixedBlock) {
+        // If so, swap in the fixed block
+        b = fixedBlock;
+      }
 
-    // If there is no selected block, pick one at random
-    if(_selected_block == nullptr) {
       // Expected value for compare and swap
       basic_block* zero = nullptr;
 
-      // Attempt to select the randomly chosen block
-      if(_selected_block.compare_exchange_weak(zero, b)) {
-        // Reset the sample counter
-        _samples.store(0);
-        // Activate trip counting in the selected block
-        makeTripCountSampler(b->getInterval().getBase()).start();
+      // Attempt to set the selected block
+      if(selectedBlock.compare_exchange_weak(zero, b)) {
+        // Clear count of samples on the current selection
+        selectedSamples.store(0);
+        profilingRound++;
       }
     }
   }
-
-  _total_samples++;
-
-  basic_block* b = _selected_block;
-  if(b != nullptr) {
-    // Add to the count of samples collected while the current block was selected
-    b->selectedSample();
-
-    // Switch to a new block after SelectionSamples samples
-    if(_samples++ == SelectionSamples) {
-      getTripCountSampler().stop();
-      fprintf(stderr, "Estimate for %s:%lu: %f visits\n",
-              b->getFunction()->getName().c_str(),
-              b->getIndex(),
-              (float)getTripCountSampler().count());
-      _selected_block.store(nullptr);
+  
+  // Get the currently selected block
+  basic_block* selected = selectedBlock.load();
+  // If there is a selected block...
+  if(selected != nullptr) {
+    // Increment the number of samples collected while this block is selected
+    selected->selectedSample();
+    
+    // Increment the count of samples with the current selection. If the limit is reached...
+    if(selectedSamples++ == SelectionSamples) {
+      // Clear the selected block
+      selectedBlock.store(nullptr);
     }
-  }*/
+    
+    if(localProfilingRound != profilingRound) {
+      localProfilingRound = profilingRound;
+      tripSampler = PerfSampler::trips((void*)selected->getInterval().getBase(), 
+                                       TripSamplePeriod, TripSampleSignal);
+      tripSampler.start(1);
+    }
+  }
 }
 
 void processTripSample(PerfSampler::Sample& s) {
+  uint64_t currentTime = s.getTime();
+  if(lastTripCountTime != 0 && tripCountPeriod != 0) {
+    tripCountEstimate += (currentTime - lastTripCountTime) / tripCountPeriod;
+  }
+  
+  lastTripCountTime = currentTime;
+  tripCountPeriod = tripSampler.timeRunning();
+  
+  //fprintf(stderr, "Period: %lu\n", tripCountPeriod);
+  
   /*basic_block* b = _selected_block;
   if(b != nullptr) {
     b->addVisits(TripSamplePeriod);
@@ -208,7 +298,7 @@ void tripSampleReady(int signum, siginfo_t* info, void* p) {
 }
 
 void onError(int signum, siginfo_t* info, void* p) {
-  fprintf(stderr, "Segfault at %p\n", info->si_addr);
+  fprintf(stderr, "Signal %d at %p\n", signum, info->si_addr);
 
   void* buf[256];
   int frames = backtrace(buf, 256);
@@ -220,4 +310,3 @@ void onError(int signum, siginfo_t* info, void* p) {
 
   abort();
 }
-

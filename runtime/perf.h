@@ -80,6 +80,7 @@ private:
       perror("Failed to mmap perf event file descriptor");
       abort();
     }
+    
     // set up the ring buffer
     _data = RingBuffer<DataSize>((uintptr_t)_mmap + PageSize);
   }
@@ -167,6 +168,7 @@ public:
     pe.config = PERF_COUNT_HW_CPU_CYCLES;
     pe.sample_period = period;
     pe.sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_TIME;
+    pe.read_format = PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
     pe.disabled = 1;
     pe.exclude_hv = 1;
     
@@ -183,6 +185,7 @@ public:
     pe.bp_len = sizeof(long);
     pe.sample_period = period;
     pe.sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_TIME;
+    pe.read_format = PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
     pe.disabled = 1;
     pe.exclude_hv = 1;
     

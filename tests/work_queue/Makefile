@@ -1,7 +1,7 @@
 ROOT = ../..
 TARGETS = work_queue
 LIBS = pthread dl
-ARGS =
+ARGS = --causal-select-block _Z11work_item_Av 0
 
 include $(ROOT)/common.mk
 

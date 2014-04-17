@@ -23,7 +23,6 @@ main_fn_t real_main;
  */
 extern "C" void __causal_register_counter(int kind, size_t* counter,
                                           const char* file, int line) {
-  INFO << "Counter registered from " << file << ":" << line;
   registerCounter(kind, counter, file, line);
 }
 

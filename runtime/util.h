@@ -40,13 +40,16 @@ static void wait(size_t ns) {
   }*/
 }
 
-static void setSignalHandler(int signum, void (*handler)(int, siginfo_t*, void*)) {
+static void setSignalHandler(int signum, void (*handler)(int, siginfo_t*, void*), int other_signal = 0) {
   // Set up the cycle sampler's signal handler
   struct sigaction sa;
   sa.sa_sigaction = handler;
   sa.sa_flags = SA_SIGINFO;
   sigemptyset(&sa.sa_mask);
   sigaddset(&sa.sa_mask, signum);
+  if(other_signal != 0) {
+    sigaddset(&sa.sa_mask, other_signal);
+  }
   Real::sigaction()(signum, &sa, nullptr);
 }
 

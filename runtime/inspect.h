@@ -5,6 +5,6 @@
 #include <string>
 
 /// Locate and register all basic blocks with the profiler
-void registerBasicBlocks();
+void inspectExecutables();
 
 #endif

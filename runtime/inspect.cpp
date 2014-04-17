@@ -48,7 +48,7 @@ extern "C" char* __progname_full;
 /**
  * Locate and register all basic blocks with the profiler
  */
-void registerBasicBlocks() {
+void inspectExecutables() {
   // Collect mapping information for all shared libraries
   map<uintptr_t, string> libs;
   dl_iterate_phdr(phdrCallback, reinterpret_cast<void*>(&libs));
@@ -200,6 +200,9 @@ void processFunction(string path, string fn_name, interval loaded) {
   
   // Allocate a function info object for basic blocks to share
   function_info* fn = new function_info(path, fn_name, demangled, loaded);
+  
+  // Register the function with the profiler
+  registerFunction(fn);
   
   // Disassemble to find starting addresses of all basic blocks
   set<uintptr_t> block_bases;
