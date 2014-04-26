@@ -24,7 +24,6 @@ using std::set;
 using std::string;
 
 void cycleSampleReady(int, siginfo_t*, void*);
-void tripSampleReady(int, siginfo_t*, void*);
 void onError(int, siginfo_t*, void*);
 
 /**
@@ -78,11 +77,6 @@ bool useFixedBlock = false;
 
 /// The fixed block
 basic_block* fixedBlock = nullptr;
-
-/// Trip count sampling foo
-atomic<size_t> tripCountEstimate = ATOMIC_VAR_INIT(0);
-thread_local size_t tripCountPeriod = 0;
-thread_local uint64_t lastTripCountTime = 0;
 
 /**
  * Parse profiling-related command line arguments, remove them from argc and
@@ -163,8 +157,7 @@ void profilerInit(int& argc, char**& argv) {
   startTime = getTime();
   
   // Set up signal handlers
-  setSignalHandler(CycleSampleSignal, cycleSampleReady, TripSampleSignal);
-  setSignalHandler(TripSampleSignal, tripSampleReady, CycleSampleSignal);
+  setSignalHandler(CycleSampleSignal, cycleSampleReady);
   setSignalHandler(SIGSEGV, onError);
   setSignalHandler(SIGFPE, onError);
 }
@@ -175,7 +168,10 @@ void profilerShutdown() {
       // Just print stats for the fixed block
       fixedBlock->printInfo(CycleSamplePeriod, totalSamples);
       
-      fprintf(stderr, "Estimated trips to selected block: %lu\n", tripCountEstimate.load());
+      //uint64_t period = periodSum.load() / periodCount.load();
+      uint64_t runtime = getTime() - startTime;
+      
+      fprintf(stderr, "Total running time: %lu\n", runtime);
       
     } else {
       for(const auto& e : blocks) {
@@ -228,7 +224,7 @@ void processCycleSample(PerfSampler::Sample& s) {
     // Get the block
     basic_block* b = sample_block_iter->second;
     // Record a cycle sample in the block
-    b->positiveSample();
+    b->sample();
     
     // If there is no selected block, try to set it to this one
     if(selectedBlock == nullptr) {
@@ -254,9 +250,6 @@ void processCycleSample(PerfSampler::Sample& s) {
   basic_block* selected = selectedBlock.load();
   // If there is a selected block...
   if(selected != nullptr) {
-    // Increment the number of samples collected while this block is selected
-    selected->selectedSample();
-    
     // Increment the count of samples with the current selection. If the limit is reached...
     if(selectedSamples++ == SelectionSamples) {
       // Clear the selected block
@@ -265,36 +258,12 @@ void processCycleSample(PerfSampler::Sample& s) {
     
     if(localProfilingRound != profilingRound) {
       localProfilingRound = profilingRound;
-      tripSampler = PerfSampler::trips((void*)selected->getInterval().getBase(), 
-                                       TripSamplePeriod, TripSampleSignal);
-      tripSampler.start(1);
     }
   }
 }
 
-void processTripSample(PerfSampler::Sample& s) {
-  uint64_t currentTime = s.getTime();
-  if(lastTripCountTime != 0 && tripCountPeriod != 0) {
-    tripCountEstimate += (currentTime - lastTripCountTime) / tripCountPeriod;
-  }
-  
-  lastTripCountTime = currentTime;
-  tripCountPeriod = tripSampler.timeRunning();
-  
-  //fprintf(stderr, "Period: %lu\n", tripCountPeriod);
-  
-  /*basic_block* b = _selected_block;
-  if(b != nullptr) {
-    b->addVisits(TripSamplePeriod);
-  }*/
-}
-
 void cycleSampleReady(int signum, siginfo_t* info, void* p) {
   cycleSampler.processSamples(processCycleSample);
-}
-
-void tripSampleReady(int signum, siginfo_t* info, void* p) {
-  tripSampler.processSamples(processTripSample);
 }
 
 void onError(int signum, siginfo_t* info, void* p) {

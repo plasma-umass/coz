@@ -165,7 +165,8 @@ public:
     memset(&pe, 0, sizeof(struct perf_event_attr));
     pe.size = sizeof(struct perf_event_attr);
     pe.type = PERF_TYPE_HARDWARE;
-    pe.config = PERF_COUNT_HW_CPU_CYCLES;
+    //pe.config = PERF_COUNT_HW_CPU_CYCLES;
+    pe.config = PERF_COUNT_HW_REF_CPU_CYCLES;
     pe.sample_period = period;
     pe.sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_TIME;
     pe.read_format = PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
@@ -183,8 +184,8 @@ public:
     pe.bp_type = HW_BREAKPOINT_X;
     pe.bp_addr = (uint64_t)address;
     pe.bp_len = sizeof(long);
-    pe.sample_period = period;
-    pe.sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_TIME;
+    //pe.sample_period = period;
+    //pe.sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_TIME;
     pe.read_format = PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
     pe.disabled = 1;
     pe.exclude_hv = 1;

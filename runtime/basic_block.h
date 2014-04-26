@@ -17,7 +17,7 @@ public:
   const interval& getInterval() const { return _loaded; }
 
 private:
-  std::string _file;
+  std::string _file;  
   std::string _name;
   std::string _demangled;
   interval _loaded;
@@ -32,25 +32,17 @@ public:
   size_t getIndex() const { return _index; }
   const interval& getInterval() const { return _range; }
   
-  void addVisits(long long visits) { _visits += visits; }
-  void positiveSample() { _positive_samples++; }
-  void selectedSample() { _selected_samples++; }
+  void sample() { _samples++; }
   
-  bool observed() { return _visits > 0 || _positive_samples > 0; }
+  bool observed() { return _samples > 0; }
   
   void printInfo(size_t sample_period, size_t total_samples) {
-    size_t sampled_visits = _visits.load();
-    float estimated_visits = (float)(sampled_visits * total_samples) / _selected_samples.load();
-    
-    size_t positive_samples = _positive_samples.load();
+    size_t positive_samples = _samples.load();
     float percent_time = (float)positive_samples / total_samples;
-    float single_run_time = (float)positive_samples * sample_period / estimated_visits;
     
-    fprintf(stderr, "Block %s:%lu:\n\tvisits: %f\n\tpercent total runtime: %f%%\n\tsingle runtime: %f ns\n",
+    fprintf(stderr, "Block %s:%lu:\n\tpercent total runtime: %f%%\n",
             getFunction()->getName().c_str(), getIndex(),
-            estimated_visits,
-            percent_time * 100,
-            single_run_time);
+            percent_time * 100);
   }
   
 private:
@@ -58,12 +50,8 @@ private:
   size_t _index;
   interval _range;
   
-  /// Visits to this block during its time as the selected block
-  std::atomic<size_t> _visits = ATOMIC_VAR_INIT(0);
-  /// Cycle samples *in this block* during its time as the selected block
-  std::atomic<size_t> _positive_samples = ATOMIC_VAR_INIT(0);
-  /// Cycle samples *in some other block* during this block's time as the selected block
-  std::atomic<size_t> _selected_samples = ATOMIC_VAR_INIT(0);
+  /// Cycle samples *in this block*
+  std::atomic<size_t> _samples = ATOMIC_VAR_INIT(0);
 };
 
 #endif
