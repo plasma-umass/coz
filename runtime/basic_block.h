@@ -40,8 +40,9 @@ public:
     size_t positive_samples = _samples.load();
     float percent_time = (float)positive_samples / total_samples;
     
-    fprintf(stderr, "Block %s:%lu:\n\tpercent total runtime: %f%%\n",
+    fprintf(stderr, "Block %s:%lu:\n\tsamples: %lu\n\tpercent total runtime: %f%%\n",
             getFunction()->getName().c_str(), getIndex(),
+            positive_samples,
             percent_time * 100);
   }
   

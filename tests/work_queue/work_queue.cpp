@@ -11,7 +11,7 @@
 using namespace std;
 
 enum {
-	WorkerCount = 16,
+	WorkerCount = 8,
 	WorkItemCount = 10000000,
 	WeightA = 3,
 	WeightB = 2,
@@ -45,7 +45,7 @@ void* worker(void* arg) {
 		pthread_mutex_unlock(&work_queue_lock);
 		// Do work
 		item();
-		//CAUSAL_PROGRESS;
+		CAUSAL_PROGRESS;
 	}
 }
 

@@ -10,7 +10,7 @@ enum {
   CycleSampleSignal = 42,
   CycleSamplePeriod = 1000000,
   
-  SelectionSamples = 100000000,
+  RoundSamples = 100000000,
   DelaySize = 1000
 };
 
