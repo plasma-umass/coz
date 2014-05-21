@@ -2,13 +2,16 @@
 
 #include <atomic>
 #include <cstdint>
-#include <map>
+#include <cstdio>
 #include <random>
 #include <set>
 #include <string>
+#include <unordered_set>
 #include <utility>
 
+#include "args.h"
 #include "basic_block.h"
+#include "counter.h"
 #include "inspect.h"
 #include "interval.h"
 #include "log.h"
@@ -18,37 +21,64 @@
 
 using std::atomic;
 using std::atomic_flag;
-using std::map;
+using std::default_random_engine;
 using std::pair;
 using std::set;
 using std::string;
+using std::uniform_int_distribution;
+using std::unordered_set;
+
+enum ProfilerMode {
+  Idle,
+  Baseline,
+  Seeking,
+  Speedup,
+  Legacy
+};
 
 void cycleSampleReady(int, siginfo_t*, void*);
+void logProfilerInfo();
 void onError(int, siginfo_t*, void*);
 
-// Binary inspection results
-set<string> filePatterns;               //< File name substrings to include in the profiling set
-map<string, function_info*> functions;  //< A map from symbols to function info
-map<interval, basic_block*> blocks;     //< A map from memory ranges to basic blocks
-
 // General execution info
-size_t startTime;                         //< The starting time for the main executable
 atomic_flag shutDown = ATOMIC_FLAG_INIT;  //< Atomic flag cleared when shutdown procedure is run
+FILE* outputFile; //< The file handle to log profiler output
 
-// Sampling data
-atomic<size_t> samples = ATOMIC_VAR_INIT(0);            //< Count of all cycle samples collected
+/// The current profiling mode
+atomic<ProfilerMode> mode = ATOMIC_VAR_INIT(Idle);
+
+// Profiler round counters
 atomic<size_t> globalRound = ATOMIC_VAR_INIT(0);        //< Global round number
 thread_local size_t localRound = 0;                     //< The thread-local round number
+
+// Sample counters
+atomic<size_t> totalSamples = ATOMIC_VAR_INIT(0);       //< Count of all cycle samples collected
 atomic<size_t> roundSamples = ATOMIC_VAR_INIT(0);       //< Samples collected during the current round
-atomic<basic_block*> victim = ATOMIC_VAR_INIT(nullptr); //< The currently selected block
-bool fixedVictim = false;                               //< Should the profiler run with a statically-selected block?
 
 // Causal profiling bits
+atomic<size_t> delaySize = ATOMIC_VAR_INIT(0);    //< The current delay size (in nanoseconds)
+atomic<basic_block*> selectedBlock = ATOMIC_VAR_INIT(nullptr); //< The currently selected block
 atomic<size_t> globalDelays = ATOMIC_VAR_INIT(0); //< Global count of delays added in the current round
-thread_local size_t localDelays = 0;              //< Delays added to the current thread in the current round
+thread_local size_t localDelays = ATOMIC_VAR_INIT(0);  //< Delays added to the current thread in the current round.
+bool useFixedBlock = false;   //< Should the profiler run with a statically-selected block?
+basic_block* fixedBlock;      //< The fixed block to profile
+
+// Progress counter tracking
+unordered_set<Counter*> counters;             //< Map from counter addresses to counter tracking object
+atomic_flag counter_lock = ATOMIC_FLAG_INIT;  //< Lock acquired on insertions to the counters set
 
 /// The per-thread cycle sampler
-thread_local PerfSampler cycleSampler = PerfSampler::cycles(CycleSamplePeriod, CycleSampleSignal);
+struct perf_event_attr perfConfig = {
+  .type = PERF_TYPE_SOFTWARE,
+  .config = PERF_COUNT_SW_CPU_CLOCK,
+  .sample_period = SamplePeriod
+};
+thread_local PerfSampler cycleSampler(perfConfig, SampleSignal);
+
+// RNG
+default_random_engine generator;  //< The source of random bits
+uniform_int_distribution<size_t> delayDist(0, SamplePeriod); //< The distribution used to generate random delay sizes
+
 
 /**
  * Parse profiling-related command line arguments, remove them from argc and
@@ -57,43 +87,17 @@ thread_local PerfSampler cycleSampler = PerfSampler::cycles(CycleSamplePeriod, C
  * @param argv Argument array passed to the injected main function
  */
 void profilerInit(int& argc, char**& argv) {
+  set<string> filePatterns;
   bool include_main_exe = true;
-  string fixed_block_symbol;
-  size_t fixed_block_offset;
   
-  // Loop over all arguments
-  for(int i = 0; i < argc; i++) {
-    int args_to_remove = 0;
-    
-    string arg(argv[i]);
-    if(arg == "--causal-profile") {
-      // Add the next argument as a file pattern for the profiler
-      filePatterns.insert(argv[i+1]);
-      args_to_remove = 2;
-    } else if(arg == "--causal-exclude-main") {
-      // Don't include the main executable in the profile
+  args a(argc, argv);
+  for(auto arg = a.begin(); !arg.done(); arg.next()) {
+    if(arg.get() == "--causal-exclude-main") {
+      arg.drop();
       include_main_exe = false;
-      args_to_remove = 1;
-    } else if(arg == "--causal-select-block") {
-      fixedVictim = true;
-      fixed_block_symbol = argv[i+1];
-      fixed_block_offset = atoi(argv[i+2]);
-      args_to_remove = 3;
-    }
-    
-    if(args_to_remove > 0) {
-      // Shift later arguments back `to_remove` spaces in `argv`
-      for(int j = i; j < argc - args_to_remove; j++) {
-        argv[j] = argv[j + args_to_remove];
-      }
-      // Overwrite later arguments with null
-      for(int j = argc - args_to_remove; j < argc; j++) {
-        argv[j] = nullptr;
-      }
-      // Update argc
-      argc -= args_to_remove;
-      // Decrement i, since argv[i] now holds an unprocessed argument
-      i--;
+    } else if(arg.get() == "--causal-profile") {
+      arg.drop();
+      filePatterns.insert(arg.take());
     }
   }
   
@@ -105,51 +109,63 @@ void profilerInit(int& argc, char**& argv) {
   }
   
   // Collect basic blocks and functions (in inspect.cpp)
-  inspectExecutables();
+  inspectExecutables(filePatterns);
   
-  // Is the selected block fixed?
-  if(fixedVictim) {
-    function_info* fn = nullptr;
-    
-    auto fn_iter = functions.find(fixed_block_symbol);
-    if(fn_iter != functions.end()) {
-      fn = fn_iter->second;
-    } else {
-      // Check for matching demangled names
-      for(const auto& fn_entry : functions) {
-        if(fn_entry.second->getName() == fixed_block_symbol) {
-          fn = fn_entry.second;
-          break;
-        }
+  string output_filename = "profile.log";
+  
+  for(auto arg = a.begin(); !arg.done(); arg.next()) {
+    if(arg.get() == "--causal-select-block") {
+      arg.drop();
+      string name = arg.take();
+      basic_block* b = findBlock(name);
+      if(b != nullptr) {
+        useFixedBlock = true;
+        fixedBlock = b;
+        INFO << "Profiling with fixed block " << b->getFunction()->getName() << ":" << b->getIndex();
+      } else {
+        WARNING << "Unable to locate block " << name << ". Reverting to default mode.";
       }
-    }
       
-    REQUIRE(fn != nullptr) << "Unable to locate requested fixed profiling block: symbol not found";
-    
-    uintptr_t fixed_block_address = fn->getInterval().getBase() + fixed_block_offset;
-    auto b_iter = blocks.find(fixed_block_address);
-    
-    if(b_iter == blocks.end()) {
-      FATAL << "Unable to locate requested fixed profiling block: block not found";
+    } else if(arg.get() == "--causal-progress") {
+      arg.drop();
+      string name = arg.take();
+      basic_block* b = findBlock(name);
+      if(b != nullptr) {
+        registerCounter(new PerfCounter(ProgressCounter, b->getInterval().getBase(), name.c_str()));
+      } else {
+        WARNING << "Unable to locate block " << name;
+      }
+      
+    } else if(arg.get() == "--causal-output") {
+      arg.drop();
+      output_filename = arg.take();
     }
-    
-    victim = b_iter->second;
   }
   
-  // Set the starting time
-  startTime = getTime();
+  // Save changes to the arguments array
+  argc = a.commit(argv);
+
+  // Open the output file
+  outputFile = fopen(output_filename.c_str(), "a");
+  REQUIRE(outputFile != NULL) << "Failed to open profiler output file: " << output_filename;
+  
+  // Log profiler parameters and calibration information to the profiler output
+  logProfilerInfo();
   
   // Set up signal handlers
-  setSignalHandler(CycleSampleSignal, cycleSampleReady);
+  setSignalHandler(SampleSignal, cycleSampleReady);
   setSignalHandler(SIGSEGV, onError);
   setSignalHandler(SIGFPE, onError);
 }
 
 void profilerShutdown() {
   if(shutDown.test_and_set() == false) {
-    if(fixedVictim) {
+    fclose(outputFile);
+    // TODO: write out sampling profile results
+    
+    /*if(useFixedBlock) {
       // Just print stats for the fixed block
-      victim.load()->printInfo(CycleSamplePeriod, samples);
+      selectedBlock.load()->printInfo(SamplePeriod, totalSamples);
       
       //uint64_t period = periodSum.load() / periodCount.load();
       uint64_t runtime = getTime() - startTime;
@@ -158,13 +174,13 @@ void profilerShutdown() {
       fprintf(stderr, "Adjusted running time: %lu\n", runtime - DelaySize * globalDelays);
       
     } else {
-      for(const auto& e : blocks) {
+      for(const auto& e : getBlocks()) {
         basic_block* b = e.second;
         if(b->observed()) {
-          b->printInfo(CycleSamplePeriod, samples);
+          b->printInfo(SamplePeriod, totalSamples);
         }
       }
-    }
+    }*/
   }
 }
 
@@ -176,66 +192,160 @@ void threadShutdown() {
   cycleSampler.stop();
 }
 
-bool shouldIncludeFile(const string& filename) {
-  for(const string& pat : filePatterns) {
-    if(filename.find(pat) != string::npos) {
-      return true;
-    }
+void registerCounter(Counter* c) {
+  // Lock the counters set
+  while(counter_lock.test_and_set()) {
+    __asm__("pause");
   }
-  return false;
+  
+  // Insert the new counter
+  counters.insert(c);
+  
+  // Unlock
+  counter_lock.clear();
 }
 
-void registerFunction(function_info* fn) {
-  functions.insert(pair<string, function_info*>(fn->getRawSymbolName(), fn));
+void dropCounters() {
+  // Lock the counters set
+  while(counter_lock.test_and_set()) {
+    __asm__("pause");
+  }
+  
+  // Remove all counters
+  counters.clear();
+  
+  // Unlock
+  counter_lock.clear();
 }
 
-void registerBasicBlock(basic_block* block) {
-  blocks.insert(pair<interval, basic_block*>(block->getInterval(), block));
+/**
+ * Collect and log calibration information for basic profiler instrumentation
+ */
+void logProfilerInfo() {
+  fprintf(outputFile, "info\tsample-period=%lu\n", (size_t)SamplePeriod);
+  fprintf(outputFile, "info\tsource-counter-overhead=%lu\n", SourceCounter::calibrate());
+  fprintf(outputFile, "info\tperf-counter-overhead=%lu\n", PerfCounter::calibrate());
+  
+  // Drop all counters, so we don't use any calibration counters during the real execution
+  dropCounters();
 }
 
-void registerCounter(int kind, size_t* counter, const char* file, int line) {
-  INFO << "Counter registered from " << file << ":" << line;
+/**
+ * Log the values for all known counters
+ */
+void logCounters() {
+  // Lock the counters set
+  while(counter_lock.test_and_set()) {
+    __asm__("pause");
+  }
+  
+  for(Counter* c : counters) {
+    fprintf(outputFile, "counter\tname=%s\tkind=%s\timpl=%s\tvalue=%lu\n",
+        c->getName().c_str(), c->getKindName(), c->getImplName(), c->getCount());
+  }
+  
+  counter_lock.clear();
+}
+
+/**
+ * Log the beginning of a baseline profiling round
+ */
+void logBaselineStart() {
+  // Write out time and progress counter values
+  fprintf(outputFile, "start-baseline\ttime=%lu\n", getTime());
+  logCounters();
+}
+
+/**
+ * Log the end of a baseline profiling round
+ */
+void logBaselineEnd() {
+  // Write out time and progress counter values
+  fprintf(outputFile, "end-baseline\ttime=%lu\n", getTime());
+  logCounters();
+}
+
+/**
+ * Log the beginning of a speedup profiling round
+ */
+void logSpeedupStart() {
+  // Write out time, selected block, and progress counter values
+  basic_block* b = selectedBlock.load();
+  fprintf(outputFile, "start-speedup\tblock=%s:%lu\ttime=%lu\n",
+      b->getFunction()->getName().c_str(), b->getIndex(), getTime());
+  logCounters();
+}
+
+/**
+ * Log the end of a speedup profiling round
+ */
+void logSpeedupEnd() {
+  // Write out time, progress counter values, delay count, and total delay
+  fprintf(outputFile, "end-speedup\tdelays=%lu\tdelay-size=%lu\ttime=%lu\n",
+      globalDelays.load(), delaySize.load(), getTime());
+  logCounters();
 }
 
 void processCycleSample(PerfSampler::Sample& s) {
-  // Keep track of the total number of cycle samples
-  samples++;
+  // Count the total number of samples over the whole execution
+  totalSamples++;
+  
+  // Count samples for the current round
+  size_t roundSample = roundSamples++;
 
   // Try to locate the basic block that contains the IP from this sample
-  auto sample_block_iter = blocks.find(s.getIP());
+  basic_block* sampleBlock = findBlock(s.getIP());
   // If a block was found...
-  if(sample_block_iter != blocks.end()) {
-    // Get the block
-    basic_block* b = sample_block_iter->second;
+  if(sampleBlock != nullptr) {
     // Record a cycle sample in the block
-    b->sample();
-    
-    // If there is no selected block, try to set it to this one
-    if(victim == nullptr) {
-      // Expected value for compare and swap
-      basic_block* zero = nullptr;
-
-      // Attempt to set the selected block
-      if(victim.compare_exchange_weak(zero, b)) {
-        // Clear count of samples on the current selection
-        roundSamples.store(0);
-        globalRound++;
-      }
-    }
+    sampleBlock->sample();
   }
-  
-  // Get the currently selected block
-  basic_block* selected = victim.load();
-  // If there is a selected block...
-  if(selected != nullptr) {
-    // If this thread is behind the current round, set up the new round
+
+  if(mode == Idle) {
+    // The profiler just started up and should move to baseline mode immediately
+    ProfilerMode idle = Idle;
+    if(mode.compare_exchange_weak(idle, Baseline)) {
+      logBaselineStart();
+    }
+    
+  } else if(mode == Baseline) {
+    // The profiler is measuring progress rates without a perturbation
+    // When the round is over, move to seeking mode to choose a block for speedup
+    if(roundSample == MaxRoundSamples) {
+      logBaselineEnd();
+      mode.store(Seeking);
+      roundSamples.store(0);
+    }
+    
+  } else if(mode == Seeking) {
+    // The profiler is looking for a block to select for "speedup"
+    basic_block* zero = nullptr;
+    basic_block* next_block = sampleBlock;
+    
+    // If the profiler is running on a fixed block, set it as the next block
+    if(useFixedBlock) {
+      next_block = fixedBlock;
+    }
+    
+    // If the current sample is in a known block, attempt to set it as the selected block
+    if(next_block != nullptr && selectedBlock.compare_exchange_weak(zero, next_block)) {
+      globalRound++;
+      delaySize.store(delayDist(generator));
+      mode.store(Speedup);
+      roundSamples.store(0);
+      logSpeedupStart();
+    }
+    
+  } else if(mode == Speedup) {
+    // The profiler is measuring progress rates with a "speedup" enabled
     if(localRound != globalRound) {
       localRound = globalRound;
       localDelays = 0;
     }
     
-    // If this thread is currently running the victim block...
-    if(selected->getInterval().contains(s.getIP())) {
+    basic_block* selected = selectedBlock.load();
+    // If this thread is currently running the selected block...
+    if(selected != nullptr && selected->getInterval().contains(s.getIP())) {
       if(localDelays < globalDelays) {
         // If this thread is behind on delays, just increment the local delay count
         localDelays++;
@@ -246,17 +356,21 @@ void processCycleSample(PerfSampler::Sample& s) {
       }
     }
     
+    size_t old_global_delays = globalDelays.load();
+    size_t old_local_delays = __atomic_exchange_n(&localDelays, old_global_delays, __ATOMIC_SEQ_CST);
+    
     // Catch up on delays
-    if(localDelays < globalDelays) {
-      size_t delayTime = DelaySize * (globalDelays - localDelays);
-      wait(delayTime);
+    if(old_local_delays < old_global_delays) {
+      size_t delay_count = old_global_delays - old_local_delays;
+      wait(delaySize * delay_count);
     }
     
-    // Increment the count of samples with the current selection.
-    if(roundSamples++ == RoundSamples && !fixedVictim) {
-      // If the round is over, clear the victim
-      victim.store(nullptr);
-      globalRound++;
+    if(roundSample == MaxRoundSamples) {
+      logSpeedupEnd();
+      mode.store(Baseline);
+      roundSamples.store(0);
+      selectedBlock.store(nullptr);
+      logBaselineStart();
     }
   }
 }

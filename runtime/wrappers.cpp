@@ -23,7 +23,7 @@ public:
  * Prevent profiled applications from registering a handler for the profiler's sampling signal 
  */
 extern "C" sighandler_t signal(int signum, sighandler_t handler) {
-  if(signum == CycleSampleSignal) {
+  if(signum == SampleSignal) {
     return NULL;
   } else {
     return Real::signal()(signum, handler);
@@ -34,11 +34,11 @@ extern "C" sighandler_t signal(int signum, sighandler_t handler) {
  * Prevent profiled applications from registering a handler for the profiler's sampling signal
  */
 extern "C" int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact) {
-  if(signum == CycleSampleSignal) {
+  if(signum == SampleSignal) {
     return 0;
-  } else if(act != NULL && sigismember(&act->sa_mask, CycleSampleSignal)) {
+  } else if(act != NULL && sigismember(&act->sa_mask, SampleSignal)) {
     struct sigaction my_act = *act;
-    sigdelset(&my_act.sa_mask, CycleSampleSignal);
+    sigdelset(&my_act.sa_mask, SampleSignal);
     return Real::sigaction()(signum, &my_act, oldact);
   } else {
     return Real::sigaction()(signum, act, oldact);
@@ -50,9 +50,9 @@ extern "C" int sigaction(int signum, const struct sigaction* act, struct sigacti
  */
 extern "C" int sigprocmask(int how, const sigset_t* set, sigset_t* oldset) {
   if(how == SIG_BLOCK || how == SIG_SETMASK) {
-    if(set != NULL && sigismember(set, CycleSampleSignal)) {
+    if(set != NULL && sigismember(set, SampleSignal)) {
       sigset_t myset = *set;
-      sigdelset(&myset, CycleSampleSignal);
+      sigdelset(&myset, SampleSignal);
       return Real::sigprocmask()(how, &myset, oldset);
     }
   }

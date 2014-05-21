@@ -75,6 +75,10 @@ void fill_work_queue() {
 }
 
 int main(int argc, char** argv) {
+  for(int i=0; i<argc; i++) {
+    fprintf(stderr, "%d: %s\n", i, argv[i]);
+  }
+  
 	fill_work_queue();
 	
 	pthread_t workers[WorkerCount];

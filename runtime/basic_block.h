@@ -31,20 +31,8 @@ public:
   const function_info* getFunction() const { return _fn; }
   size_t getIndex() const { return _index; }
   const interval& getInterval() const { return _range; }
-  
-  void sample() { _samples++; }
-  
   bool observed() { return _samples > 0; }
-  
-  void printInfo(size_t sample_period, size_t total_samples) {
-    size_t positive_samples = _samples.load();
-    float percent_time = (float)positive_samples / total_samples;
-    
-    fprintf(stderr, "Block %s:%lu:\n\tsamples: %lu\n\tpercent total runtime: %f%%\n",
-            getFunction()->getName().c_str(), getIndex(),
-            positive_samples,
-            percent_time * 100);
-  }
+  void sample() { _samples++; }
   
 private:
   function_info* _fn;

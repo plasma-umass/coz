@@ -5,21 +5,19 @@
 #include <string>
 
 #include "basic_block.h"
+#include "causal.h"
+#include "counter.h"
 
 enum {
-  CycleSampleSignal = 42,
-  CycleSamplePeriod = 1000000,
-  
-  RoundSamples = 100000000,
-  DelaySize = 1000
+  SampleSignal = 42,
+  SamplePeriod = 1000000, // 1 millisecond
+  MaxRoundSamples = 1000
 };
 
+void dropCounters();
 void profilerInit(int& argc, char**& argv);
 void profilerShutdown();
-void registerBasicBlock(basic_block* block);
-void registerCounter(int kind, size_t* counter, const char* file, int line);
-void registerFunction(function_info* fn);
-bool shouldIncludeFile(const std::string& filename);
+void registerCounter(Counter* c);
 void threadInit();
 void threadShutdown();
 

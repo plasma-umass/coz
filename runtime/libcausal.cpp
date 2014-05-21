@@ -5,6 +5,7 @@
 #include <set>
 #include <string>
 
+#include "counter.h"
 #include "inspect.h"
 #include "log.h"
 #include "real.h"
@@ -21,9 +22,8 @@ main_fn_t real_main;
 /**
  * Called by the application to register a progress counter
  */
-extern "C" void __causal_register_counter(int kind, size_t* counter,
-                                          const char* file, int line) {
-  registerCounter(kind, counter, file, line);
+extern "C" void __causal_register_counter(CounterType kind, size_t* counter, const char* name) {
+  registerCounter(new SourceCounter(kind, counter, name));
 }
 
 /**

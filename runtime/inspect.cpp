@@ -12,6 +12,7 @@
 #include <map>
 #include <set>
 #include <stack>
+#include <stdexcept>
 #include <string>
 
 #include "arch.h"
@@ -20,7 +21,11 @@
 #include "log.h"
 #include "profiler.h"
 
-using namespace std;
+using std::map;
+using std::pair;
+using std::set;
+using std::stack;
+using std::string;
 
 // The executable/library must match the current bittedness, so typedef appropriately
 _X86(typedef Elf32_Ehdr ELFHeader);
@@ -45,21 +50,40 @@ void processFunction(string path, string func_name, interval loaded);
 /// Path for the main executable, as passed to exec()
 extern "C" char* __progname_full;
 
+/// A map of functions by mangled name
+map<string, function_info*> mangled_functions;
+
+/// A map of functions by demangled name
+map<string, function_info*> demangled_functions;
+
+/// A map of basic blocks in the processed executables
+map<interval, basic_block*> blocks;
+
 /**
  * Locate and register all basic blocks with the profiler
  */
-void inspectExecutables() {
+void inspectExecutables(set<string> patterns, bool include_all) {
   // Collect mapping information for all shared libraries
   map<uintptr_t, string> libs;
   dl_iterate_phdr(phdrCallback, reinterpret_cast<void*>(&libs));
+  
   // Loop over libs
   for(const auto& e : libs) {
-    // Check if each library should be included
-    if(shouldIncludeFile(e.second) ) {
+    bool include = include_all;
+    
+    // Loop through patterns to check for a match
+    auto iter = patterns.begin();
+    while(!include && iter != patterns.end()) {
+      if(e.second.find(*iter) != string::npos) {
+        include = true;
+      }
+      iter++;
+    }
+    
+    // If matched, process the file
+    if(include) {
       INFO << "Processing file " << e.second;
       processELFFile(e.second, e.first);
-    } else {
-      INFO << "Skipping file " << e.second;
     }
   }
 }
@@ -80,6 +104,104 @@ int phdrCallback(struct dl_phdr_info* info, size_t sz, void* data) {
     libs[info->dlpi_addr] = string(info->dlpi_name);
   }
   return 0;
+}
+
+/**
+ * Find a block by address
+ */
+basic_block* findBlock(uintptr_t p) {
+  auto iter = blocks.find(p);
+  if(iter != blocks.end()) {
+    return iter->second;
+  } else {
+    return nullptr;
+  }
+}
+
+/**
+ * Find a symbol by name, either mangled or demangled
+ */
+function_info* findSymbol(string s) {
+  // Check for the symbol in the mangled functions map
+  auto iter = mangled_functions.find(s);
+  if(iter != mangled_functions.end()) {
+    return iter->second;
+  }
+  // Check for the symbol in the demangled functions map
+  iter = demangled_functions.find(s);
+  if(iter != demangled_functions.end()) {
+    return iter->second;
+  }
+  // Symbol not found
+  return nullptr;
+}
+
+/**
+ * Find a basic block by name. There are three valid formats:
+ *  - <symbol_name>: returns the first block in the matching symbol
+ *  - <symbol_name>+<offset>: returns the block containing the specified address
+ *  - <symbol_name>:<block_index>: returns the block_index-th basic block in the function
+ */
+basic_block* findBlock(string s) {
+  // First, check if the argument is a symbol on its own
+  function_info* sym = findSymbol(s);
+  if(sym != nullptr) {
+    auto iter = blocks.find(sym->getInterval().getBase());
+    if(iter != blocks.end()) {
+      return iter->second;
+    }
+  }
+  
+  // Second, treat the block as a symbol+offset format:
+  size_t split_index = s.find_last_of('+');
+  if(split_index != string::npos) {
+    sym = findSymbol(s.substr(0, split_index));
+    if(sym != nullptr) {
+      try {
+        size_t offset = std::stoul(s.substr(split_index+1));
+        uintptr_t addr = sym->getInterval().getBase() + offset;
+        auto iter = blocks.find(addr);
+        if(iter != blocks.end()) {
+          return iter->second;
+        }
+      } catch(std::invalid_argument& e) {
+        // Move on
+      }
+    }
+  }
+  
+  // If that didn't work, try symbol:block_index format:
+  split_index = s.find_last_of(':');
+  if(split_index != string::npos) {
+    sym = findSymbol(s.substr(0, split_index));
+    if(sym != nullptr) {
+      try {
+        size_t block_index = std::stoul(s.substr(split_index+1));
+        // Get the first block in the function
+        auto iter = blocks.find(sym->getInterval().getBase());
+        // Advance through the blocks map until the requested block is found, the end
+        // of the map is reached, or we start seeing blocks in a different symbol
+        size_t i = block_index;
+        while(i > 0 && iter != blocks.end() && sym->getInterval().contains(iter->first.getBase())) {
+          i--;
+          iter++;
+        }
+        // If the loop finished and we didn't reach the end of the map, return the block
+        if(i == 0 && iter != blocks.end()) {
+          return iter->second;
+        }
+      } catch(std::invalid_argument& e) {
+        // Move on
+      }
+    }
+  }
+
+  // No block found
+  return nullptr;
+}
+
+const map<interval, basic_block*>& getBlocks() {
+  return blocks;
 }
 
 /**
@@ -183,6 +305,21 @@ void processELFFile(string path, uintptr_t loaded_base) {
 bool checkELFMagic(ELFHeader* header) {
   return header->e_ident[0] == 0x7f && header->e_ident[1] == 'E' &&
     header->e_ident[2] == 'L' && header->e_ident[3] == 'F';
+}
+
+/**
+ * Insert a function into the map of functions
+ */
+void registerFunction(function_info* fn) {
+  mangled_functions.insert(pair<string, function_info*>(fn->getRawSymbolName(), fn));
+  demangled_functions.insert(pair<string, function_info*>(fn->getName(), fn));
+}
+
+/**
+ * Insert a block into the map of basic blocks
+ */
+void registerBasicBlock(basic_block* block) {
+  blocks.insert(pair<interval, basic_block*>(block->getInterval(), block));
 }
 
 /**
