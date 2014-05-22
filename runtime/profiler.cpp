@@ -37,7 +37,8 @@ enum ProfilerMode {
 };
 
 void cycleSampleReady(int, siginfo_t*, void*);
-void logProfilerInfo();
+void logShutdown();
+void logStartup();
 void onError(int, siginfo_t*, void*);
 
 // General execution info
@@ -150,7 +151,7 @@ void profilerInit(int& argc, char**& argv) {
   REQUIRE(outputFile != NULL) << "Failed to open profiler output file: " << output_filename;
   
   // Log profiler parameters and calibration information to the profiler output
-  logProfilerInfo();
+  logStartup();
   
   // Set up signal handlers
   setSignalHandler(SampleSignal, cycleSampleReady);
@@ -160,27 +161,9 @@ void profilerInit(int& argc, char**& argv) {
 
 void profilerShutdown() {
   if(shutDown.test_and_set() == false) {
-    fclose(outputFile);
+    logShutdown();
     // TODO: write out sampling profile results
-    
-    /*if(useFixedBlock) {
-      // Just print stats for the fixed block
-      selectedBlock.load()->printInfo(SamplePeriod, totalSamples);
-      
-      //uint64_t period = periodSum.load() / periodCount.load();
-      uint64_t runtime = getTime() - startTime;
-      
-      fprintf(stderr, "Total running time: %lu\n", runtime);
-      fprintf(stderr, "Adjusted running time: %lu\n", runtime - DelaySize * globalDelays);
-      
-    } else {
-      for(const auto& e : getBlocks()) {
-        basic_block* b = e.second;
-        if(b->observed()) {
-          b->printInfo(SamplePeriod, totalSamples);
-        }
-      }
-    }*/
+    fclose(outputFile);
   }
 }
 
@@ -205,29 +188,24 @@ void registerCounter(Counter* c) {
   counter_lock.clear();
 }
 
-void dropCounters() {
-  // Lock the counters set
-  while(counter_lock.test_and_set()) {
-    __asm__("pause");
-  }
-  
-  // Remove all counters
-  counters.clear();
-  
-  // Unlock
-  counter_lock.clear();
-}
-
 /**
- * Collect and log calibration information for basic profiler instrumentation
+ * Log the start of a profile run, along with instrumentation calibration info
  */
-void logProfilerInfo() {
+void logStartup() {
+  fprintf(outputFile, "startup\ttime=%lu\n", getTime());
   fprintf(outputFile, "info\tsample-period=%lu\n", (size_t)SamplePeriod);
   fprintf(outputFile, "info\tsource-counter-overhead=%lu\n", SourceCounter::calibrate());
   fprintf(outputFile, "info\tperf-counter-overhead=%lu\n", PerfCounter::calibrate());
   
   // Drop all counters, so we don't use any calibration counters during the real execution
-  dropCounters();
+  counters.clear();
+}
+
+/**
+ * Log profiler shutdown
+ */
+void logShutdown() {
+  fprintf(outputFile, "shutdown\ttime=%lu\n", getTime());
 }
 
 /**

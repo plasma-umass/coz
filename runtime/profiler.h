@@ -14,7 +14,6 @@ enum {
   MaxRoundSamples = 1000
 };
 
-void dropCounters();
 void profilerInit(int& argc, char**& argv);
 void profilerShutdown();
 void registerCounter(Counter* c);
