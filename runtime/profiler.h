@@ -10,7 +10,7 @@
 
 enum {
   SampleSignal = 42,
-  SamplePeriod = 1000000, // 1 millisecond
+  SamplePeriod = 3000000, // 3 milliseconds
   MaxRoundSamples = 1000
 };
 

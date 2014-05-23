@@ -1,6 +1,7 @@
 #include <execinfo.h>
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <random>
@@ -80,7 +81,6 @@ thread_local PerfSampler cycleSampler(perfConfig, SampleSignal);
 default_random_engine generator;  //< The source of random bits
 uniform_int_distribution<size_t> delayDist(0, SamplePeriod); //< The distribution used to generate random delay sizes
 
-
 /**
  * Parse profiling-related command line arguments, remove them from argc and
  * argv, then initialize the profiler.
@@ -88,6 +88,10 @@ uniform_int_distribution<size_t> delayDist(0, SamplePeriod); //< The distributio
  * @param argv Argument array passed to the injected main function
  */
 void profilerInit(int& argc, char**& argv) {
+  // See the random number generator
+  unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+  generator = default_random_engine(seed);
+  
   set<string> filePatterns;
   bool include_main_exe = true;
   
@@ -156,7 +160,6 @@ void profilerInit(int& argc, char**& argv) {
   // Set up signal handlers
   setSignalHandler(SampleSignal, cycleSampleReady);
   setSignalHandler(SIGSEGV, onError);
-  setSignalHandler(SIGFPE, onError);
 }
 
 void profilerShutdown() {
@@ -213,16 +216,16 @@ void logShutdown() {
  */
 void logCounters() {
   // Lock the counters set
-  while(counter_lock.test_and_set()) {
-    __asm__("pause");
-  }
+  //while(counter_lock.test_and_set()) {
+  //  __asm__("pause");
+  //}
   
   for(Counter* c : counters) {
     fprintf(outputFile, "counter\tname=%s\tkind=%s\timpl=%s\tvalue=%lu\n",
         c->getName().c_str(), c->getKindName(), c->getImplName(), c->getCount());
   }
   
-  counter_lock.clear();
+  //counter_lock.clear();
 }
 
 /**
