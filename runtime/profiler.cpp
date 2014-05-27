@@ -219,28 +219,6 @@ namespace profiler {
     counter_lock.clear();
   }
   
-  atomic<size_t> threads = ATOMIC_VAR_INIT(0);
-  atomic<size_t> live_threads = ATOMIC_VAR_INIT(1);
-  
-  struct Foo {
-  public:
-    Foo() {
-      INFO << "HERE";
-      threads++;
-      live_threads++;
-    }
-    ~Foo() {
-      live_threads--;
-    }
-    
-    void show() {
-      INFO << "Total threads: " << threads.load();
-      INFO << "Live threads: " << live_threads.load();
-    }
-  };
-  
-  thread_local Foo f;
-  
   /**
    * The body of the main profiler thread
    */
@@ -260,7 +238,6 @@ namespace profiler {
       REQUIRE(rc != -1) << "Poll failed";
       
       if(rc > 0) {
-        f.show();
         for(int i = 0; i < cpu_count; i++) {
           if(perf_fds[i].revents & POLLIN) {
             // Ensure updated head and tail indices are read
