@@ -9,15 +9,15 @@
 #include "counter.h"
 
 enum {
-  SampleSignal = 42,
+  PauseSignal = 42,
   SamplePeriod = 3000000, // 3 milliseconds
   MaxRoundSamples = 1000
 };
 
-void profilerInit(int& argc, char**& argv);
-void profilerShutdown();
-void registerCounter(Counter* c);
-void threadInit();
-void threadShutdown();
+namespace profiler {
+  void startup(int& argc, char**& argv);
+  void shutdown();
+  void registerCounter(Counter* c);
+};
 
 #endif

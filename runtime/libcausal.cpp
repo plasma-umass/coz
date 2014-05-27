@@ -23,7 +23,7 @@ main_fn_t real_main;
  * Called by the application to register a progress counter
  */
 extern "C" void __causal_register_counter(CounterType kind, size_t* counter, const char* name) {
-  registerCounter(new SourceCounter(kind, counter, name));
+  profiler::registerCounter(new SourceCounter(kind, counter, name));
 }
 
 /**
@@ -31,12 +31,9 @@ extern "C" void __causal_register_counter(CounterType kind, size_t* counter, con
  * function. This allows Causal to shut down when the real main function returns.
  */
 int wrapped_main(int argc, char** argv, char** other) {
-  profilerInit(argc, argv);
-  
-  threadInit();
+  profiler::startup(argc, argv);
   int result = real_main(argc, argv, other);
-  threadShutdown();
-  profilerShutdown();
+  profiler::shutdown();
   return result;
 }
 
@@ -54,3 +51,92 @@ extern "C" int __libc_start_main(main_fn_t main_fn, int argc, char** argv,
   
   return result;
 }
+
+/**
+ * Intercept calls to fork. Child process should run with a clean profile.
+ */
+// TODO: handle fork
+
+/**
+ * Intercept calls to exit() to ensure shutdown() is run first
+ */
+extern "C" void exit(int status) {
+  // Run the profiler shutdown, but only if shutdown hasn't been run already
+  profiler::shutdown();
+  Real::exit()(status);
+}
+
+/**
+ * Intercept calls to _exit() to ensure shutdown() is run first
+ */
+extern "C" void _exit(int status) {
+  // Run the profiler shutdown, but only if shutdown hasn't been run already
+  profiler::shutdown();
+	Real::_exit()(status);
+}
+
+/**
+ * Intercept calls to _Exit() to ensure shutdown() is run first
+ */
+extern "C" void _Exit(int status) {
+  // Run the profiler shutdown, but only if shutdown hasn't been run already
+  profiler::shutdown();
+  Real::_Exit()(status);
+}
+
+/**
+ * Prevent profiled applications from registering a handler for the profiler's pause signal 
+ */
+extern "C" sighandler_t signal(int signum, sighandler_t handler) {
+  if(signum == PauseSignal) {
+    return NULL;
+  } else {
+    return Real::signal()(signum, handler);
+  }
+}
+
+/**
+ * Prevent profiled applications from registering a handler for the profiler's pause signal
+ */
+extern "C" int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact) {
+  if(signum == PauseSignal) {
+    return 0;
+  } else if(act != NULL && sigismember(&act->sa_mask, PauseSignal)) {
+    struct sigaction my_act = *act;
+    sigdelset(&my_act.sa_mask, PauseSignal);
+    return Real::sigaction()(signum, &my_act, oldact);
+  } else {
+    return Real::sigaction()(signum, act, oldact);
+  }
+}
+
+/**
+ * Intercept calls to sigprocmask to ensure the pause signal is left unmasked
+ */
+extern "C" int sigprocmask(int how, const sigset_t* set, sigset_t* oldset) {
+  if(how == SIG_BLOCK || how == SIG_SETMASK) {
+    if(set != NULL && sigismember(set, PauseSignal)) {
+      sigset_t myset = *set;
+      sigdelset(&myset, PauseSignal);
+      return Real::sigprocmask()(how, &myset, oldset);
+    }
+  }
+  
+  return Real::sigprocmask()(how, set, oldset);
+}
+
+/**
+ * Intercept calls to pthread_sigmask to ensure the pause signal is unmasked
+ * TODO: fix strange zero argument bug
+ */
+/*extern "C" int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset) {
+  if(how == SIG_BLOCK || how == SIG_SETMASK) {
+    if(set != NULL && sigismember(set, PauseSignal)) {
+      sigset_t myset = *set;
+      sigdelset(&myset, PauseSignal);
+      return Real::pthread_sigmask(how, &myset, oldset);
+    }
+  }
+  
+  return Real::pthread_sigmask(how, set, oldset);
+}*/

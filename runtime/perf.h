@@ -220,7 +220,7 @@ public:
         callback(s);
       } else {
         // Skip over the record
-        _data.skip(sizeof(struct perf_event_header));
+        _data.skip(hdr.size);
       }
       
       consumed_bytes += hdr.size;
