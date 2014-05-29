@@ -89,6 +89,8 @@ namespace profiler {
   /// Array of per-cpu perf_event sampling ring buffers
   RingBuffer<PerfBufferSize>* perf_data;
   
+  EventSet events;
+  
   /**
    * Parse profiling-related command line arguments, remove them from argc and
    * argv, then initialize the profiler.
@@ -219,6 +221,13 @@ namespace profiler {
     counter_lock.clear();
   }
   
+  class Handler {
+  public:
+    static void processSample(const PerfEvent::SampleRecord& sample) {
+      INFO << "sample! pid=" << sample.pid << " tid=" << sample.tid;
+    }
+  };
+  
   /**
    * The body of the main profiler thread
    */
@@ -234,7 +243,10 @@ namespace profiler {
     logStartup();
     
     while(true) {
-      int rc = poll(perf_fds, cpu_count, -1);
+      events.wait();
+      events.process<Handler>();
+      
+      /*int rc = poll(perf_fds, cpu_count, -1);
       REQUIRE(rc != -1) << "Poll failed";
       
       if(rc > 0) {
@@ -291,7 +303,7 @@ namespace profiler {
               
           perf_fds[i].revents = 0;
         }
-      }
+      }*/
     }
   }
   
@@ -327,14 +339,15 @@ namespace profiler {
           .size = sizeof(struct perf_event_attr),
           .disabled = 1,
           .inherit = 1,
-          .inherit_stat = 1,
           .sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_TID | PERF_SAMPLE_TIME,
-          .sample_period = 1000000,
-          .wakeup_events = 100
+          .sample_period = SamplePeriod,
+          .wakeup_events = 10
         };
+        
+        events.add(PerfEvent(pe, getpid(), cpu, -1, 0));
   
         // Open the perf event file
-        int fd = perf_event_open(&pe, 0, cpu, -1, 0);
+        /*int fd = perf_event_open(&pe, 0, cpu, -1, 0);
         REQUIRE(fd != -1) << "Failed to open perf event";
       
         // Populate an entry in the perf_fds array
@@ -350,7 +363,7 @@ namespace profiler {
         perf_data[i] = RingBuffer<PerfBufferSize>((uintptr_t)p + PageSize);
   
         // Start sampling
-        ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
+        ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);*/
       
         // Move to the next index
         i++;

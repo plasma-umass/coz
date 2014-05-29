@@ -10,7 +10,7 @@
 
 enum {
   PauseSignal = 42,
-  SamplePeriod = 3000000, // 3 milliseconds
+  SamplePeriod = 10000000, // 10ms
   MaxRoundSamples = 1000
 };
 
