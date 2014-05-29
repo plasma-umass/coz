@@ -245,65 +245,6 @@ namespace profiler {
     while(true) {
       events.wait();
       events.process<Handler>();
-      
-      /*int rc = poll(perf_fds, cpu_count, -1);
-      REQUIRE(rc != -1) << "Poll failed";
-      
-      if(rc > 0) {
-        for(int i = 0; i < cpu_count; i++) {
-          if(perf_fds[i].revents & POLLIN) {
-            // Ensure updated head and tail indices are read
-            __atomic_thread_fence(__ATOMIC_SEQ_CST);
-            // Get the ring buffer head and tail positions
-            uint64_t data_tail = perf_maps[i]->data_tail;
-            uint64_t data_head = perf_maps[i]->data_head;
-    
-            // Compute the number of bytes to read from the ring buffer
-            size_t size = data_head - data_tail;
-    
-            size_t consumed_bytes = 0;
-            while(consumed_bytes + sizeof(struct perf_event_header) < size) {
-              // Take the next record's header from the ring buffer
-              struct perf_event_header hdr = perf_data[i].peek<struct perf_event_header>();
-              // If the whole record hasn't been written, stop
-              if(consumed_bytes + hdr.size > size) {
-                break;
-              }
-      
-              // Check the type of record
-              if(hdr.type == PERF_RECORD_SAMPLE) {
-                REQUIRE(hdr.size == sizeof(Sample));
-                
-                // if this is a sample, take it and call the provided callback
-                Sample s = perf_data[i].take<Sample>();
-                basic_block* b = findBlock(s.ip);
-                if(b != nullptr) {
-                  //INFO << "Sample in thread " << s.tid << " at " << b->getFunction()->getName() << ":" << b->getIndex();
-                } else {
-                  //INFO << "Sample in thread " << s.tid << " at " << (void*)s.ip;
-                }
-              
-              } else {        
-                // Skip over the record
-                perf_data[i].skip(hdr.size);
-              }
-      
-              consumed_bytes += hdr.size;
-            }
-   
-            // Advance the tail pointer in the ring buffer
-            perf_maps[i]->data_tail += consumed_bytes;
-            __atomic_thread_fence(__ATOMIC_SEQ_CST);
-          }
-
-          if(perf_fds[i].revents & (POLLHUP | POLLERR | POLLNVAL)) {
-            WARNING << "poll returned error on perf file " << i;
-            perf_fds[i].fd = -1;
-          }
-              
-          perf_fds[i].revents = 0;
-        }
-      }*/
     }
   }
   
@@ -345,25 +286,6 @@ namespace profiler {
         };
         
         events.add(PerfEvent(pe, getpid(), cpu, -1, 0));
-  
-        // Open the perf event file
-        /*int fd = perf_event_open(&pe, 0, cpu, -1, 0);
-        REQUIRE(fd != -1) << "Failed to open perf event";
-      
-        // Populate an entry in the perf_fds array
-        perf_fds[i] = {
-          .fd = fd,
-          .events = POLLIN
-        };
-      
-        // Memory map the perf file
-        void* p = mmap(NULL, PerfMapSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-        REQUIRE(p != MAP_FAILED) << "Failed to map perf file " << i;
-        perf_maps[i] = (struct perf_event_mmap_page*)p;
-        perf_data[i] = RingBuffer<PerfBufferSize>((uintptr_t)p + PageSize);
-  
-        // Start sampling
-        ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);*/
       
         // Move to the next index
         i++;
