@@ -5,11 +5,13 @@
 #include <set>
 #include <string>
 
+#include "args.h"
 #include "counter.h"
 #include "inspect.h"
 #include "log.h"
-#include "real.h"
 #include "profiler.h"
+#include "real.h"
+#include "util.h"
 
 using namespace std;
 
@@ -31,7 +33,76 @@ extern "C" void __causal_register_counter(CounterType kind, size_t* counter, con
  * function. This allows Causal to shut down when the real main function returns.
  */
 int wrapped_main(int argc, char** argv, char** other) {
-  profiler::startup(argc, argv);
+  // The set of file patterns (substrings) to include in the profile
+  set<string> filePatterns;
+  // Should the main executable be included in the profile
+  bool include_main_exe = true;
+
+  // Walk through the arguments array to find any causal-specific arguments that change
+  // the profiler's scope
+  args a(argc, argv);
+  for(auto arg = a.begin(); !arg.done(); arg.next()) {
+    if(arg.get() == "--causal-exclude-main") {
+      arg.drop();
+      include_main_exe = false;
+    } else if(arg.get() == "--causal-profile") {
+      arg.drop();
+      filePatterns.insert(arg.take());
+    }
+  }
+
+  // If the main executable hasn't been excluded, include its full path as a pattern
+  if(include_main_exe) {
+    char* main_exe = realpath(argv[0], nullptr);
+    filePatterns.insert(main_exe);
+    free(main_exe);
+  }
+
+  // Collect basic blocks and functions (in inspect.cpp)
+  inspectExecutables(filePatterns);
+
+  // The default filename where profile output will be written
+  string output_filename = "profile.log";
+  // A single basic block to target for profiling
+  basic_block* fixed_block = nullptr;
+  // Basic blocks that should be instrumented with perf-based progress counters
+  map<basic_block*, string> perf_counter_blocks;
+
+  // Walk through the arguments array to find any causal-specific arguments that must be
+  // processed post-inspection
+  for(auto arg = a.begin(); !arg.done(); arg.next()) {
+    if(arg.get() == "--causal-select-block") {
+      arg.drop();
+      string name = arg.take();
+      basic_block* b = findBlock(name);
+      if(b != nullptr) {
+        fixed_block = b;
+        INFO << "Profiling with fixed block " << b->getFunction()->getName() << ":" << b->getIndex();
+      } else {
+        WARNING << "Unable to locate block " << name << ". Reverting to default mode.";
+      }
+    
+    } else if(arg.get() == "--causal-progress") {
+      arg.drop();
+      string name = arg.take();
+      basic_block* b = findBlock(name);
+      if(b != nullptr) {
+        // Save the block now, then generate a breakpoint-based counter later
+        perf_counter_blocks[b] = name;
+      } else {
+        WARNING << "Unable to locate block " << name;
+      }
+    
+    } else if(arg.get() == "--causal-output") {
+      arg.drop();
+      output_filename = arg.take();
+    }
+  }
+
+  // Save changes to the arguments array
+  argc = a.commit(argv);
+  
+  profiler::startup(output_filename, perf_counter_blocks, fixed_block);
   int result = real_main(argc, argv, other);
   profiler::shutdown();
   return result;
@@ -51,92 +122,3 @@ extern "C" int __libc_start_main(main_fn_t main_fn, int argc, char** argv,
   
   return result;
 }
-
-/**
- * Intercept calls to fork. Child process should run with a clean profile.
- */
-// TODO: handle fork
-
-/**
- * Intercept calls to exit() to ensure shutdown() is run first
- */
-extern "C" void exit(int status) {
-  // Run the profiler shutdown, but only if shutdown hasn't been run already
-  profiler::shutdown();
-  Real::exit()(status);
-}
-
-/**
- * Intercept calls to _exit() to ensure shutdown() is run first
- */
-extern "C" void _exit(int status) {
-  // Run the profiler shutdown, but only if shutdown hasn't been run already
-  profiler::shutdown();
-	Real::_exit()(status);
-}
-
-/**
- * Intercept calls to _Exit() to ensure shutdown() is run first
- */
-extern "C" void _Exit(int status) {
-  // Run the profiler shutdown, but only if shutdown hasn't been run already
-  profiler::shutdown();
-  Real::_Exit()(status);
-}
-
-/**
- * Prevent profiled applications from registering a handler for the profiler's pause signal 
- */
-extern "C" sighandler_t signal(int signum, sighandler_t handler) {
-  if(signum == PauseSignal) {
-    return NULL;
-  } else {
-    return Real::signal()(signum, handler);
-  }
-}
-
-/**
- * Prevent profiled applications from registering a handler for the profiler's pause signal
- */
-extern "C" int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact) {
-  if(signum == PauseSignal) {
-    return 0;
-  } else if(act != NULL && sigismember(&act->sa_mask, PauseSignal)) {
-    struct sigaction my_act = *act;
-    sigdelset(&my_act.sa_mask, PauseSignal);
-    return Real::sigaction()(signum, &my_act, oldact);
-  } else {
-    return Real::sigaction()(signum, act, oldact);
-  }
-}
-
-/**
- * Intercept calls to sigprocmask to ensure the pause signal is left unmasked
- */
-extern "C" int sigprocmask(int how, const sigset_t* set, sigset_t* oldset) {
-  if(how == SIG_BLOCK || how == SIG_SETMASK) {
-    if(set != NULL && sigismember(set, PauseSignal)) {
-      sigset_t myset = *set;
-      sigdelset(&myset, PauseSignal);
-      return Real::sigprocmask()(how, &myset, oldset);
-    }
-  }
-  
-  return Real::sigprocmask()(how, set, oldset);
-}
-
-/**
- * Intercept calls to pthread_sigmask to ensure the pause signal is unmasked
- * TODO: fix strange zero argument bug
- */
-/*extern "C" int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset) {
-  if(how == SIG_BLOCK || how == SIG_SETMASK) {
-    if(set != NULL && sigismember(set, PauseSignal)) {
-      sigset_t myset = *set;
-      sigdelset(&myset, PauseSignal);
-      return Real::pthread_sigmask(how, &myset, oldset);
-    }
-  }
-  
-  return Real::pthread_sigmask(how, set, oldset);
-}*/

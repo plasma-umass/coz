@@ -1,3 +1,5 @@
+#include "profiler.h"
+
 #include <execinfo.h>
 #include <poll.h>
 #include <pthread.h>
@@ -6,175 +8,84 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <map>
 #include <random>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
-#include "args.h"
 #include "basic_block.h"
 #include "counter.h"
 #include "inspect.h"
 #include "interval.h"
 #include "log.h"
 #include "perf.h"
-#include "profiler.h"
 #include "util.h"
 
 using namespace std;
 
 namespace profiler {
-  enum Mode {
-    Idle,
-    Baseline,
-    Seeking,
-    Speedup,
-    Legacy
-  };
-  
-  enum { PageSize = 0x1000 };
-  enum { PerfMapSize = 65 * PageSize };
-  enum { PerfBufferSize = PerfMapSize - PageSize };
-  
-  struct Sample {
-  public:
-    perf_event_header hdr;
-    uint64_t ip;
-    uint32_t pid;
-    uint32_t tid;
-    uint64_t time;
-  };
-  
-  void logStartup();
-  void logShutdown();
   void onError(int, siginfo_t*, void*);
   void onPause(int, siginfo_t*, void*);
-  void* profilerMain(void*);
+  void* profilerMain(void* arg);
+  void logBaselineStart();
+  void logBaselineEnd();
+  void logSpeedupStart(basic_block*);
+  void logSpeedupEnd(size_t, size_t);
+  void logStartup();
+  void logShutdown();
   void startPerformanceMonitoring();
-
+  
   /// The file handle to log profiler output
   FILE* outputFile;
   
   /// Flag is set when shutdown has been run
   atomic_flag shutdownRun = ATOMIC_FLAG_INIT;
   
-  /// Map from counter addresses to counter tracking object
-  unordered_set<Counter*> counters;
+  /// The fixed block for causal profiling, if any
+  basic_block* fixedBlock = nullptr;
   
-  /// Lock that guards the counters set
-  atomic_flag counter_lock = ATOMIC_FLAG_INIT;
-
-  /// The source of random bits
-  default_random_engine generator;
+  // Progress counter tracking
+  unordered_set<Counter*> counters; //< A hash set of counter object pointers
+  spinlock countersLock;           //< A lock to guard the counters hash set
   
-  /// The distribution used to generate random delay sizes
-  uniform_int_distribution<size_t> delayDist(0, SamplePeriod);
-  
-  /// Mutex used to block the profiler thread at startup
-  pthread_mutex_t profilerMutex = PTHREAD_MUTEX_INITIALIZER;
+  // Thread tracking
+  unordered_map<pid_t, pthread_t> threads;  //< A hash map from tid to pthread identifier
+  unordered_set<pid_t> deadThreads;        //< A hash set of threads that have exited
+  spinlock threadsLock;                    //< A lock to guard the threads map
+  /// A version number to indicate when the set of threads has changed
+  atomic<size_t> threadsVersion = ATOMIC_VAR_INIT(0);
   
   /// The profiler thread handle
   pthread_t profilerThread;
   
-  /// The total number of CPUs enabled
-  size_t cpu_count;
-  
-  /// Array of polling structs for per-cpu perf_event files
-  struct pollfd* perf_fds;
-  
-  /// Array of per-cpu perf_event mapped file pointers
-  struct perf_event_mmap_page** perf_maps;
-  
-  /// Array of per-cpu perf_event sampling ring buffers
-  RingBuffer<PerfBufferSize>* perf_data;
-  
-  EventSet events;
+  /// A flag to signal the profiler thread to exit
+  atomic<bool> profilerRunning = ATOMIC_VAR_INIT(true);
   
   /**
-   * Parse profiling-related command line arguments, remove them from argc and
+   * Set up the profiling environment and start the main profiler thread
    * argv, then initialize the profiler.
-   * @param argc Argument count passed to the injected main function
-   * @param argv Argument array passed to the injected main function
    */
-  void startup(int& argc, char**& argv) {
-    // See the random number generator
-    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-    generator = default_random_engine(seed);
-  
-    set<string> filePatterns;
-    bool include_main_exe = true;
-  
-    // Walk through the arguments array to find any causal-specific arguments that change
-    // the profiler's scope
-    args a(argc, argv);
-    for(auto arg = a.begin(); !arg.done(); arg.next()) {
-      if(arg.get() == "--causal-exclude-main") {
-        arg.drop();
-        include_main_exe = false;
-      } else if(arg.get() == "--causal-profile") {
-        arg.drop();
-        filePatterns.insert(arg.take());
-      }
-    }
-  
-    // If the main executable hasn't been excluded, include its full path as a pattern
-    if(include_main_exe) {
-      char* main_exe = realpath(argv[0], nullptr);
-      filePatterns.insert(main_exe);
-      free(main_exe);
-    }
-  
-    // Collect basic blocks and functions (in inspect.cpp)
-    inspectExecutables(filePatterns);
-  
-    string output_filename = "profile.log";
-    basic_block* fixed_block = nullptr;
-    map<basic_block*, string> perf_counter_blocks;
-  
-    // Walk through the arguments array to find any causal-specific arguments that must be
-    // processed post-inspection
-    for(auto arg = a.begin(); !arg.done(); arg.next()) {
-      if(arg.get() == "--causal-select-block") {
-        arg.drop();
-        string name = arg.take();
-        basic_block* b = findBlock(name);
-        if(b != nullptr) {
-          fixed_block = b;
-          INFO << "Profiling with fixed block " << b->getFunction()->getName() << ":" << b->getIndex();
-        } else {
-          WARNING << "Unable to locate block " << name << ". Reverting to default mode.";
-        }
-      
-      } else if(arg.get() == "--causal-progress") {
-        arg.drop();
-        string name = arg.take();
-        basic_block* b = findBlock(name);
-        if(b != nullptr) {
-          // Save the block now, then generate a breakpoint-based counter later
-          perf_counter_blocks[b] = name;
-        } else {
-          WARNING << "Unable to locate block " << name;
-        }
-      
-      } else if(arg.get() == "--causal-output") {
-        arg.drop();
-        output_filename = arg.take();
-      }
-    }
-  
-    // Save changes to the arguments array
-    argc = a.commit(argv);
+  void startup(string output_filename, map<basic_block*, string> perf_counter_blocks, basic_block* fixed_block) {
+    // Set the fixed block (will be nullptr if profiler should choose random blocks)
+    
+    // Set up signal handlers
+    setSignalHandler(PauseSignal, onPause);
+    setSignalHandler(SIGSEGV, onError);
+    
+    // Save the passed-in fixed block
+    fixedBlock = fixed_block;
 
     // Open the output file
     outputFile = fopen(output_filename.c_str(), "a");
-    REQUIRE(outputFile != NULL) << "Failed to open profiler output file: " << output_filename;
-  
-    // Lock the profiler mutex to block the main profiler thread
-    REQUIRE(pthread_mutex_lock(&profilerMutex) == 0) << "Failed to lock profiler mutex";
+    REQUIRE(outputFile != NULL)
+      << "Failed to open profiler output file: " << output_filename;
     
     // Create the profiler thread
-    REQUIRE(pthread_create(&profilerThread, NULL, profilerMain, fixed_block) == 0) << "Failed to create profiler thread";
+    REQUIRE(Real::pthread_create()(&profilerThread, NULL, profilerMain, fixed_block) == 0)
+      << "Failed to create profiler thread";
   
     // Create breakpoint-based progress counters for all the command-line specified blocks
     for(pair<basic_block*, string> e : perf_counter_blocks) {
@@ -182,15 +93,6 @@ namespace profiler {
       string name = e.second;
       registerCounter(new PerfCounter(ProgressCounter, b->getInterval().getBase(), name.c_str()));
     }
-  
-    // Start up performance monitoring
-    startPerformanceMonitoring();
-  
-    // Set up signal handlers
-    setSignalHandler(PauseSignal, onPause);
-    setSignalHandler(SIGSEGV, onError);
-    
-    REQUIRE(pthread_mutex_unlock(&profilerMutex) == 0) << "Failed to unlock profiler mutex";
   }
 
   /**
@@ -198,7 +100,9 @@ namespace profiler {
    */
   void shutdown() {
     if(shutdownRun.test_and_set() == false) {
-      logShutdown();
+      profilerRunning.store(false);
+      pthread_join(profilerThread, nullptr);
+      
       // TODO: write out sampling profile results
       fclose(outputFile);
     }
@@ -209,22 +113,216 @@ namespace profiler {
    * from any of the application's threads.
    */
   void registerCounter(Counter* c) {
-    // Lock the counters set
-    while(counter_lock.test_and_set()) {
-      __asm__("pause");
-    }
+    countersLock.lock();
   
     // Insert the new counter
     counters.insert(c);
   
     // Unlock
-    counter_lock.clear();
+    countersLock.unlock();
   }
   
-  class Handler {
+  void threadStartup() {
+    threadsLock.lock();
+    threads.insert(pair<pid_t, pthread_t>(gettid(), pthread_self()));
+    threadsVersion++;
+    threadsLock.unlock();
+  }
+  
+  void threadShutdown() {
+    threadsLock.lock();
+    deadThreads.insert(gettid());
+    threadsVersion++;
+    threadsLock.unlock();
+  }
+  
+  class ProfilerState {
+  private:
+    enum Mode {
+      Baseline,
+      Speedup,
+      Legacy
+    };
+    
+    Mode mode = Baseline;
+    
+    default_random_engine generator;
+    uniform_int_distribution<size_t> delayDist;
+    vector<struct pollfd> pollers;
+    map<pid_t, PerfEvent> events;
+    size_t currentVersion = 0;
+    size_t roundSamples = 0;
+    
+    /// The total count of visits to the block selected for "speedup" this round
+    size_t globalVisits;
+    
+    /// The count of visits or delays for each thread
+    unordered_map<pid_t, size_t> localVisits;
+    
+    /// The current delay size
+    size_t delaySize;
+    
+    /// The currently selected block
+    basic_block* selectedBlock;
+    
+    /// The perf event configuration
+    struct perf_event_attr pe = {
+      .type = PERF_TYPE_SOFTWARE,
+      .config = PERF_COUNT_SW_TASK_CLOCK,
+      .sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_TID | PERF_SAMPLE_TIME,
+      .sample_period = SamplePeriod,
+      .wakeup_events = SampleWakeupCount
+    };
+    
   public:
-    static void processSample(const PerfEvent::SampleRecord& sample) {
-      INFO << "sample! pid=" << sample.pid << " tid=" << sample.tid;
+    ProfilerState() : generator(getTime()), delayDist(0, 20) {}
+    
+    void processSample(const PerfEvent::SampleRecord& sample) {
+      roundSamples++;
+      basic_block* b = findBlock(sample.ip);
+      if(b != nullptr) {
+        b->sample();
+        
+        if(mode == Baseline) {
+          // If the baseline round has run long enough and we're in a known block,
+          // use this block for the next speedup round
+          if(roundSamples >= MinRoundSamples) {
+            selectedBlock = b;
+          }
+        } else if(mode == Speedup) {
+          // Check if the sample is in the selected block
+          if(b == selectedBlock) {
+            // Increment the total visits counter, and the counter for the visiting thread
+            globalVisits++;
+            localVisits[sample.tid]++;
+          }
+        }
+      }
+    }
+    
+    void doBaseline() {
+      mode = Baseline;
+      roundSamples = 0;
+      
+      logBaselineStart();
+      
+      while(roundSamples < MinRoundSamples || selectedBlock == nullptr) {
+        if(!profilerRunning) {
+          break;
+        }
+        collectSamples();
+      }
+      
+      logBaselineEnd();
+    }
+    
+    void doSpeedup() {
+      mode = Speedup;
+      roundSamples = 0;
+      globalVisits = 0;
+      localVisits.clear();
+      delaySize = delayDist(generator) * SamplePeriod / 20;
+      
+      logSpeedupStart(selectedBlock);
+      
+      while(roundSamples < MinRoundSamples) {
+        if(!profilerRunning) {
+          break;
+        }
+        
+        size_t starting_visits = globalVisits;
+        collectSamples();
+        if(globalVisits > starting_visits) {
+          for(auto& event : events) {
+            pid_t tid = event.first;
+            size_t pause_time = delaySize * (globalVisits - localVisits[tid]);
+            // Send the thread the time to pause
+            union sigval sv = {
+              .sival_ptr = (void*)pause_time
+            };
+            localVisits[tid] = globalVisits;
+            pthread_sigqueue(threads[tid], PauseSignal, sv);
+          }
+        }
+      }
+      
+      logSpeedupEnd(globalVisits, delaySize);
+    }
+    
+    void run() {
+      // Log profiler parameters and calibration information to the profiler output
+      logStartup();
+    
+      while(profilerRunning) {
+        doBaseline();
+        doSpeedup();
+      }
+    
+      logShutdown();
+    }
+    
+    void collectSamples() {
+      updatePollers();
+    
+      int rc = poll(pollers.data(), pollers.size(), 10);
+      REQUIRE(rc != -1) << "Failed to poll event files";
+    
+      if(rc > 0) {
+        for(pair<const pid_t, PerfEvent>& event : events) {
+          event.second.process(this);
+        }
+      }
+    }
+    
+    void updatePollers() {
+      size_t newest_version = threadsVersion.load();
+    
+      if(currentVersion < newest_version) {
+        threadsLock.lock();
+    
+        // Remove any dead threads
+        for(pid_t tid : deadThreads) {
+          // Remove the thread from the thread map
+          auto threads_iter = threads.find(tid);
+          if(threads_iter != threads.end()) {
+            threads.erase(threads_iter);
+          }
+      
+          // Remove the thread's event from the events map
+          auto events_iter = events.find(tid);
+          if(events_iter != events.end()) {
+            events_iter->second.stop();
+            events.erase(events_iter);
+          }
+        }
+    
+        // Resize the pollers vector
+        pollers.resize(threads.size());
+    
+        // Fill the pollers vector with pollfd structs
+        size_t i = 0;
+        for(pair<const pid_t, pthread_t> thread : threads) {
+          pid_t tid = thread.first;
+          // If this thread doesn't have an event yet, create one
+          auto events_iter = events.find(tid);
+          if(events_iter == events.end()) {
+            events.emplace(tid, PerfEvent(pe, tid));
+          }
+      
+          events[tid].start();
+      
+          pollers[i] = {
+            .fd = events[tid].getFileDescriptor(),
+            .events = POLLIN
+          };
+      
+          i++;
+        }
+      
+        currentVersion = threadsVersion.load();
+    
+        threadsLock.unlock();
+      }
     }
   };
   
@@ -232,65 +330,10 @@ namespace profiler {
    * The body of the main profiler thread
    */
   void* profilerMain(void* arg) {
-    // Block on startup until the main thread has finished starting perf events
-    REQUIRE(pthread_mutex_lock(&profilerMutex) == 0) << "Failed to lock profiler mutex";
-    REQUIRE(pthread_mutex_unlock(&profilerMutex) == 0) << "Failed to unlock profiler mutex";
+    ProfilerState s;
+    s.run();
     
-    // If running on a fixed block, it will be passed as the thread argument
-    basic_block* fixed_block = (basic_block*)arg;
-    
-    // Log profiler parameters and calibration information to the profiler output
-    logStartup();
-    
-    while(true) {
-      events.wait();
-      events.process<Handler>();
-    }
-  }
-  
-  /**
-   *
-   */
-  void startPerformanceMonitoring() {
-    cpu_set_t cs;
-    CPU_ZERO(&cs);
-    sched_getaffinity(0, sizeof(cs), &cs);
-
-    // Get the total number of active CPUs
-    cpu_count = CPU_COUNT(&cs);
-  
-    // Allocate a table of pollable file descriptor entries
-    perf_fds = new struct pollfd[cpu_count];
-  
-    // Allocate an array of perf mmap page pointers
-    perf_maps = new struct perf_event_mmap_page*[cpu_count];
-  
-    // Allocate an array of perf ring buffers
-    perf_data = new RingBuffer<PerfBufferSize>[cpu_count];
-  
-    // Open a perf file on each CPU
-    for(int cpu = 0, i = 0; i < cpu_count; cpu++) {
-      if(CPU_ISSET(cpu, &cs)) {
-        INFO << "Starting perf on CPU " << cpu;
-      
-        // Set up the perf event file
-        struct perf_event_attr pe = {
-          .type = PERF_TYPE_SOFTWARE,
-          .config = PERF_COUNT_SW_TASK_CLOCK,
-          .size = sizeof(struct perf_event_attr),
-          .disabled = 1,
-          .inherit = 1,
-          .sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_TID | PERF_SAMPLE_TIME,
-          .sample_period = SamplePeriod,
-          .wakeup_events = 10
-        };
-        
-        events.add(PerfEvent(pe, getpid(), cpu, -1, 0));
-      
-        // Move to the next index
-        i++;
-      }
-    }
+    return NULL;
   }
 
   /**
@@ -451,7 +494,8 @@ namespace profiler {
 }*/
 
   void onPause(int signum, siginfo_t* info, void* p) {
-    // TODO: pause here
+    size_t pause_time = (size_t)info->si_value.sival_ptr;
+    wait(pause_time);
   }
 
   void onError(int signum, siginfo_t* info, void* p) {

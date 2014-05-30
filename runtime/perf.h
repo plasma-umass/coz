@@ -22,7 +22,6 @@
 #include <vector>
 
 #include "log.h"
-#include "ringbuffer.h"
 #include "spinlock.h"
 
 static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid, int cpu, int group_fd, unsigned long flags) {
@@ -111,6 +110,11 @@ public:
   template<typename T>
   void process(T& t) {
     return _mapping.process<T>(t);
+  }
+  
+  template<typename T>
+  void process(T* t) {
+    return _mapping.process<T>(*t);
   }
   
   template<typename T>
@@ -278,114 +282,6 @@ protected:
   
   /// Memory mapped perf event region
   MappedEvent _mapping;
-};
-
-class EventSet {
-public:
-  size_t add(PerfEvent&& e) {
-    _l.lock();
-    size_t index = _version++;
-    e.start();
-    _events.emplace(index, std::move(e));
-    _l.unlock();
-    return index;
-  }
-  
-  size_t add(struct perf_event_attr& pe) {
-    _l.lock();
-    size_t index = _version++;
-    _events.emplace(index, PerfEvent(pe));
-    _events[index].start();
-    _l.unlock();
-    return index;
-  }
-  
-  void remove(size_t index) {
-    _l.lock();
-    _to_remove.insert(index);
-    _version++;
-    _l.unlock();
-  }
-  
-  void wait() {
-    size_t newest_version = _version.load();
-    
-    // If we're at version zero, there aren't any events in the set
-    if(newest_version == 0) {
-      return;
-    }
-    
-    // Check if the current version of the pollfd array is outdated
-    if(_current_version != newest_version) {
-      _l.lock();
-      
-      // Now that we have locked the set, ensure the version index is up to date
-      newest_version = _version.load();
-      
-      // Remove perf events that have been passed to the remove() method since the last version
-      for(size_t index : _to_remove) {
-        auto iter = _events.find(index);
-        if(iter != _events.end()) {
-          _events.erase(iter);
-        }
-      }
-      
-      // Clear the removal list
-      _to_remove.clear();
-      
-      // Resize the pollfds and event indices vectors
-      _current_pollfds.resize(_events.size());
-      _current_events.resize(_events.size());
-      
-      size_t i = 0;
-      for(std::pair<const size_t, PerfEvent>& e : _events) {
-        _current_pollfds[i] = {
-          .fd = e.second.getFileDescriptor(),
-          .events = POLLIN,
-          .revents = 0
-        };
-        
-        _current_events[i] = e.first;
-        i++;
-      }
-      
-      _current_version = newest_version;
-      
-      _l.unlock();
-    }
-    
-    int rc = poll(_current_pollfds.data(), _current_pollfds.size(), -1);
-    REQUIRE(rc != -1) << "Poll failed";
-  }
-  
-  template<typename T>
-  void process(T& t) {
-    for(size_t i=0; i<_current_pollfds.size(); i++) {
-      if(_current_pollfds[i].revents & POLLIN) {
-        size_t index = _current_events[i];
-        _events[index].process<T>(t);
-        _current_pollfds[i].revents = 0;
-      } else if(_current_pollfds[i].revents & (POLLHUP | POLLERR | POLLNVAL)) {
-        _current_pollfds[i].fd = -1;
-      }
-    }
-  }
-  
-  template<typename T>
-  void process() {
-    T t;
-    process(t);
-  }
-  
-private:
-  spinlock _l;
-  std::unordered_map<size_t, PerfEvent> _events;
-  std::unordered_set<size_t> _to_remove;
-  std::atomic<size_t> _version = ATOMIC_VAR_INIT(0);
-  
-  size_t _current_version = 0;
-  std::vector<struct pollfd> _current_pollfds;
-  std::vector<size_t> _current_events;
 };
 
 #endif

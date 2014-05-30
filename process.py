@@ -2,6 +2,7 @@
 
 import os
 import sys
+import math
 
 def main(filename):
   total_runtime = 0
@@ -77,7 +78,7 @@ def main(filename):
               speedup_rates[speedup_block][delay_size][counter] = []
             speedup_rates[speedup_block][delay_size][counter].append((difference, phase_time))
   
-  print "block\tblock_speedup\tcounter\tcounter_speedup"
+  print "block\tblock_speedup\tcounter\tcounter_speedup\terr_min\terr_max"
   
   for block in speedup_rates:
     for delay_size in speedup_rates[block]:
@@ -88,15 +89,36 @@ def main(filename):
           
           block_speedup = float(delay_size) / period
           counter_speedup = speedup_period / baseline_period
-          print block + "\t" + str(block_speedup) + "\t" + counter + "\t" + str(counter_speedup)
+          
+          (min_baseline, max_baseline) = periodErrorBounds(baseline_rates[counter])
+          (min_speedup, max_speedup) = periodErrorBounds(speedup_rates[block][delay_size][counter])
+          
+          (err_min, err_max) = (min_speedup / max_baseline, max_speedup / min_baseline)
+          
+          print "\t".join([block, str(block_speedup), counter, str(counter_speedup), str(err_min), str(err_max)])
 
-def avgPeriod(rates):
+def totalDelta(rates):
   total_delta = 0
-  total_time = 0
   for (delta, time) in rates:
     total_delta += delta
+  return float(total_delta)
+
+def totalTime(rates):
+  total_time = 0
+  for (delta, time) in rates:
     total_time += time
-  return float(total_time) / total_delta
+  return float(total_time)
+
+def avgPeriod(rates):
+  return totalTime(rates) / totalDelta(rates)
+  
+def periodErrorBounds(rates):
+  total_time = totalTime(rates)
+  total_delta = totalDelta(rates)
+  err = math.sqrt(total_delta)
+  if err == 1:
+    err = 0
+  return (total_time / (total_delta - err), total_time / (total_delta + err))
 
 def readCounters(lines, i):
   counter_values = {}
