@@ -25,6 +25,7 @@ def main(filename):
     
     if command == 'startup':
       start_time = int(data['time'])
+      counter_values = {}
       
     elif command == 'shutdown':
       total_runtime += int(data['time']) - start_time
@@ -78,7 +79,7 @@ def main(filename):
               speedup_rates[speedup_block][delay_size][counter] = []
             speedup_rates[speedup_block][delay_size][counter].append((difference, phase_time))
   
-  print "block\tblock_speedup\tcounter\tcounter_speedup\terr_min\terr_max"
+  print "block\tblock_speedup\tcounter\tcounter_speedup\tbaseline_period\tspeedup_period"
   
   for block in speedup_rates:
     for delay_size in speedup_rates[block]:
@@ -88,14 +89,10 @@ def main(filename):
           speedup_period = avgPeriod(speedup_rates[block][delay_size][counter])
           
           block_speedup = float(delay_size) / period
-          counter_speedup = speedup_period / baseline_period
+          #counter_speedup = speedup_period / baseline_period
+          counter_speedup = (baseline_period - speedup_period) / baseline_period
           
-          (min_baseline, max_baseline) = periodErrorBounds(baseline_rates[counter])
-          (min_speedup, max_speedup) = periodErrorBounds(speedup_rates[block][delay_size][counter])
-          
-          (err_min, err_max) = (min_speedup / max_baseline, max_speedup / min_baseline)
-          
-          print "\t".join([block, str(block_speedup), counter, str(counter_speedup), str(err_min), str(err_max)])
+          print "\t".join([block, str(block_speedup), counter, str(counter_speedup), str(baseline_period), str(speedup_period)])
 
 def totalDelta(rates):
   total_delta = 0
@@ -111,14 +108,6 @@ def totalTime(rates):
 
 def avgPeriod(rates):
   return totalTime(rates) / totalDelta(rates)
-  
-def periodErrorBounds(rates):
-  total_time = totalTime(rates)
-  total_delta = totalDelta(rates)
-  err = math.sqrt(total_delta)
-  if err == 1:
-    err = 0
-  return (total_time / (total_delta - err), total_time / (total_delta + err))
 
 def readCounters(lines, i):
   counter_values = {}

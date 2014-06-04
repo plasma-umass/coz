@@ -96,7 +96,7 @@ void* thread_entry(void* arg) {
  * Intercept calls to create threads
  */
 extern "C" int pthread_create(pthread_t* thread, const pthread_attr_t* attr, thread_fn_t fn, void* arg) {
-  void* arg_wrapper = (void*)new thread_wrapper(fn, arg);
+  thread_wrapper* arg_wrapper = new thread_wrapper(fn, arg);
   int result = Real::pthread_create()(thread, attr, thread_entry, arg_wrapper);
   return result;
 }

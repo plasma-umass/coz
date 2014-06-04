@@ -26,6 +26,10 @@
 
 using namespace std;
 
+int rt_tgsigqueueinfo(pid_t tgid, pid_t tid, int sig, siginfo_t *uinfo) {
+  return syscall(__NR_rt_tgsigqueueinfo, tgid, tid, sig, uinfo);
+}
+
 namespace profiler {
   void onError(int, siginfo_t*, void*);
   void onPause(int, siginfo_t*, void*);
@@ -124,6 +128,7 @@ namespace profiler {
   
   void threadStartup() {
     threadsLock.lock();
+    //INFO << "Thread " << (void*)pthread_self() << " starting";
     threads.insert(pair<pid_t, pthread_t>(gettid(), pthread_self()));
     threadsVersion++;
     threadsLock.unlock();
@@ -131,6 +136,7 @@ namespace profiler {
   
   void threadShutdown() {
     threadsLock.lock();
+    //INFO << "Thread " << (void*)pthread_self() << " stopping";
     deadThreads.insert(gettid());
     threadsVersion++;
     threadsLock.unlock();
@@ -233,16 +239,26 @@ namespace profiler {
         size_t starting_visits = globalVisits;
         collectSamples();
         if(globalVisits > starting_visits) {
-          for(auto& event : events) {
-            pid_t tid = event.first;
+          threadsLock.lock();
+          for(auto& thread : threads) {
+            pid_t tid = thread.first;
             size_t pause_time = delaySize * (globalVisits - localVisits[tid]);
+            
             // Send the thread the time to pause
-            union sigval sv = {
-              .sival_ptr = (void*)pause_time
+            siginfo_t info = {
+              .si_code = SI_QUEUE,
+              .si_pid = getpid(),
+              .si_uid = getuid(),
+              .si_value = {
+                .sival_ptr = (void*)pause_time
+              }
             };
+            
+            rt_tgsigqueueinfo(getpid(), tid, PauseSignal, &info);
+            
             localVisits[tid] = globalVisits;
-            pthread_sigqueue(threads[tid], PauseSignal, sv);
           }
+          threadsLock.unlock();
         }
       }
       
@@ -403,95 +419,6 @@ namespace profiler {
         delay_count, delay_size, getTime());
     logCounters();
   }
-
-/*void processCycleSample(PerfSampler::Sample& s) {
-  // Count the total number of samples over the whole execution
-  totalSamples++;
-  
-  // Count samples for the current round
-  size_t roundSample = roundSamples++;
-
-  // Try to locate the basic block that contains the IP from this sample
-  basic_block* sampleBlock = findBlock(s.getIP());
-  // If a block was found...
-  if(sampleBlock != nullptr) {
-    // Record a cycle sample in the block
-    sampleBlock->sample();
-  }
-
-  if(mode == Idle) {
-    // The profiler just started up and should move to baseline mode immediately
-    ProfilerMode idle = Idle;
-    if(mode.compare_exchange_weak(idle, Baseline)) {
-      logBaselineStart();
-    }
-    
-  } else if(mode == Baseline) {
-    // The profiler is measuring progress rates without a perturbation
-    // When the round is over, move to seeking mode to choose a block for speedup
-    if(roundSample == MaxRoundSamples) {
-      logBaselineEnd();
-      mode.store(Seeking);
-      roundSamples.store(0);
-    }
-    
-  } else if(mode == Seeking) {
-    // The profiler is looking for a block to select for "speedup"
-    basic_block* zero = nullptr;
-    basic_block* next_block = sampleBlock;
-    
-    // If the profiler is running on a fixed block, set it as the next block
-    if(useFixedBlock) {
-      next_block = fixedBlock;
-    }
-    
-    // If the current sample is in a known block, attempt to set it as the selected block
-    if(next_block != nullptr && selectedBlock.compare_exchange_weak(zero, next_block)) {
-      globalRound++;
-      delaySize.store(delayDist(generator));
-      mode.store(Speedup);
-      roundSamples.store(0);
-      logSpeedupStart();
-    }
-    
-  } else if(mode == Speedup) {
-    // The profiler is measuring progress rates with a "speedup" enabled
-    if(localRound != globalRound) {
-      localRound = globalRound;
-      localDelays = 0;
-    }
-    
-    basic_block* selected = selectedBlock.load();
-    // If this thread is currently running the selected block...
-    if(selected != nullptr && selected->getInterval().contains(s.getIP())) {
-      if(localDelays < globalDelays) {
-        // If this thread is behind on delays, just increment the local delay count
-        localDelays++;
-      } else {
-        // If this thread is caught up, increment both delay counts to make other threads wait
-        globalDelays++;
-        localDelays++;
-      }
-    }
-    
-    size_t old_global_delays = globalDelays.load();
-    size_t old_local_delays = __atomic_exchange_n(&localDelays, old_global_delays, __ATOMIC_SEQ_CST);
-    
-    // Catch up on delays
-    if(old_local_delays < old_global_delays) {
-      size_t delay_count = old_global_delays - old_local_delays;
-      wait(delaySize * delay_count);
-    }
-    
-    if(roundSample == MaxRoundSamples) {
-      logSpeedupEnd();
-      mode.store(Baseline);
-      roundSamples.store(0);
-      selectedBlock.store(nullptr);
-      logBaselineStart();
-    }
-  }
-}*/
 
   void onPause(int signum, siginfo_t* info, void* p) {
     size_t pause_time = (size_t)info->si_value.sival_ptr;

@@ -78,6 +78,7 @@ int wrapped_main(int argc, char** argv, char** other) {
       if(b != nullptr) {
         fixed_block = b;
         INFO << "Profiling with fixed block " << b->getFunction()->getName() << ":" << b->getIndex();
+        INFO << " Block spans addresses: " << (void*)b->getInterval().getBase() << " to " << (void*)b->getInterval().getLimit();
       } else {
         WARNING << "Unable to locate block " << name << ". Reverting to default mode.";
       }
