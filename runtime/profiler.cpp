@@ -118,7 +118,7 @@ namespace profiler {
    */
   void registerCounter(Counter* c) {
     countersLock.lock();
-  
+
     // Insert the new counter
     counters.insert(c);
   
@@ -128,7 +128,6 @@ namespace profiler {
   
   void threadStartup() {
     threadsLock.lock();
-    //INFO << "Thread " << (void*)pthread_self() << " starting";
     threads.insert(pair<pid_t, pthread_t>(gettid(), pthread_self()));
     threadsVersion++;
     threadsLock.unlock();
@@ -136,7 +135,6 @@ namespace profiler {
   
   void threadShutdown() {
     threadsLock.lock();
-    //INFO << "Thread " << (void*)pthread_self() << " stopping";
     deadThreads.insert(gettid());
     threadsVersion++;
     threadsLock.unlock();
@@ -147,6 +145,7 @@ namespace profiler {
     enum Mode {
       Baseline,
       Speedup,
+      Flush,
       Legacy
     };
     
@@ -156,17 +155,12 @@ namespace profiler {
     uniform_int_distribution<size_t> delayDist;
     vector<struct pollfd> pollers;
     map<pid_t, PerfEvent> events;
+    map<Counter*, size_t> counterSnapshot;
     size_t currentVersion = 0;
     size_t roundSamples = 0;
     
-    /// The total count of visits to the block selected for "speedup" this round
-    size_t globalVisits;
-    
     /// The count of visits or delays for each thread
     unordered_map<pid_t, size_t> localVisits;
-    
-    /// The current delay size
-    size_t delaySize;
     
     /// The currently selected block
     basic_block* selectedBlock;
@@ -184,9 +178,9 @@ namespace profiler {
     ProfilerState() : generator(getTime()), delayDist(0, 20) {}
     
     void processSample(const PerfEvent::SampleRecord& sample) {
-      roundSamples++;
       basic_block* b = findBlock(sample.ip);
       if(b != nullptr) {
+        roundSamples++;
         b->sample();
         
         if(mode == Baseline) {
@@ -198,8 +192,6 @@ namespace profiler {
         } else if(mode == Speedup) {
           // Check if the sample is in the selected block
           if(b == selectedBlock) {
-            // Increment the total visits counter, and the counter for the visiting thread
-            globalVisits++;
             localVisits[sample.tid]++;
           }
         }
@@ -207,8 +199,13 @@ namespace profiler {
     }
     
     void doBaseline() {
+      if(!profilerRunning) {
+        return;
+      }
+      
       mode = Baseline;
       roundSamples = 0;
+      takeCounterSnapshot();
       
       logBaselineStart();
       
@@ -223,28 +220,66 @@ namespace profiler {
     }
     
     void doSpeedup() {
-      mode = Speedup;
-      roundSamples = 0;
-      globalVisits = 0;
-      localVisits.clear();
-      delaySize = delayDist(generator) * SamplePeriod / 20;
+      if(!profilerRunning) {
+        return;
+      }
       
+      // Set the mode to speedup
+      mode = Speedup;
+      // Clear the count of samples seen this round
+      roundSamples = 0;
+      // Generate a random delay size
+      size_t delay_size = delayDist(generator) * SamplePeriod / 20;
+      // Count the total number of delays/visits required for each thread
+      size_t delay_count = 0;
+      
+      // Save the state of all active counters
+      takeCounterSnapshot();
+      
+      // Log the beginning of the speedup period
       logSpeedupStart(selectedBlock);
       
-      while(roundSamples < MinRoundSamples) {
+      // Run until enough samples have been processed
+      while(roundSamples < MinRoundSamples || !countersChanged()) {
+        // Check for termination
         if(!profilerRunning) {
           break;
         }
         
-        size_t starting_visits = globalVisits;
+        // Clear the per-thread counts of visits to the selected block
+        localVisits.clear();
+        
+        // Process samples from all threads
         collectSamples();
-        if(globalVisits > starting_visits) {
+        
+        // Find the maximum number of visits by any one thread to the selected block
+        size_t max_visits = 0;
+        // Loop over threads to check for a new max
+        for(auto& local : localVisits) {
+          if(local.second > max_visits) {
+            max_visits = local.second;
+          }
+        }
+        
+        // The total number of visits/delays should increase by the max visit count
+        delay_count += max_visits;
+        
+        // If there was at least one visit to the selected lock, send out delays to each thread
+        if(max_visits > 0) {
+          // Lock the set of threads
           threadsLock.lock();
+          
+          size_t max_pause = 0;
+          
+          // Loop over threads to send delays
           for(auto& thread : threads) {
+            // Get the thread's task ID
             pid_t tid = thread.first;
-            size_t pause_time = delaySize * (globalVisits - localVisits[tid]);
             
-            // Send the thread the time to pause
+            // Compute the required pause time for this thread
+            size_t pause_time = delay_size * (max_visits - localVisits[tid]);
+            
+            // Set up siginfo_t structure to pass with signal
             siginfo_t info = {
               .si_code = SI_QUEUE,
               .si_pid = getpid(),
@@ -254,15 +289,54 @@ namespace profiler {
               }
             };
             
-            rt_tgsigqueueinfo(getpid(), tid, PauseSignal, &info);
-            
-            localVisits[tid] = globalVisits;
+            // Send the thread the pause signal
+            if(rt_tgsigqueueinfo(getpid(), tid, PauseSignal, &info) != -1) {
+              // If signaling the thread succeeded, update the max pause time
+              if(pause_time > max_pause) {
+                max_pause = pause_time;
+              }
+            }
           }
+          
+          // Unlock the set of threads
           threadsLock.unlock();
+          
+          // Wait until the thread with the longest pause time has had time to delay
+          wait(max_pause);
         }
       }
       
-      logSpeedupEnd(globalVisits, delaySize);
+      // Log the end of the speedup round
+      logSpeedupEnd(delay_count, delay_size);
+      
+      // Flush any remaining samples before returning to baseline mode
+      mode = Flush;
+      collectSamples();
+    }
+    
+    void takeCounterSnapshot() {
+      counterSnapshot.clear();
+      
+      countersLock.lock();
+      for(Counter* c : counters) {
+        counterSnapshot[c] = c->getCount();
+      }
+      countersLock.unlock();
+    }
+    
+    bool countersChanged() {
+      return true;
+      // if there are no saved counters, don't wait forever!
+      if(counterSnapshot.size() == 0) {
+        return true;
+      }
+      
+      for(auto counter : counterSnapshot) {
+        if(counter.first->getCount() != counter.second) {
+          return true;
+        }
+      }
+      return false;
     }
     
     void run() {
@@ -358,11 +432,11 @@ namespace profiler {
   void logStartup() {
     fprintf(outputFile, "startup\ttime=%lu\n", getTime());
     fprintf(outputFile, "info\tsample-period=%lu\n", (size_t)SamplePeriod);
-    fprintf(outputFile, "info\tsource-counter-overhead=%lu\n", SourceCounter::calibrate());
+    //fprintf(outputFile, "info\tsource-counter-overhead=%lu\n", SourceCounter::calibrate());
     fprintf(outputFile, "info\tperf-counter-overhead=%lu\n", PerfCounter::calibrate());
   
     // Drop all counters, so we don't use any calibration counters during the real execution
-    counters.clear();
+    //counters.clear();
   }
 
   /**

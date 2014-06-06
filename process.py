@@ -89,8 +89,8 @@ def main(filename):
           speedup_period = avgPeriod(speedup_rates[block][delay_size][counter])
           
           block_speedup = float(delay_size) / period
-          #counter_speedup = speedup_period / baseline_period
-          counter_speedup = (baseline_period - speedup_period) / baseline_period
+          #counter_speedup = baseline_period / speedup_period
+          counter_speedup = 1 - speedup_period / baseline_period
           
           print "\t".join([block, str(block_speedup), counter, str(counter_speedup), str(baseline_period), str(speedup_period)])
 

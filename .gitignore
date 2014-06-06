@@ -8,6 +8,8 @@ deps
 
 tests/*/obj
 tests/*/*_datafiles
+tests/*/profile.log
+tests/*/results.csv
 tests/pbzip2/data
 
 tests/histogram/histogram
