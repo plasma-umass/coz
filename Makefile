@@ -1,5 +1,5 @@
 ROOT = .
-DIRS = runtime
+DIRS = runtime tools
 
 include $(ROOT)/common.mk
 

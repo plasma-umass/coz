@@ -4,7 +4,7 @@ CXX = clang++
 CFLAGS ?=
 CXXFLAGS ?= $(CFLAGS)
 CXXLIB = $(CXX) -shared -fPIC
-LINKFLAGS ?=
+LINKFLAGS ?= -L$(ROOT)/deps/libelfin/dwarf -L$(ROOT)/deps/libelfin/elf
 
 # Don't build into subdirectories by default
 DIRS ?=
@@ -107,8 +107,15 @@ $(RECURSIVE_TARGETS)::
 	  $(MAKE) -C $$dir $@ DEBUG=$(DEBUG); \
 	done
 
+$(ROOT)/deps/libelfin/dwarf $(ROOT)/deps/libelfin/elf:
+	@echo $(INDENT)[git] Checking out libelfin
+	@rm -rf $(ROOT)/deps/libelfin
+	@mkdir -p $(ROOT)/deps
+	@git clone git@github.com:ccurtsinger/libelfin.git $(ROOT)/deps/libelfin
+	@cd $(ROOT)/deps/libelfin; make
+
 $(ROOT)/deps/cppgoodies/include:
-	@ echo $(INDENT)[git] Checking out cppgoodies
+	@echo $(INDENT)[git] Checking out cppgoodies
 	@rm -rf $(ROOT)/deps/cppgoodies
 	@mkdir -p $(ROOT)/deps
 	@git clone git://github.com/ccurtsinger/cppgoodies.git $(ROOT)/deps/cppgoodies
