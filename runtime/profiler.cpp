@@ -78,6 +78,7 @@ namespace profiler {
     // Set up signal handlers
     setSignalHandler(PauseSignal, onPause);
     setSignalHandler(SIGSEGV, onError);
+    setSignalHandler(SIGABRT, onError);
     
     // Save the passed-in fixed block
     fixedBlock = fixed_block;
@@ -169,7 +170,7 @@ namespace profiler {
     struct perf_event_attr pe = {
       .type = PERF_TYPE_SOFTWARE,
       .config = PERF_COUNT_SW_TASK_CLOCK,
-      .sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_TID | PERF_SAMPLE_TIME,
+      .sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_TID | PERF_SAMPLE_TIME | PERF_SAMPLE_CALLCHAIN,
       .sample_period = SamplePeriod,
       .wakeup_events = SampleWakeupCount
     };
@@ -510,6 +511,6 @@ namespace profiler {
       fprintf(stderr, "  %d: %s\n", i, syms[i]);
     }
 
-    abort();
+    Real::_exit()(2);
   }
 }

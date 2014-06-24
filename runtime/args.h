@@ -31,7 +31,11 @@ public:
       while(!done() && !_a._keep[_pos]) {
         _pos++;
       }
-      return _a._argv[_pos];
+      if(_a._argv[_pos] != nullptr) {
+        return _a._argv[_pos];
+      } else {
+        return "";
+      }
     }
     
     void drop() {

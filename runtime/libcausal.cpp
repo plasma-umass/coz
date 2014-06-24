@@ -54,8 +54,10 @@ int wrapped_main(int argc, char** argv, char** other) {
   // If the main executable hasn't been excluded, include its full path as a pattern
   if(include_main_exe) {
     char* main_exe = realpath(argv[0], nullptr);
-    filePatterns.insert(main_exe);
-    free(main_exe);
+    if(main_exe != nullptr) {
+      filePatterns.insert(main_exe);
+      free(main_exe);
+    }
   }
 
   // Collect basic blocks and functions (in inspect.cpp)

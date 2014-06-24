@@ -6,6 +6,9 @@ runtime/obj
 
 deps
 
+tools/*/obj
+tools/inspect/inspect
+
 tests/*/obj
 tests/*/*_datafiles
 tests/*/profile.log

@@ -58,7 +58,6 @@ const string get_full_path(const string filename) {
     return filename;
     
   } else if(filename[0] == '.') {
-    return string("/lib/x86_64-linux-gnu/libc-2.18.so");
     return canonical(filename).string();
     
   } else {  

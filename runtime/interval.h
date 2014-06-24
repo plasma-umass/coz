@@ -49,7 +49,7 @@ public:
 };
 
 static std::ostream& operator<<(std::ostream& os, const interval& i) {
-  os << std::hex << "0x" << i.getBase() << "\t0x" << i.getLimit() << std::dec;
+  os << std::hex << "0x" << i.getBase() << "-0x" << i.getLimit() << std::dec;
   return os;
 }
 

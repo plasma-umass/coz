@@ -49,7 +49,7 @@ public:
     
     // If sampling, map the perf event file
     if(pe.sample_type != 0 && pe.sample_period != 0) {
-      REQUIRE(pe.sample_type == (PERF_SAMPLE_IP | PERF_SAMPLE_TID | PERF_SAMPLE_TIME)) << "Unsupported sample type";
+      //REQUIRE(pe.sample_type == (PERF_SAMPLE_IP | PERF_SAMPLE_TID | PERF_SAMPLE_TIME)) << "Unsupported sample type";
       _mapping = MappedEvent(_fd);
     }
   }
@@ -219,7 +219,7 @@ public:
         // Check if the record wraps around the ring buffer
         if(rounded_index + hdr.size > DataSize) {
           if(hdr.type == PERF_RECORD_SAMPLE) {
-            if(hdr.size == sizeof(SampleRecord)) {
+            if(hdr.size >= sizeof(SampleRecord)) {
               const SampleRecord r = copyData<SampleRecord>(index);
               t.processSample(r);
             } else {
@@ -233,7 +233,7 @@ public:
         } else {
           void* record_base = (void*)((uintptr_t)_header + PageSize + rounded_index);
           if(hdr.type == PERF_RECORD_SAMPLE) {
-            if(hdr.size == sizeof(SampleRecord)) {
+            if(hdr.size >= sizeof(SampleRecord)) {
               t.processSample(*reinterpret_cast<const SampleRecord*>(record_base));
             } else {
               WARNING << "Invalid sample record. Size = " << hdr.size;
