@@ -5,5 +5,5 @@ ARGS =
 
 include $(ROOT)/common.mk
 
-test:: producer_consumer
-	LD_PRELOAD=$(ROOT)/libcausal.so ./producer_consumer $(ARGS)
+test:: debug/bin/producer_consumer
+	LD_PRELOAD=$(ROOT)/debug/lib/libcausal.so ./debug/bin/producer_consumer $(ARGS)

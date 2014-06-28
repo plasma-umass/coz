@@ -7,5 +7,5 @@ CFLAGS = -O3
 
 include $(ROOT)/common.mk
 
-test:: work_queue
-	LD_PRELOAD=$(ROOT)/libcausal.so ./work_queue $(ARGS)
+test:: debug/bin/work_queue
+	LD_PRELOAD=$(ROOT)/debug/lib/libcausal.so ./debug/bin/work_queue $(ARGS)

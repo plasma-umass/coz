@@ -5,5 +5,5 @@ ARGS =
 
 include $(ROOT)/common.mk
 
-test:: unbalanced
-	LD_PRELOAD=$(ROOT)/libcausal.so ./unbalanced $(ARGS)
+test:: debug/bin/unbalanced
+	LD_PRELOAD=$(ROOT)/debug/lib/libcausal.so ./debug/bin/unbalanced $(ARGS)

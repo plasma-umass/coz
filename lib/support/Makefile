@@ -1,11 +1,9 @@
-ROOT = ..
-TARGETS = $(ROOT)/libcausal.so
-LIBS = pthread dl rt udis86 dwarf++ elf++
+ROOT = ../..
+TARGETS = libcausal_support.a
+LIBS = pthread rt udis86 dwarf++ elf++
 INCLUDE_DIRS = $(ROOT)/deps/cppgoodies/include \
 							 $(ROOT)/deps/libelfin/dwarf\
 							 $(ROOT)/deps/libelfin/elf
-
-CFLAGS =
 
 include $(ROOT)/common.mk
 

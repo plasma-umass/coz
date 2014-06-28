@@ -12,6 +12,6 @@ histogram_datafiles/%:
 	tar xvzf histogram.tar.gz
 	rm histogram.tar.gz
 
-test:: histogram setup
-	LD_PRELOAD=$(ROOT)/libcausal.so ./histogram $(ARGS)
+test:: debug/bin/histogram setup
+	LD_PRELOAD=$(ROOT)/debug/lib/libcausal.so ./debug/bin/histogram $(ARGS)
 	

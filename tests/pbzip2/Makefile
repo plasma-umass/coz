@@ -12,5 +12,5 @@ data/input.txt:
 	mkdir -p data
 	cp ../linear_regression/linear_regression_datafiles/key_file_500MB.txt data/input.txt
 
-test:: pbzip2 setup
-	LD_PRELOAD=$(ROOT)/libcausal.so ./pbzip2 --causal-profile libbz2 $(ARGS)
+test:: debug/bin/pbzip2 setup
+	LD_PRELOAD=$(ROOT)/debug/lib/libcausal.so ./debug/bin/pbzip2 --causal-profile libbz2 $(ARGS)

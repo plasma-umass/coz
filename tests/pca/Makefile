@@ -5,5 +5,5 @@ ARGS = > /dev/null
 
 include $(ROOT)/common.mk
 
-test:: pca
-	LD_PRELOAD=$(ROOT)/libcausal.so ./pca $(ARGS)
+test:: debug/bin/pca
+	LD_PRELOAD=$(ROOT)/debug/lib/libcausal.so ./debug/bin/pca $(ARGS)

@@ -10,5 +10,5 @@ setup: matrix_file_A.txt matrix_file_B.txt
 matrix_file_A.txt matrix_file_B.txt: matrix_multiply
 	./matrix_multiply 1024 1024 > /dev/null
 
-test:: matrix_multiply setup
-	LD_PRELOAD=$(ROOT)/libcausal.so ./matrix_multiply $(ARGS)
+test:: debug/bin/matrix_multiply setup
+	LD_PRELOAD=$(ROOT)/debug/lib/libcausal.so ./debug/bin/matrix_multiply $(ARGS)

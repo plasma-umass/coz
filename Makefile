@@ -1,7 +1,7 @@
 ROOT = .
-DIRS = runtime tools
+DIRS = lib tools
 
 include $(ROOT)/common.mk
 
-test: build
+test: debug
 	@$(MAKE) -C tests test

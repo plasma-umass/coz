@@ -12,5 +12,5 @@ word_count_datafiles/%:
 	tar xvzf word_count.tar.gz
 	rm word_count.tar.gz
 
-test:: word_count setup
-	LD_PRELOAD=$(ROOT)/libcausal.so ./word_count $(ARGS)
+test:: debug/bin/word_count setup
+	LD_PRELOAD=$(ROOT)/debug/lib/libcausal.so ./debug/bin/word_count $(ARGS)

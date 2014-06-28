@@ -5,5 +5,5 @@ ARGS =
 
 include $(ROOT)/common.mk
 
-test:: kmeans
-	LD_PRELOAD=$(ROOT)/libcausal.so ./kmeans $(ARGS)
+test:: debug/bin/kmeans
+	LD_PRELOAD=$(ROOT)/debug/lib/libcausal.so ./debug/bin/kmeans $(ARGS)
