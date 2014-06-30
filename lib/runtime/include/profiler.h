@@ -2,10 +2,9 @@
 #define CAUSAL_RUNTIME_PROFILER_H
 
 #include <cstdint>
-#include <map>
+#include <set>
 #include <string>
 
-#include "basic_block.h"
 #include "causal.h"
 #include "counter.h"
 
@@ -17,9 +16,12 @@ enum {
 };
 
 namespace profiler {
+  void include_file(const std::string& filename, uintptr_t load_address);
   void registerCounter(Counter* c);
   void shutdown();
-  void startup(std::string, std::map<basic_block*, std::string>, basic_block*);
+  void startup(const std::string& output_filename,
+               const std::set<std::string>& source_progress_names,
+               const std::string& fixed_line_name);
   void threadShutdown();
   void threadStartup();
 };

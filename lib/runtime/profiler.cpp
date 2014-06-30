@@ -16,14 +16,13 @@
 #include <unordered_set>
 #include <utility>
 
-#include "basic_block.h"
 #include "counter.h"
-#include "inspect.h"
-#include "interval.h"
 #include "log.h"
 #include "perf.h"
+#include "support.h"
 #include "util.h"
 
+using namespace causal_support;
 using namespace std;
 
 int rt_tgsigqueueinfo(pid_t tgid, pid_t tid, int sig, siginfo_t *uinfo) {
@@ -36,7 +35,7 @@ namespace profiler {
   void* profilerMain(void* arg);
   void logBaselineStart();
   void logBaselineEnd();
-  void logSpeedupStart(basic_block*);
+  void logSpeedupStart(shared_ptr<line>);
   void logSpeedupEnd(size_t, size_t);
   void logStartup();
   void logShutdown();
@@ -48,8 +47,8 @@ namespace profiler {
   /// Flag is set when shutdown has been run
   atomic_flag shutdownRun = ATOMIC_FLAG_INIT;
   
-  /// The fixed block for causal profiling, if any
-  basic_block* fixedBlock = nullptr;
+  /// The fixed line for causal profiling, if any
+  shared_ptr<line> fixed_line;
   
   // Progress counter tracking
   unordered_set<Counter*> counters; //< A hash set of counter object pointers
@@ -68,20 +67,29 @@ namespace profiler {
   /// A flag to signal the profiler thread to exit
   atomic<bool> profilerRunning = ATOMIC_VAR_INIT(true);
   
+  /// The map from source to memory locations constructed by causal_support
+  memory_map mem;
+  
+  void include_file(const string& filename, uintptr_t load_address) {
+    mem.process_file(filename, load_address);
+  }
+  
   /**
    * Set up the profiling environment and start the main profiler thread
    * argv, then initialize the profiler.
    */
-  void startup(string output_filename, map<basic_block*, string> perf_counter_blocks, basic_block* fixed_block) {
-    // Set the fixed block (will be nullptr if profiler should choose random blocks)
-    
+  void startup(const string& output_filename,
+               const set<string>& source_progress_names,
+               const string& fixed_line_name) {
     // Set up signal handlers
     setSignalHandler(PauseSignal, onPause);
     setSignalHandler(SIGSEGV, onError);
-    setSignalHandler(SIGABRT, onError);
     
-    // Save the passed-in fixed block
-    fixedBlock = fixed_block;
+    // If a non-empty fixed line was provided, attempt to locate it
+    if(fixed_line_name != "") {
+      fixed_line = mem.find_line(fixed_line_name);
+      PREFER(fixed_line) << "Fixed line \"" << fixed_line_name << "\" was not found.";
+    }
 
     // Open the output file
     outputFile = fopen(output_filename.c_str(), "a");
@@ -89,14 +97,20 @@ namespace profiler {
       << "Failed to open profiler output file: " << output_filename;
     
     // Create the profiler thread
-    REQUIRE(Real::pthread_create()(&profilerThread, NULL, profilerMain, fixed_block) == 0)
+    REQUIRE(Real::pthread_create()(&profilerThread, NULL, profilerMain, NULL) == 0)
       << "Failed to create profiler thread";
   
-    // Create breakpoint-based progress counters for all the command-line specified blocks
-    for(pair<basic_block*, string> e : perf_counter_blocks) {
-      basic_block* b = e.first;
-      string name = e.second;
-      registerCounter(new PerfCounter(ProgressCounter, b->getInterval().getBase(), name.c_str()));
+    // Create breakpoint-based progress counters for all the lines specified via command-line
+    for(const string& line_name : source_progress_names) {
+      shared_ptr<line> l = mem.find_line(line_name);
+      if(l) {
+        WARNING << "Found line \"" << line_name << "\" but breakpoint placement hasn't been implemented for lines.";
+        // TODO: Place breakpoint-based counter
+        // Old code was:
+        // registerCounter(new PerfCounter(ProgressCounter, b->getInterval().getBase(), name.c_str()));
+      } else {
+        WARNING << "Progress line \"" << line_name << "\" was not found.";
+      }
     }
   }
 
@@ -163,8 +177,8 @@ namespace profiler {
     /// The count of visits or delays for each thread
     unordered_map<pid_t, size_t> localVisits;
     
-    /// The currently selected block
-    basic_block* selectedBlock;
+    /// The currently selected line
+    shared_ptr<line> selectedLine;
     
     /// The perf event configuration
     struct perf_event_attr pe = {
@@ -179,20 +193,20 @@ namespace profiler {
     ProfilerState() : generator(getTime()), delayDist(0, 20) {}
     
     void processSample(const PerfEvent::SampleRecord& sample) {
-      basic_block* b = findBlock(sample.ip);
-      if(b != nullptr) {
+      shared_ptr<line> l = mem.find_line(sample.ip);
+      if(l != nullptr) {
         roundSamples++;
-        b->sample();
+        // l->record_sample();
         
         if(mode == Baseline) {
-          // If the baseline round has run long enough and we're in a known block,
-          // use this block for the next speedup round
+          // If the baseline round has run long enough and we're in a known line,
+          // use this line for the next speedup round
           if(roundSamples >= MinRoundSamples) {
-            selectedBlock = b;
+            selectedLine = l;
           }
         } else if(mode == Speedup) {
-          // Check if the sample is in the selected block
-          if(b == selectedBlock) {
+          // Check if the sample is in the selected line
+          if(l == selectedLine) {
             localVisits[sample.tid]++;
           }
         }
@@ -210,7 +224,7 @@ namespace profiler {
       
       logBaselineStart();
       
-      while(roundSamples < MinRoundSamples || selectedBlock == nullptr) {
+      while(roundSamples < MinRoundSamples || !selectedLine) {
         if(!profilerRunning) {
           break;
         }
@@ -238,7 +252,7 @@ namespace profiler {
       takeCounterSnapshot();
       
       // Log the beginning of the speedup period
-      logSpeedupStart(selectedBlock);
+      logSpeedupStart(selectedLine);
       
       // Run until enough samples have been processed
       while(roundSamples < MinRoundSamples || !countersChanged()) {
@@ -247,13 +261,13 @@ namespace profiler {
           break;
         }
         
-        // Clear the per-thread counts of visits to the selected block
+        // Clear the per-thread counts of visits to the selected line
         localVisits.clear();
         
         // Process samples from all threads
         collectSamples();
         
-        // Find the maximum number of visits by any one thread to the selected block
+        // Find the maximum number of visits by any one thread to the selected line
         size_t max_visits = 0;
         // Loop over threads to check for a new max
         for(auto& local : localVisits) {
@@ -265,7 +279,7 @@ namespace profiler {
         // The total number of visits/delays should increase by the max visit count
         delay_count += max_visits;
         
-        // If there was at least one visit to the selected lock, send out delays to each thread
+        // If there was at least one visit to the selected line, send out delays to each thread
         if(max_visits > 0) {
           // Lock the set of threads
           threadsLock.lock();
@@ -478,10 +492,10 @@ namespace profiler {
   /**
    * Log the beginning of a speedup profiling round
    */
-  void logSpeedupStart(basic_block* selected) {
-    // Write out time, selected block, and progress counter values
-    fprintf(outputFile, "start-speedup\tblock=%s:%lu\ttime=%lu\n",
-        selected->getFunction()->getName().c_str(), selected->getIndex(), getTime());
+  void logSpeedupStart(shared_ptr<line> selected) {
+    // Write out time, selected line, and progress counter values
+    fprintf(outputFile, "start-speedup\tline=%s:%lu\ttime=%lu\n",
+        selected->get_file()->get_name().c_str(), selected->get_line(), getTime());
     logCounters();
   }
 

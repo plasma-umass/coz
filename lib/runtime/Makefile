@@ -1,10 +1,9 @@
 ROOT = ../..
 TARGETS = libcausal.so
 INSTALL = 1
-LIBS = pthread dl rt udis86 dwarf++ elf++
-INCLUDE_DIRS = $(ROOT)/deps/cppgoodies/include\
-							 $(ROOT)/deps/libelfin/dwarf\
-							 $(ROOT)/deps/libelfin/elf
+LIBS = pthread dl rt causal_support dwarf++ elf++ boost_filesystem boost_system
+INCLUDE_DIRS = $(ROOT)/lib/support/include\
+							 $(ROOT)/deps/cppgoodies/include
 
 CFLAGS =
 

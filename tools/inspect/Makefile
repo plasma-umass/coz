@@ -1,11 +1,9 @@
 ROOT = ../..
 TARGETS = inspect
 INSTALL = 1
-LIBS = dwarf++ elf++ boost_filesystem boost_system
-INCLUDE_DIRS = $(ROOT)/lib/runtime/include \
-							 $(ROOT)/deps/cppgoodies/include \
-							 $(ROOT)/deps/libelfin/dwarf \
-							 $(ROOT)/deps/libelfin/elf
+LIBS = causal_support dwarf++ elf++ boost_filesystem boost_system
+INCLUDE_DIRS = $(ROOT)/lib/support/include \
+							 $(ROOT)/deps/cppgoodies/include
 
 include $(ROOT)/common.mk
 

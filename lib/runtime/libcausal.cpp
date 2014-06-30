@@ -7,10 +7,10 @@
 
 #include "args.h"
 #include "counter.h"
-#include "inspect.h"
 #include "log.h"
 #include "profiler.h"
 #include "real.h"
+#include "support.h"
 #include "util.h"
 
 using namespace std;
@@ -34,9 +34,15 @@ extern "C" void __causal_register_counter(CounterType kind, size_t* counter, con
  */
 int wrapped_main(int argc, char** argv, char** other) {
   // The set of file patterns (substrings) to include in the profile
-  set<string> filePatterns;
+  set<string> file_patterns;
   // Should the main executable be included in the profile
   bool include_main_exe = true;
+  // The file where profile results should be written
+  string output_filename = "profile.log";
+  // The source line names that should be treated as progress points
+  set<string> source_progress_names;
+  // If set, the only source line that should be "sped up" by the profiler
+  string fixed_line_name;
 
   // Walk through the arguments array to find any causal-specific arguments that change
   // the profiler's scope
@@ -47,67 +53,49 @@ int wrapped_main(int argc, char** argv, char** other) {
       include_main_exe = false;
     } else if(arg.get() == "--causal-profile") {
       arg.drop();
-      filePatterns.insert(arg.take());
-    }
-  }
-
-  // If the main executable hasn't been excluded, include its full path as a pattern
-  if(include_main_exe) {
-    char* main_exe = realpath(argv[0], nullptr);
-    if(main_exe != nullptr) {
-      filePatterns.insert(main_exe);
-      free(main_exe);
-    }
-  }
-
-  // Collect basic blocks and functions (in inspect.cpp)
-  inspectExecutables(filePatterns);
-
-  // The default filename where profile output will be written
-  string output_filename = "profile.log";
-  // A single basic block to target for profiling
-  basic_block* fixed_block = nullptr;
-  // Basic blocks that should be instrumented with perf-based progress counters
-  map<basic_block*, string> perf_counter_blocks;
-
-  // Walk through the arguments array to find any causal-specific arguments that must be
-  // processed post-inspection
-  for(auto arg = a.begin(); !arg.done(); arg.next()) {
-    if(arg.get() == "--causal-select-block") {
+      file_patterns.insert(arg.take());
+    } else if(arg.get() == "--causal-fixed-line") {
       arg.drop();
-      string name = arg.take();
-      basic_block* b = findBlock(name);
-      if(b != nullptr) {
-        fixed_block = b;
-        INFO << "Profiling with fixed block " << b->getFunction()->getName() << ":" << b->getIndex();
-        INFO << " Block spans addresses: " << (void*)b->getInterval().getBase() << " to " << (void*)b->getInterval().getLimit();
-      } else {
-        WARNING << "Unable to locate block " << name << ". Reverting to default mode.";
-      }
-    
+      fixed_line_name = arg.take();
     } else if(arg.get() == "--causal-progress") {
       arg.drop();
-      string name = arg.take();
-      basic_block* b = findBlock(name);
-      if(b != nullptr) {
-        // Save the block now, then generate a breakpoint-based counter later
-        perf_counter_blocks[b] = name;
-      } else {
-        WARNING << "Unable to locate block " << name;
-      }
-    
+      source_progress_names.insert(arg.take());
     } else if(arg.get() == "--causal-output") {
       arg.drop();
       output_filename = arg.take();
     }
   }
-
-  // Save changes to the arguments array
-  argc = a.commit(argv);
   
-  profiler::startup(output_filename, perf_counter_blocks, fixed_block);
+  // Commit changes to the argv array and update the argument count
+  argc = a.commit(argv);
+
+  // If the main executable hasn't been excluded, include its full path as a pattern
+  if(include_main_exe) {
+    file_patterns.insert(argv[0]);
+  }
+
+  // Walk through all the loaded executable images
+  for(const auto& file : causal_support::get_loaded_files()) {
+    const string& filename = file.first;
+    uintptr_t load_address = file.second;
+    
+    // Check if the loaded file matches any of the specified patterns
+    for(const string& pat : file_patterns) {
+      if(filename.find(pat) != string::npos) {
+        // When a match is found, tell the profiler to include the file
+        profiler::include_file(filename, load_address);
+        break;
+      }
+    }
+  }
+  
+  // Start the profiler
+  profiler::startup(output_filename, source_progress_names, fixed_line_name);
+  // Run the real main function
   int result = real_main(argc, argv, other);
+  // Shut down the profiler
   profiler::shutdown();
+  
   return result;
 }
 
