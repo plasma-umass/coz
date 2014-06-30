@@ -82,6 +82,11 @@ def main(filename):
   print "line\tline_speedup\tcounter\tcounter_speedup\tbaseline_period\tspeedup_period"
   
   for line in speedup_rates:
+    print_line = line
+    # If the file name starts with the current dir, remove it (plus the slash)
+    if line.startswith(os.getcwd()):
+      print_line = line[(len(os.getcwd())+1):]
+    
     for delay_size in speedup_rates[line]:
       for counter in speedup_rates[line][delay_size]:
         if counter in baseline_rates:
@@ -92,7 +97,7 @@ def main(filename):
           #counter_speedup = baseline_period / speedup_period
           counter_speedup = 1 - speedup_period / baseline_period
           
-          print "\t".join([line, str(line_speedup), counter, str(counter_speedup), str(baseline_period), str(speedup_period)])
+          print "\t".join([print_line, str(line_speedup), counter, str(counter_speedup), str(baseline_period), str(speedup_period)])
 
 def totalDelta(rates):
   total_delta = 0
