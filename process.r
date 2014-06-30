@@ -8,28 +8,28 @@ args <- commandArgs(trailingOnly = TRUE)
 # Read the CSV file
 dat <- read.csv(args[1], sep='\t')
 
-# Compute the slope of each block's regression line
-slopes <- daply(dat, .(block), function(x) {
-  model <- lm(counter_speedup~block_speedup, data=x)
+# Compute the slope of each line's regression line
+slopes <- daply(dat, .(line), function(x) {
+  model <- lm(counter_speedup~line_speedup, data=x)
   return(coef(model)[2])
 })
 
-# Save the initial block factor order
-l <- levels(dat$block)
+# Save the initial line factor order
+l <- levels(dat$line)
 
-# Reorder the block factor by slope
-dat$block <- factor(dat$block, levels=l[rev(order(slopes))], ordered=TRUE)
+# Reorder the line factor by slope
+dat$line <- factor(dat$line, levels=l[rev(order(slopes))], ordered=TRUE)
 
-# Compute the number of points for each block
-dat$points <- tabulate(dat$block)[dat$block]
+# Compute the number of points for each line
+dat$points <- tabulate(dat$line)[dat$line]
 
-# Prune out blocks with a single point
+# Prune out lines with a single point
 dat <- subset(dat, points > 3)
 
 # Graph it
-ggplot(dat, aes(x=block_speedup, y=counter_speedup, color=counter)) +
+ggplot(dat, aes(x=line_speedup, y=counter_speedup, color=counter)) +
   geom_point() +
-  facet_wrap(~block) +
+  facet_wrap(~line) +
   geom_smooth(method='lm', se=FALSE) +
   theme(legend.position='bottom') +
   scale_y_continuous(limits=c(-1, 1))

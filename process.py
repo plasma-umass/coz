@@ -11,7 +11,7 @@ def main(filename):
   counter_values = {}
   # Map from counter name -> list of (counter delta, time) pairs
   baseline_rates = {}
-  # Map from block name -> block speedup -> counter name -> list of (counter delta, time) pairs
+  # Map from line name -> line speedup -> counter name -> list of (counter delta, time) pairs
   speedup_rates = {}
   
   f = open(filename)
@@ -53,7 +53,7 @@ def main(filename):
       
     elif command == 'start-speedup':
       phase_start_time = int(data['time'])
-      speedup_block = data['block']
+      speedup_line = data['line']
       (i, counter_start_values) = readCounters(lines, i)
       
     elif command == 'end-speedup':
@@ -63,11 +63,11 @@ def main(filename):
       # Adjust to effective time
       phase_time -= delay_count * delay_size
       
-      if speedup_block not in speedup_rates:
-        speedup_rates[speedup_block] = {}
+      if speedup_line not in speedup_rates:
+        speedup_rates[speedup_line] = {}
       
-      if delay_size not in speedup_rates[speedup_block]:
-        speedup_rates[speedup_block][delay_size] = {}
+      if delay_size not in speedup_rates[speedup_line]:
+        speedup_rates[speedup_line][delay_size] = {}
       
       (i, counter_end_values) = readCounters(lines, i)
       
@@ -75,24 +75,24 @@ def main(filename):
         if counter in counter_end_values:
           difference = counter_end_values[counter] - counter_start_values[counter]
           if difference > 0:
-            if counter not in speedup_rates[speedup_block][delay_size]:
-              speedup_rates[speedup_block][delay_size][counter] = []
-            speedup_rates[speedup_block][delay_size][counter].append((difference, phase_time))
+            if counter not in speedup_rates[speedup_line][delay_size]:
+              speedup_rates[speedup_line][delay_size][counter] = []
+            speedup_rates[speedup_line][delay_size][counter].append((difference, phase_time))
   
-  print "block\tblock_speedup\tcounter\tcounter_speedup\tbaseline_period\tspeedup_period"
+  print "line\tline_speedup\tcounter\tcounter_speedup\tbaseline_period\tspeedup_period"
   
-  for block in speedup_rates:
-    for delay_size in speedup_rates[block]:
-      for counter in speedup_rates[block][delay_size]:
+  for line in speedup_rates:
+    for delay_size in speedup_rates[line]:
+      for counter in speedup_rates[line][delay_size]:
         if counter in baseline_rates:
           baseline_period = avgPeriod(baseline_rates[counter])
-          speedup_period = avgPeriod(speedup_rates[block][delay_size][counter])
+          speedup_period = avgPeriod(speedup_rates[line][delay_size][counter])
           
-          block_speedup = float(delay_size) / period
+          line_speedup = float(delay_size) / period
           #counter_speedup = baseline_period / speedup_period
           counter_speedup = 1 - speedup_period / baseline_period
           
-          print "\t".join([block, str(block_speedup), counter, str(counter_speedup), str(baseline_period), str(speedup_period)])
+          print "\t".join([line, str(line_speedup), counter, str(counter_speedup), str(baseline_period), str(speedup_period)])
 
 def totalDelta(rates):
   total_delta = 0
