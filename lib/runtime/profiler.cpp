@@ -68,10 +68,15 @@ namespace profiler {
   atomic<bool> profilerRunning = ATOMIC_VAR_INIT(true);
   
   /// The map from source to memory locations constructed by causal_support
-  memory_map mem;
+  memory_map& get_memory_map() {
+    static char buf[sizeof(memory_map)];
+    static memory_map* the_map = new(buf) memory_map();
+    return *the_map;
+  }
   
   void include_file(const string& filename, uintptr_t load_address) {
-    mem.process_file(filename, load_address);
+    PREFER(get_memory_map().process_file(filename, load_address))
+      << "Failed to locate debug version of " << filename;
   }
   
   /**
@@ -87,7 +92,7 @@ namespace profiler {
     
     // If a non-empty fixed line was provided, attempt to locate it
     if(fixed_line_name != "") {
-      fixed_line = mem.find_line(fixed_line_name);
+      fixed_line = get_memory_map().find_line(fixed_line_name);
       PREFER(fixed_line) << "Fixed line \"" << fixed_line_name << "\" was not found.";
     }
 
@@ -102,7 +107,7 @@ namespace profiler {
   
     // Create breakpoint-based progress counters for all the lines specified via command-line
     for(const string& line_name : source_progress_names) {
-      shared_ptr<line> l = mem.find_line(line_name);
+      shared_ptr<line> l = get_memory_map().find_line(line_name);
       if(l) {
         WARNING << "Found line \"" << line_name << "\" but breakpoint placement hasn't been implemented for lines.";
         // TODO: Place breakpoint-based counter
@@ -193,7 +198,7 @@ namespace profiler {
     ProfilerState() : generator(getTime()), delayDist(0, 20) {}
     
     void processSample(const PerfEvent::SampleRecord& sample) {
-      shared_ptr<line> l = mem.find_line(sample.ip);
+      shared_ptr<line> l = get_memory_map().find_line(sample.ip);
       if(l != nullptr) {
         roundSamples++;
         // l->record_sample();

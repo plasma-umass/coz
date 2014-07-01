@@ -38,6 +38,7 @@ tests/pbzip2/debug
 tests/pbzip2/release
 tests/pbzip2/data/input.txt
 tests/pbzip2/data/output.txt
+tests/pbzip2/bzip2-1.0.6
 
 tests/pca/debug
 tests/pca/release

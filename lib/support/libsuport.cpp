@@ -164,6 +164,9 @@ namespace causal_support {
       search_paths.push_back(directory + "/.debug/" + link_name);
       search_paths.push_back("/usr/lib/debug" + directory + "/" + link_name);
     }
+    
+    // Clear the loaded file so if we have to return it, it won't be valid()
+    f = elf::elf();
 
     // Try all the usable search paths
     for(const string& path : search_paths) {

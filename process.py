@@ -79,7 +79,7 @@ def main(filename):
               speedup_rates[speedup_line][delay_size][counter] = []
             speedup_rates[speedup_line][delay_size][counter].append((difference, phase_time))
   
-  print "line\tline_speedup\tcounter\tcounter_speedup\tbaseline_period\tspeedup_period"
+  print "line\tline_speedup\tcounter\tcounter_speedup\tbaseline_period\tspeedup_period\tsamples"
   
   for line in speedup_rates:
     print_line = line
@@ -97,7 +97,7 @@ def main(filename):
           #counter_speedup = baseline_period / speedup_period
           counter_speedup = 1 - speedup_period / baseline_period
           
-          print "\t".join([print_line, str(line_speedup), counter, str(counter_speedup), str(baseline_period), str(speedup_period)])
+          print "\t".join([print_line, str(line_speedup), counter, str(counter_speedup), str(baseline_period), str(speedup_period), str(len(speedup_rates[line][delay_size][counter]))])
 
 def totalDelta(rates):
   total_delta = 0

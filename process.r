@@ -10,7 +10,7 @@ dat <- read.csv(args[1], sep='\t')
 
 # Compute the slope of each line's regression line
 slopes <- daply(dat, .(line), function(x) {
-  model <- lm(counter_speedup~line_speedup, data=x)
+  model <- lm(counter_speedup~line_speedup, data=x, weights=samples)
   return(coef(model)[2])
 })
 
@@ -27,7 +27,7 @@ dat$points <- tabulate(dat$line)[dat$line]
 dat <- subset(dat, points > 3)
 
 # Graph it
-ggplot(dat, aes(x=line_speedup, y=counter_speedup, color=counter)) +
+ggplot(dat, aes(x=line_speedup, y=counter_speedup, color=counter, weight=samples)) +
   geom_point() +
   facet_wrap(~line) +
   geom_smooth(method='lm', se=FALSE) +
