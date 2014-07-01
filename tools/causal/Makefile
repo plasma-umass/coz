@@ -1,8 +1,8 @@
 ROOT = ../..
 TARGETS = causal
 INSTALL = 1
-LIBS =
-INCLUDE_DIRS = 
+LIBS = boost_program_options
+INCLUDE_DIRS = $(ROOT)/lib/runtime/include
 
 include $(ROOT)/common.mk
 

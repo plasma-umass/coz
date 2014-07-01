@@ -3,6 +3,8 @@
 #include <iostream>
 #include <string>
 
+#include "options.h"
+
 using std::cerr;
 using std::cout;
 using std::string;
@@ -11,39 +13,33 @@ using std::string;
 #error "The path to the causal root must be set in the CAUSAL_ROOT_PATH variable."
 #endif
 
-void show_usage(char* prog_name) {
-  cerr << "Usage:\n"
-    << "\t" << prog_name << " <program> args...\n"
-    << "\t" << prog_name << " causal_args... --- <program> args...\n";
-}
-
 int main(int argc, char** argv, char** env) {
-  if(argc < 2) {
-    show_usage(argv[0]);
-    return 2;
-  }
-  
   // Find the "---" separator between causal arguments and the program name
-  size_t sep;
-  for(sep = 1; sep < argc && argv[sep] != string("---"); sep++) {
+  size_t causal_argc;
+  for(causal_argc = 1; causal_argc < argc && argv[causal_argc] != string("---"); causal_argc++) {
     // Do nothing
   }
   
-  cout << "Found separator at index " << sep << "\n";
+  // Parse arguments preemptively (in case the user wants a help message)
+  auto args = causal::parse_args(causal_argc, argv);
   
-  // If there is no "---", the program name must be in argv[1]
-  char* prog_name = argv[1];
+  // Show usage information if the help argument was passed
+  if(args.count("help")) {
+    causal::show_usage();
+    return 1;
+  }
   
-  // If the separator is the last argument no program was specified
-  if(sep == argc - 1) {
-    show_usage(argv[0]);
+  // If the separator is missing or in the last argument, no program was specified
+  if(causal_argc >= argc - 1) {
+    causal::show_usage();
     return 2;
   }
   
-  // If there is a valid separator, get the program name
-  if(sep < argc - 1) {
-    prog_name = argv[sep + 1];
-  }
+  // The program name comes immediately after the separator
+  char* prog_name = argv[causal_argc + 1];
+  
+  // Set the program name in the first argument, otherwise file name resolution won't work
+  argv[0] = prog_name;
   
   // Set the preload string to the path to the debug causal library
   string causal_preload = CAUSAL_ROOT_PATH "/debug/lib/libcausal.so";
@@ -83,9 +79,9 @@ int main(int argc, char** argv, char** env) {
     env = new_env;
   }
   
-  // Execute the specified program. Pass all the arguments (including causal args) so they
-  // can be handled by the preloaded library
-  if(execvpe(prog_name, &argv[1], env)) {
+  // Execute the specified program.
+  // Pass all the arguments, including the causal tool name and all profiler args.
+  if(execvpe(prog_name, argv, env)) {
     cerr << "exec failed!\n";
     return 2;
   }

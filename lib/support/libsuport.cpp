@@ -87,7 +87,7 @@ namespace causal_support {
     if(filename[0] == '/') {
       return filename;
     
-    } else if(filename[0] == '.') {
+    } else if(filename.find('/') != string::npos) {
       return canonical(filename).string();
     
     } else {  

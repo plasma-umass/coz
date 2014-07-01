@@ -2,8 +2,8 @@
 #define CAUSAL_RUNTIME_PROFILER_H
 
 #include <cstdint>
-#include <set>
 #include <string>
+#include <vector>
 
 #include "causal.h"
 #include "counter.h"
@@ -20,7 +20,7 @@ namespace profiler {
   void registerCounter(Counter* c);
   void shutdown();
   void startup(const std::string& output_filename,
-               const std::set<std::string>& source_progress_names,
+               const std::vector<std::string>& source_progress_names,
                const std::string& fixed_line_name);
   void threadShutdown();
   void threadStartup();

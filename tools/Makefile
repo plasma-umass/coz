@@ -1,4 +1,4 @@
 ROOT = ..
-DIRS = inspect
+DIRS = causal inspect
 
 include $(ROOT)/common.mk

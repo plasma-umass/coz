@@ -10,11 +10,11 @@
 #include <cstdio>
 #include <map>
 #include <random>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "counter.h"
 #include "log.h"
@@ -84,7 +84,7 @@ namespace profiler {
    * argv, then initialize the profiler.
    */
   void startup(const string& output_filename,
-               const set<string>& source_progress_names,
+               const vector<string>& source_progress_names,
                const string& fixed_line_name) {
     // Set up signal handlers
     setSignalHandler(PauseSignal, onPause);
