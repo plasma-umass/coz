@@ -195,7 +195,7 @@ namespace profiler {
     };
     
   public:
-    ProfilerState() : generator(getTime()), delayDist(0, 20) {}
+    ProfilerState() : generator(getTime()), delayDist(0, 8) {}
     
     void processSample(const PerfEvent::SampleRecord& sample) {
       shared_ptr<line> l = get_memory_map().find_line(sample.ip);
@@ -249,7 +249,7 @@ namespace profiler {
       // Clear the count of samples seen this round
       roundSamples = 0;
       // Generate a random delay size
-      size_t delay_size = delayDist(generator) * SamplePeriod / 20;
+      size_t delay_size = delayDist(generator) * SamplePeriod / 8;
       // Count the total number of delays/visits required for each thread
       size_t delay_count = 0;
       

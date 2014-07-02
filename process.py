@@ -87,7 +87,10 @@ def main(filename):
     if line.startswith(os.getcwd()):
       print_line = line[(len(os.getcwd())+1):]
     
-    for delay_size in speedup_rates[line]:
+    delay_sizes = speedup_rates[line].keys()
+    delay_sizes.sort()
+    
+    for delay_size in delay_sizes:
       for counter in speedup_rates[line][delay_size]:
         if counter in baseline_rates:
           baseline_period = avgPeriod(baseline_rates[counter])
