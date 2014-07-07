@@ -12,5 +12,5 @@ linear_regression_datafiles/%:
 	tar xvzf linear_regression.tar.gz
 	rm linear_regression.tar.gz
 
-test:: debug/bin/linear_regression setup
-	LD_PRELOAD=$(ROOT)/debug/lib/libcausal.so ./debug/bin/linear_regression $(ARGS)
+bench:: debug/bin/linear_regression setup
+	causal --- debug/bin/linear_regression $(ARGS)

@@ -12,5 +12,5 @@ string_match_datafiles/%:
 	tar xvzf string_match.tar.gz
 	rm string_match.tar.gz
 
-test:: debug/bin/string_match setup
-	LD_PRELOAD=$(ROOT)/debug/lib/libcausal.so ./debug/bin/string_match $(ARGS)
+bench:: debug/bin/string_match setup
+	causal --- debug/bin/string_match $(ARGS)
