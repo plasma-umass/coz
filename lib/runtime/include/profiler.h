@@ -10,7 +10,7 @@
 
 enum {
   PauseSignal = 42,
-  SamplePeriod = 1000000, // 1ms
+  SamplePeriod = 2100000, // 1ms
   SampleWakeupCount = 1,
   MinRoundSamples = 1000
 };

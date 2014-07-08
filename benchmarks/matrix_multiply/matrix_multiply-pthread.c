@@ -80,8 +80,7 @@ void matrixmult_splitter(void *data_in)
     assert(data->matrix_B);
     assert(data->output);
 
-    //CHECK_ERROR((num_procs = sysconf(_SC_NPROCESSORS_ONLN)) <= 0);
-    num_procs = 4;
+    CHECK_ERROR((num_procs = sysconf(_SC_NPROCESSORS_ONLN)) <= 0);
     dprintf("THe number of processors is %d\n", num_procs);
 
     tid = (pthread_t *)MALLOC(num_procs * sizeof(pthread_t));
@@ -148,9 +147,7 @@ void *matrixmult_map(void *args_in)
 		    value = 0;
         for(j=0;j<data->matrix_len ; j++)
 		    {
-			    for(int k = 0; k <= 8 - SKIP_COUNT; k++) {
-            value += ( a_ptr[j] * (*b_ptr));
-          }
+			    value += ( a_ptr[j] * (*b_ptr));
 			    b_ptr+= data->matrix_len;
 		    }        
 		    x_loc = (data->row_num + row_count);
@@ -286,14 +283,14 @@ int main(int argc, char *argv[]) {
 
     fprintf(stderr, "runtime = %f\n", (usec / 1000000));
 
-    /*for(i=0;i<matrix_len*matrix_len;i++)
+    for(i=0;i<matrix_len*matrix_len;i++)
     {
 	    if(i%matrix_len == 0)
 		    dprintf("\n");
 
 	    dprintf("%d ",mm_data.output[i]);
 
-	    //write(fd_out,&(mm_data.output[i]),sizeof(int));
+	    write(fd_out,&(mm_data.output[i]),sizeof(int));
     }
     dprintf("\n");
 
@@ -307,7 +304,7 @@ int main(int argc, char *argv[]) {
     CHECK_ERROR(munmap(fdata_B, file_size + 1) < 0);
     CHECK_ERROR(close(fd_B) < 0);
 
-    CHECK_ERROR(close(fd_out) < 0);*/
+    CHECK_ERROR(close(fd_out) < 0);
 
     return 0;
 }

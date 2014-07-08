@@ -187,8 +187,8 @@ namespace profiler {
     
     /// The perf event configuration
     struct perf_event_attr pe = {
-      .type = PERF_TYPE_SOFTWARE,
-      .config = PERF_COUNT_SW_TASK_CLOCK,
+      .type = PERF_TYPE_HARDWARE,
+      .config = PERF_COUNT_HW_CPU_CYCLES,
       .sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_TID | PERF_SAMPLE_TIME | PERF_SAMPLE_CALLCHAIN,
       .sample_period = SamplePeriod,
       .wakeup_events = SampleWakeupCount
@@ -207,7 +207,11 @@ namespace profiler {
           // If the baseline round has run long enough and we're in a known line,
           // use this line for the next speedup round
           if(roundSamples >= MinRoundSamples) {
-            selectedLine = l;
+            if(fixed_line) {
+              selectedLine = fixed_line;
+            } else {
+              selectedLine = l;
+            }
           }
         } else if(mode == Speedup) {
           // Check if the sample is in the selected line

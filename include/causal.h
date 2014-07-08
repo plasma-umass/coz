@@ -18,9 +18,11 @@ static void __init_counter(int kind, size_t* ctr, const char* name) {
 
 #define CAUSAL_INCREMENT_COUNTER(kind, name) \
   if(1) { \
-    static unsigned char __causal_counter_initialized = 0; \
-    static size_t __causal_counter = 0; \
-    if(__atomic_exchange_n(&__causal_counter_initialized, 1, __ATOMIC_SEQ_CST) == 0) { \
+    static unsigned int __causal_counter_initialized; \
+    static size_t __causal_counter; \
+    if(__causal_counter_initialized != 0xDEADBEEF && \
+        __atomic_exchange_n(&__causal_counter_initialized, 0xDEADBEEF, __ATOMIC_SEQ_CST) != 0xDEADBEEF) { \
+      __causal_counter = 0; \
       __init_counter(kind, &__causal_counter, name); \
     } \
     __atomic_fetch_add(&__causal_counter, 1, __ATOMIC_SEQ_CST); \
@@ -33,9 +35,9 @@ static void __init_counter(int kind, size_t* ctr, const char* name) {
 #define STR2(x) #x 
 #define STR(x) STR2(x)
 
-#define CAUSAL_PROGRESS CAUSAL_INCREMENT_COUNTER(PROGRESS_COUNTER, __FILE__ " line " STR(__LINE__))
-#define CAUSAL_BEGIN CAUSAL_INCREMENT_COUNTER(BEGIN_COUNTER, __FILE__ " line " STR(__LINE__))
-#define CAUSAL_END CAUSAL_INCREMENT_COUNTER(END_COUNTER, __FILE__ " line " STR(__LINE__))
+#define CAUSAL_PROGRESS CAUSAL_INCREMENT_COUNTER(PROGRESS_COUNTER, __FILE__ ":" STR(__LINE__))
+#define CAUSAL_BEGIN CAUSAL_INCREMENT_COUNTER(BEGIN_COUNTER, __FILE__ ":" STR(__LINE__))
+#define CAUSAL_END CAUSAL_INCREMENT_COUNTER(END_COUNTER, __FILE__ ":" STR(__LINE__))
 
 #if defined(__cplusplus)
 }

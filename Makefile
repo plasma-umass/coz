@@ -1,5 +1,5 @@
 ROOT = .
-DIRS = lib tools
+DIRS = lib tools benchmarks tests
 
 include $(ROOT)/common.mk
 
