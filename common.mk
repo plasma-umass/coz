@@ -199,7 +199,8 @@ $(ROOT)/deps/libelfin/dwarf $(ROOT)/deps/libelfin/elf:
 	@echo $(INDENT)[git] Checking out libelfin
 	@rm -rf $(ROOT)/deps/libelfin
 	@mkdir -p $(ROOT)/deps
-	@git clone git@github.com:ccurtsinger/libelfin.git $(ROOT)/deps/libelfin
+	@git clone git@github.com:ccurtsinger/libelfin.git -b all-fixes $(ROOT)/deps/libelfin
+	@echo $(INDENT)[make] Building libelfin
 	@cd $(ROOT)/deps/libelfin; CXXFLAGS=-fPIC make
 
 $(ROOT)/deps/cppgoodies/include:
