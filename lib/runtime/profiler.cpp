@@ -1,5 +1,6 @@
 #include "profiler.h"
 
+#include <asm/unistd.h>
 #include <execinfo.h>
 #include <poll.h>
 #include <pthread.h>
@@ -19,6 +20,7 @@
 #include "counter.h"
 #include "log.h"
 #include "perf.h"
+#include "spinlock.h"
 #include "support.h"
 #include "util.h"
 
@@ -27,6 +29,10 @@ using namespace std;
 
 int rt_tgsigqueueinfo(pid_t tgid, pid_t tid, int sig, siginfo_t *uinfo) {
   return syscall(__NR_rt_tgsigqueueinfo, tgid, tid, sig, uinfo);
+}
+
+pid_t gettid() {
+  return syscall(__NR_gettid);
 }
 
 namespace profiler {
@@ -174,7 +180,7 @@ namespace profiler {
     default_random_engine generator;
     uniform_int_distribution<size_t> delayDist;
     vector<struct pollfd> pollers;
-    map<pid_t, PerfEvent> events;
+    map<pid_t, perf_event> events;
     map<Counter*, size_t> counterSnapshot;
     size_t currentVersion = 0;
     size_t roundSamples = 0;
@@ -189,38 +195,13 @@ namespace profiler {
     struct perf_event_attr pe = {
       .type = PERF_TYPE_HARDWARE,
       .config = PERF_COUNT_HW_CPU_CYCLES,
-      .sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_TID | PERF_SAMPLE_TIME | PERF_SAMPLE_CALLCHAIN,
+      .sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_TID | PERF_SAMPLE_TIME | PERF_SAMPLE_CPU | PERF_SAMPLE_CALLCHAIN,
       .sample_period = SamplePeriod,
       .wakeup_events = SampleWakeupCount
     };
     
   public:
     ProfilerState() : generator(getTime()), delayDist(0, 8) {}
-    
-    void processSample(const PerfEvent::SampleRecord& sample) {
-      shared_ptr<line> l = get_memory_map().find_line(sample.ip);
-      if(l != nullptr) {
-        roundSamples++;
-        // l->record_sample();
-        
-        if(mode == Baseline) {
-          // If the baseline round has run long enough and we're in a known line,
-          // use this line for the next speedup round
-          if(roundSamples >= MinRoundSamples) {
-            if(fixed_line) {
-              selectedLine = fixed_line;
-            } else {
-              selectedLine = l;
-            }
-          }
-        } else if(mode == Speedup) {
-          // Check if the sample is in the selected line
-          if(l == selectedLine) {
-            localVisits[sample.tid]++;
-          }
-        }
-      }
-    }
     
     void doBaseline() {
       if(!profilerRunning) {
@@ -382,8 +363,37 @@ namespace profiler {
       REQUIRE(rc != -1) << "Failed to poll event files";
     
       if(rc > 0) {
-        for(pair<const pid_t, PerfEvent>& event : events) {
-          event.second.process(this);
+        for(pair<const pid_t, perf_event>& event : events) {
+          event.second.process([this](const perf_event::record& r) {
+            if(!r.is_sample()) {
+              return;
+            }
+            
+            perf_event::sample_record sample = r.as_sample();
+            
+            shared_ptr<line> l = get_memory_map().find_line(sample.get_ip());
+            if(l != nullptr) {
+              roundSamples++;
+              // l->record_sample();
+        
+              if(mode == Baseline) {
+                // If the baseline round has run long enough and we're in a known line,
+                // use this line for the next speedup round
+                if(roundSamples >= MinRoundSamples) {
+                  if(fixed_line) {
+                    selectedLine = fixed_line;
+                  } else {
+                    selectedLine = l;
+                  }
+                }
+              } else if(mode == Speedup) {
+                // Check if the sample is in the selected line
+                if(l == selectedLine) {
+                  localVisits[sample.get_tid()]++;
+                }
+              }
+            }
+          });
         }
       }
     }
@@ -420,13 +430,13 @@ namespace profiler {
           // If this thread doesn't have an event yet, create one
           auto events_iter = events.find(tid);
           if(events_iter == events.end()) {
-            events.emplace(tid, PerfEvent(pe, tid));
+            events.emplace(tid, perf_event(pe, tid));
           }
       
           events[tid].start();
       
           pollers[i] = {
-            .fd = events[tid].getFileDescriptor(),
+            .fd = events[tid].get_fd(),
             .events = POLLIN
           };
       

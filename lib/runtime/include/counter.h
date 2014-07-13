@@ -4,6 +4,7 @@
 #include <string>
 
 #include "causal.h"
+#include "log.h"
 #include "perf.h"
 #include "util.h"
 
@@ -113,7 +114,7 @@ public:
   }
   
   virtual size_t getCount() const {
-    return _event.getCount();
+    return _event.get_count();
   }
   
 private:
@@ -150,7 +151,7 @@ public:
   
 private:
   struct perf_event_attr _pe;
-  PerfEvent _event;
+  perf_event _event;
   
   static size_t _overhead;
 };
