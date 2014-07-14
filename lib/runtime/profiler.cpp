@@ -19,6 +19,7 @@
 
 #include "counter.h"
 #include "log.h"
+#include "output.h"
 #include "perf.h"
 #include "spinlock.h"
 #include "support.h"
@@ -39,26 +40,16 @@ namespace profiler {
   void onError(int, siginfo_t*, void*);
   void onPause(int, siginfo_t*, void*);
   void* profilerMain(void* arg);
-  void logBaselineStart();
-  void logBaselineEnd();
-  void logSpeedupStart(shared_ptr<line>);
-  void logSpeedupEnd(size_t, size_t);
-  void logStartup();
-  void logShutdown();
   void startPerformanceMonitoring();
   
-  /// The file handle to log profiler output
-  FILE* outputFile;
+  /// Handle for the profiler output
+  output* out;
   
   /// Flag is set when shutdown has been run
   atomic_flag shutdownRun = ATOMIC_FLAG_INIT;
   
   /// The fixed line for causal profiling, if any
   shared_ptr<line> fixed_line;
-  
-  // Progress counter tracking
-  unordered_set<Counter*> counters; //< A hash set of counter object pointers
-  spinlock countersLock;           //< A lock to guard the counters hash set
   
   // Thread tracking
   unordered_map<pid_t, pthread_t> threads;  //< A hash map from tid to pthread identifier
@@ -102,10 +93,8 @@ namespace profiler {
       PREFER(fixed_line) << "Fixed line \"" << fixed_line_name << "\" was not found.";
     }
 
-    // Open the output file
-    outputFile = fopen(output_filename.c_str(), "a");
-    REQUIRE(outputFile != NULL)
-      << "Failed to open profiler output file: " << output_filename;
+    // Create the profiler output object
+    out = new output(output_filename);
     
     // Create the profiler thread
     REQUIRE(Real::pthread_create()(&profilerThread, NULL, profilerMain, NULL) == 0)
@@ -132,9 +121,7 @@ namespace profiler {
     if(shutdownRun.test_and_set() == false) {
       profilerRunning.store(false);
       pthread_join(profilerThread, nullptr);
-      
-      // TODO: write out sampling profile results
-      fclose(outputFile);
+      delete out;
     }
   }
 
@@ -143,13 +130,7 @@ namespace profiler {
    * from any of the application's threads.
    */
   void registerCounter(Counter* c) {
-    countersLock.lock();
-
-    // Insert the new counter
-    counters.insert(c);
-  
-    // Unlock
-    countersLock.unlock();
+    out->add_counter(c);
   }
   
   void threadStartup() {
@@ -210,9 +191,8 @@ namespace profiler {
       
       mode = Baseline;
       roundSamples = 0;
-      takeCounterSnapshot();
       
-      logBaselineStart();
+      out->baseline_start();
       
       while(roundSamples < MinRoundSamples || !selectedLine) {
         if(!profilerRunning) {
@@ -221,7 +201,7 @@ namespace profiler {
         collectSamples();
       }
       
-      logBaselineEnd();
+      out->baseline_end();
     }
     
     void doSpeedup() {
@@ -238,14 +218,11 @@ namespace profiler {
       // Count the total number of delays/visits required for each thread
       size_t delay_count = 0;
       
-      // Save the state of all active counters
-      takeCounterSnapshot();
-      
       // Log the beginning of the speedup period
-      logSpeedupStart(selectedLine);
+      out->speedup_start(selectedLine);
       
       // Run until enough samples have been processed
-      while(roundSamples < MinRoundSamples || !countersChanged()) {
+      while(roundSamples < MinRoundSamples /*|| !countersChanged()*/) {
         // Check for termination
         if(!profilerRunning) {
           break;
@@ -312,14 +289,14 @@ namespace profiler {
       }
       
       // Log the end of the speedup round
-      logSpeedupEnd(delay_count, delay_size);
+      out->speedup_end(delay_count, delay_size);
       
       // Flush any remaining samples before returning to baseline mode
       mode = Flush;
       collectSamples();
     }
     
-    void takeCounterSnapshot() {
+    /*void takeCounterSnapshot() {
       counterSnapshot.clear();
       
       countersLock.lock();
@@ -327,7 +304,7 @@ namespace profiler {
         counterSnapshot[c] = c->getCount();
       }
       countersLock.unlock();
-    }
+    }*/
     
     bool countersChanged() {
       return true;
@@ -346,14 +323,14 @@ namespace profiler {
     
     void run() {
       // Log profiler parameters and calibration information to the profiler output
-      logStartup();
+      out->startup(SamplePeriod);
     
       while(profilerRunning) {
         doBaseline();
         doSpeedup();
       }
     
-      logShutdown();
+      out->shutdown();
     }
     
     void collectSamples() {
@@ -456,74 +433,6 @@ namespace profiler {
     s.run();
     
     return NULL;
-  }
-
-  /**
-   * Log the start of a profile run, along with instrumentation calibration info
-   */
-  void logStartup() {
-    fprintf(outputFile, "startup\ttime=%lu\n", getTime());
-    fprintf(outputFile, "info\tsample-period=%lu\n", (size_t)SamplePeriod);
-    //fprintf(outputFile, "info\tsource-counter-overhead=%lu\n", SourceCounter::calibrate());
-    fprintf(outputFile, "info\tperf-counter-overhead=%lu\n", PerfCounter::calibrate());
-  
-    // Drop all counters, so we don't use any calibration counters during the real execution
-    //counters.clear();
-  }
-
-  /**
-   * Log profiler shutdown
-   */
-  void logShutdown() {
-    fprintf(outputFile, "shutdown\ttime=%lu\n", getTime());
-  }
-
-  /**
-   * Log the values for all known counters
-   */
-  void logCounters() {
-    for(Counter* c : counters) {
-      fprintf(outputFile, "counter\tname=%s\tkind=%s\timpl=%s\tvalue=%lu\n",
-          c->getName().c_str(), c->getKindName(), c->getImplName(), c->getCount());
-    }
-  }
-
-  /**
-   * Log the beginning of a baseline profiling round
-   */
-  void logBaselineStart() {
-    // Write out time and progress counter values
-    fprintf(outputFile, "start-baseline\ttime=%lu\n", getTime());
-    logCounters();
-  }
-
-  /**
-   * Log the end of a baseline profiling round
-   */
-  void logBaselineEnd() {
-    // Write out time and progress counter values
-    fprintf(outputFile, "end-baseline\ttime=%lu\n", getTime());
-    logCounters();
-  }
-
-  /**
-   * Log the beginning of a speedup profiling round
-   */
-  void logSpeedupStart(shared_ptr<line> selected) {
-    // Write out time, selected line, and progress counter values
-    fprintf(outputFile, "start-speedup\tline=%s:%lu\ttime=%lu\n",
-        selected->get_file()->get_name().c_str(), selected->get_line(), getTime());
-    logCounters();
-  }
-
-  /**
-   * Log the end of a speedup profiling round
-   */
-  void logSpeedupEnd(size_t delay_count, size_t delay_size) {
-    // Write out time, progress counter values, delay count, and total delay
-    fprintf(outputFile, "end-speedup\tdelays=%lu\tdelay-size=%lu\ttime=%lu\n",
-        delay_count, delay_size, getTime());
-    logCounters();
   }
 
   void onPause(int signum, siginfo_t* info, void* p) {
