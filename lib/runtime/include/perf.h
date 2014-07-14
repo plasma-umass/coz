@@ -9,6 +9,7 @@
 #include <functional>
 
 #include "log.h"
+#include "wrapped_array.h"
 
 class perf_event {
 public:
@@ -44,6 +45,35 @@ public:
   /// Apply a function to all available records in the mmapped ring buffer
   void process(std::function<void(const record&)> handler);
   
+  /// An enum class with all the available sampling data
+  enum class sample : uint64_t {
+    ip = PERF_SAMPLE_IP,
+    pid_tid = PERF_SAMPLE_TID,
+    time = PERF_SAMPLE_TIME,
+    addr = PERF_SAMPLE_ADDR,
+    id = PERF_SAMPLE_ID,
+    stream_id = PERF_SAMPLE_STREAM_ID,
+    cpu = PERF_SAMPLE_CPU,
+    period = PERF_SAMPLE_PERIOD,
+    read = PERF_SAMPLE_READ,
+    callchain = PERF_SAMPLE_CALLCHAIN,
+    raw = PERF_SAMPLE_RAW,
+    branch_stack = PERF_SAMPLE_BRANCH_STACK,
+    regs = PERF_SAMPLE_REGS_USER,
+    stack = PERF_SAMPLE_STACK_USER,
+    _end = PERF_SAMPLE_MAX
+  };
+  
+  /// Check if this perf_event was configured to collect a type of sample data
+  inline bool is_sampling(sample s) const {
+    return _sample_type & static_cast<uint64_t>(s);
+  }
+  
+  /// Get the configuration for this perf_event's read format
+  inline uint64_t get_read_format() const {
+    return _read_format;
+  }
+  
   /// An enum to distinguish types of records in the mmapped ring buffer
   enum class record_type {
     mmap = PERF_RECORD_MMAP,
@@ -58,43 +88,9 @@ public:
     mmap2 = PERF_RECORD_MMAP2
   };
   
-  /// Wrapper around a sample record from the mmapped ring buffer
-  struct sample_record {
-  private:
-    struct sample_data {
-      struct perf_event_header header;
-      uint64_t ip;
-      uint32_t pid, tid;
-      uint64_t time;
-      uint32_t cpu, res;
-    } __attribute__((packed));
-    
-    sample_data* _data;
-    
-  public:
-    inline explicit sample_record(struct perf_event_header* header) :
-        _data(reinterpret_cast<sample_data*>(header)) {}
-    
-    inline uintptr_t get_ip() const { return _data->ip; }
-    inline pid_t get_pid() const { return _data->pid; }
-    inline pid_t get_tid() const { return _data->tid; }
-    inline uint64_t get_time() const { return _data->time; }
-    inline uint32_t get_cpu() const { return _data->cpu; }
-  };
-  
   /// A generic record type
   struct record {
-  private:
     friend class perf_event;
-    
-    struct perf_event_header* _header;
-    
-    record(struct perf_event_header* header) : _header(header) {}
-    
-    record(const record&) = delete;
-    record(record&&) = delete;
-    void operator=(const record&) = delete;
-    
   public:
     record_type get_type() const { return static_cast<record_type>(_header->type); }
     
@@ -109,10 +105,25 @@ public:
     inline bool is_sample() const { return get_type() == record_type::sample; }
     inline bool is_mmap2() const { return get_type() == record_type::mmap2; }
     
-    inline const sample_record as_sample() const {
-      ASSERT(get_type() == record_type::sample) << "Casting perf_event record to wrong type!";
-      return sample_record(_header);
-    }
+    uint64_t get_ip() const;
+    uint64_t get_pid() const;
+    uint64_t get_tid() const;
+    uint64_t get_time() const;
+    uint32_t get_cpu() const;
+    cppgoodies::wrapped_array<uint64_t> get_callchain() const;
+    
+  private:
+    record(const perf_event& source, struct perf_event_header* header) :
+        _source(source), _header(header) {}
+    
+    record(const record&) = delete;
+    record(record&&) = delete;
+    void operator=(const record&) = delete;
+    
+    template<perf_event::sample s, typename T=void*> T locate_field() const;
+    
+    const perf_event& _source;
+    struct perf_event_header* _header;
   };
     
 private:
@@ -128,6 +139,11 @@ private:
   
   /// Memory mapped perf event region
   struct perf_event_mmap_page* _mapping = nullptr;
+  
+  /// The sample type from this perf_event's configuration
+  uint64_t _sample_type = 0;
+  /// The read format from this perf event's configuration
+  uint64_t _read_format = 0;
 };
 
 #endif

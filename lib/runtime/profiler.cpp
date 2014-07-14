@@ -369,9 +369,7 @@ namespace profiler {
               return;
             }
             
-            perf_event::sample_record sample = r.as_sample();
-            
-            shared_ptr<line> l = get_memory_map().find_line(sample.get_ip());
+            shared_ptr<line> l = get_memory_map().find_line(r.get_ip());
             if(l != nullptr) {
               roundSamples++;
               // l->record_sample();
@@ -389,7 +387,7 @@ namespace profiler {
               } else if(mode == Speedup) {
                 // Check if the sample is in the selected line
                 if(l == selectedLine) {
-                  localVisits[sample.get_tid()]++;
+                  localVisits[r.get_tid()]++;
                 }
               }
             }
