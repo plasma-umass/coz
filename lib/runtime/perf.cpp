@@ -19,6 +19,7 @@
 
 #include "log.h"
 #include "spinlock.h"
+#include "util.h"
 #include "wrapped_array.h"
 
 using std::function;
@@ -33,10 +34,6 @@ enum {
 
 long perf_event_open(struct perf_event_attr *hw_event, pid_t pid, int cpu, int group_fd, unsigned long flags) {
   return syscall(__NR_perf_event_open, hw_event, pid, cpu, group_fd, flags);
-}
-
-static pid_t gettid() {
-  return syscall(__NR_gettid);
 }
 
 // Create an uninitialized perf_event object

@@ -32,7 +32,7 @@ void output::add_counter(Counter* c) {
  * Log the start of a profile run, along with instrumentation calibration info
  */
 void output::startup(size_t sample_period) {
-  fprintf(_f, "startup\ttime=%lu\n", getTime());
+  fprintf(_f, "startup\ttime=%lu\n", get_time());
   fprintf(_f, "info\tsample-period=%lu\n", sample_period);
   //fprintf(_f, "info\tsource-counter-overhead=%lu\n", SourceCounter::calibrate());
   fprintf(_f, "info\tperf-counter-overhead=%lu\n", PerfCounter::calibrate());
@@ -45,7 +45,7 @@ void output::startup(size_t sample_period) {
  * Log profiler shutdown
  */
 void output::shutdown() {
-  fprintf(_f, "shutdown\ttime=%lu\n", getTime());
+  fprintf(_f, "shutdown\ttime=%lu\n", get_time());
 }
 
 /**
@@ -63,7 +63,7 @@ void output::write_counters() {
  */
 void output::baseline_start() {
   // Write out time and progress counter values
-  fprintf(_f, "start-baseline\ttime=%lu\n", getTime());
+  fprintf(_f, "start-baseline\ttime=%lu\n", get_time());
   write_counters();
 }
 
@@ -72,7 +72,7 @@ void output::baseline_start() {
  */
 void output::baseline_end() {
   // Write out time and progress counter values
-  fprintf(_f, "end-baseline\ttime=%lu\n", getTime());
+  fprintf(_f, "end-baseline\ttime=%lu\n", get_time());
   write_counters();
 }
 
@@ -82,7 +82,7 @@ void output::baseline_end() {
 void output::speedup_start(shared_ptr<line> selected) {
   // Write out time, selected line, and progress counter values
   fprintf(_f, "start-speedup\tline=%s:%lu\ttime=%lu\n",
-      selected->get_file()->get_name().c_str(), selected->get_line(), getTime());
+      selected->get_file()->get_name().c_str(), selected->get_line(), get_time());
   write_counters();
 }
 
@@ -92,6 +92,6 @@ void output::speedup_start(shared_ptr<line> selected) {
 void output::speedup_end(size_t num_delays, size_t delay_size) {
   // Write out time, progress counter values, delay count, and total delay
   fprintf(_f, "end-speedup\tdelays=%lu\tdelay-size=%lu\ttime=%lu\n",
-      num_delays, delay_size, getTime());
+      num_delays, delay_size, get_time());
   write_counters();
 }

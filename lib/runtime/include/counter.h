@@ -74,20 +74,20 @@ private:
   
 public:
   static size_t calibrate() {
-    size_t clean_start_time = getTime();
+    size_t clean_start_time = get_time();
     volatile size_t n = CalibrationCount;
     while(n > 0) {
       n--;
     }
-    size_t clean_time = getTime() - clean_start_time;
+    size_t clean_time = get_time() - clean_start_time;
     
-    size_t perturbed_start_time = getTime();
+    size_t perturbed_start_time = get_time();
     n = CalibrationCount;
     while(n > 0) {
       CAUSAL_PROGRESS;
       n--;
     }
-    size_t perturbed_time = getTime() - perturbed_start_time;
+    size_t perturbed_time = get_time() - perturbed_start_time;
     
     return (perturbed_time - clean_time) / CalibrationCount;
   }
@@ -129,17 +129,17 @@ private:
 public:
   static size_t calibrate() {
     // Time an execution without instrumentation
-    size_t clean_start_time = getTime();
+    size_t clean_start_time = get_time();
     looper(CalibrationCount);
-    size_t clean_time = getTime() - clean_start_time;
+    size_t clean_time = get_time() - clean_start_time;
     
     // Create a breakpoint-based trip counter
     PerfCounter ctr(ProgressCounter, (uintptr_t)looper, "calibration");
     
     // Time the same execution with instrumentation in place
-    size_t perturbed_start_time = getTime();
+    size_t perturbed_start_time = get_time();
     looper(CalibrationCount);
-    size_t perturbed_time = getTime() - perturbed_start_time;
+    size_t perturbed_time = get_time() - perturbed_start_time;
   
     // Ensure that trips were counted properly
     REQUIRE(ctr.getCount() == CalibrationCount)

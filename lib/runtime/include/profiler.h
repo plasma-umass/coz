@@ -10,6 +10,7 @@
 #include "causal.h"
 #include "counter.h"
 #include "output.h"
+#include "perf.h"
 #include "support.h"
 
 enum {

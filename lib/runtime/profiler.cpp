@@ -40,14 +40,6 @@ thread_local atomic<perf_event*> sampler(nullptr);
 void on_error(int, siginfo_t*, void*);
 void samples_ready(int, siginfo_t*, void*);
 
-int rt_tgsigqueueinfo(pid_t tgid, pid_t tid, int sig, siginfo_t *uinfo) {
-  return syscall(__NR_rt_tgsigqueueinfo, tgid, tid, sig, uinfo);
-}
-
-pid_t gettid() {
-  return syscall(__NR_gettid);
-}
-  
 void profiler::include_file(const string& filename, uintptr_t load_address) {
   PREFER(_map.process_file(filename, load_address))
     << "Failed to locate debug version of " << filename;
@@ -65,8 +57,8 @@ void profiler::startup(const string& output_filename,
              const vector<string>& source_progress_names,
              const string& fixed_line_name) {
   // Set up signal handlers
-  setSignalHandler(SampleSignal, samples_ready);
-  setSignalHandler(SIGSEGV, on_error);
+  set_signal_handler(SampleSignal, samples_ready);
+  set_signal_handler(SIGSEGV, on_error);
   
   // If a non-empty fixed line was provided, attempt to locate it
   if(fixed_line_name != "") {
@@ -140,37 +132,24 @@ size_t profiler::get_local_delays() {
   return local_delays;
 }
 
-int x = 0;
-
 void samples_ready(int signum, siginfo_t* info, void* p) {
+  // Attempt to claim the sampler
   perf_event* s = sampler.exchange(nullptr);
   
-  if(!s) {
+  // If the sampler was not available to be claimed, try again later
+  if(!s)
     return;
-  }
   
-  //fprintf(stderr, "%p\n", s);
-  
+  // Stop sampling
   s->stop();
   
-  if(info->si_code == POLL_IN) {
-    //INFO << "POLL_IN";
-  } else if(info->si_code == POLL_HUP) {
-    INFO << "POLL_HUP";
-  } else {
-    INFO << "POLL unknown!";
-  }
-  
-  size_t samples = 0;
-  s->process([&samples](const perf_event::record& r) {
+  s->process([](const perf_event::record& r) {
     if(r.is_sample()) {
-      samples++;
       //fprintf(stderr, "Sample at %p\n", (void*)r.get_ip());
     }
   });
   
-  //INFO << "Processed " << samples << " samples";
-  
+  // Resume sampling
   s->start();
   
   // Return the sampler to the shared atomic pointer
