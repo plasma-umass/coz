@@ -25,7 +25,7 @@ using std::function;
 using cppgoodies::wrapped_array;
 
 enum {
-  DataPages = 16,
+  DataPages = 2,
   PageSize = 0x1000,
   DataSize = DataPages * PageSize,
   MmapSize = DataSize + PageSize
@@ -50,16 +50,14 @@ perf_event::perf_event(struct perf_event_attr& pe, pid_t pid, int cpu) :
   pe.size = sizeof(struct perf_event_attr);
   pe.disabled = 1;
   
+  _tid = gettid();
+  
   // Open the file
   _fd = perf_event_open(&pe, pid, cpu, -1, 0);
   REQUIRE(_fd != -1) << "Failed to open perf event";
   
   // If sampling, map the perf event file
   if(pe.sample_type != 0 && pe.sample_period != 0) {
-    REQUIRE(pe.sample_type == (PERF_SAMPLE_IP | PERF_SAMPLE_TID | PERF_SAMPLE_TIME 
-                              | PERF_SAMPLE_CPU | PERF_SAMPLE_CALLCHAIN )) 
-        << "Unsupported sample type";
-    
     void* ring_buffer = mmap(NULL, MmapSize, PROT_READ | PROT_WRITE, MAP_SHARED, _fd, 0);
     REQUIRE(ring_buffer != MAP_FAILED) << "Failed to mmap perf event file";
     
@@ -87,6 +85,7 @@ perf_event::perf_event(perf_event&& other) {
   other._mapping = nullptr;
   
   // Copy over the sample type and read format
+  _tid = other._tid;
   _sample_type = other._sample_type;
   _read_format = other._read_format;
 }
@@ -116,6 +115,7 @@ void perf_event::operator=(perf_event&& other) {
   other._mapping = nullptr;
   
   // Copy over the sample type and read format
+  _tid = other._tid;
   _sample_type = other._sample_type;
   _read_format = other._read_format;
 }
@@ -136,11 +136,25 @@ void perf_event::start() {
 /// Stop counting events
 void perf_event::stop() {
   REQUIRE(ioctl(_fd, PERF_EVENT_IOC_DISABLE, 0) != -1) << "Failed to stop perf event: "
-      << strerror(errno);
+      << strerror(errno) << " (" << _fd << ")";
 }
 
 int perf_event::get_fd() {
   return _fd;
+}
+
+void perf_event::set_ready_signal(int sig) {
+  // Set the perf_event file to async
+  REQUIRE(fcntl(_fd, F_SETFL, fcntl(_fd, F_GETFL, 0) | O_ASYNC) != -1)
+      << "failed to set perf_event file to async mode";
+  
+  // Set the notification signal for the perf file
+  REQUIRE(fcntl(_fd, F_SETSIG, sig) != -1)
+      << "failed to set perf_event file signal";
+  
+  // Set the current thread as the owner of the file (to target signal delivery)
+  REQUIRE(fcntl(_fd, F_SETOWN, gettid()) != -1)
+      << "failed to set the owner of the perf_event file";
 }
 
 void perf_event::process(function<void(const record&)> handler) {
@@ -184,14 +198,16 @@ void perf_event::process(function<void(const record&)> handler) {
 void perf_event::copy_from_ring_buffer(uint64_t index, void* dest, size_t bytes) {
   uintptr_t base = reinterpret_cast<uintptr_t>(_mapping) + PageSize;
   size_t start_index = index % DataSize;
-  size_t end_index = (index + bytes) % (DataSize + 1);
+  size_t end_index = start_index + bytes;
   
-  if(start_index < end_index) {
+  if(end_index <= DataSize) {
     memcpy(dest, reinterpret_cast<void*>(base + start_index), bytes);
   } else {
-    size_t chunk1_size = DataSize - start_index;
-    size_t chunk2_size = bytes - chunk1_size;
+    size_t chunk2_size = end_index - DataSize;
+    size_t chunk1_size = bytes - chunk2_size;
+    
     void* chunk2_dest = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(dest) + chunk1_size);
+    
     memcpy(dest, reinterpret_cast<void*>(base + start_index), chunk1_size);
     memcpy(chunk2_dest, reinterpret_cast<void*>(base), chunk2_size);
   }

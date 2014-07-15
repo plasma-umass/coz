@@ -28,6 +28,18 @@
 using namespace causal_support;
 using namespace std;
 
+/// Thread-local round number
+thread_local size_t local_round;
+
+/// Thread-local delay count for the current round
+thread_local size_t local_delays;
+
+// Thread-local perf_event sampler
+thread_local atomic<perf_event*> sampler(nullptr);
+
+void on_error(int, siginfo_t*, void*);
+void samples_ready(int, siginfo_t*, void*);
+
 int rt_tgsigqueueinfo(pid_t tgid, pid_t tid, int sig, siginfo_t *uinfo) {
   return syscall(__NR_rt_tgsigqueueinfo, tgid, tid, sig, uinfo);
 }
@@ -35,422 +47,146 @@ int rt_tgsigqueueinfo(pid_t tgid, pid_t tid, int sig, siginfo_t *uinfo) {
 pid_t gettid() {
   return syscall(__NR_gettid);
 }
+  
+void profiler::include_file(const string& filename, uintptr_t load_address) {
+  PREFER(_map.process_file(filename, load_address))
+    << "Failed to locate debug version of " << filename;
+}
 
-namespace profiler {
-  void onError(int, siginfo_t*, void*);
-  void onPause(int, siginfo_t*, void*);
-  void* profilerMain(void* arg);
-  void startPerformanceMonitoring();
+void profiler::register_counter(Counter* c) {
+  _out->add_counter(c);
+}
   
-  /// Handle for the profiler output
-  output* out;
+/**
+ * Set up the profiling environment and start the main profiler thread
+ * argv, then initialize the profiler.
+ */
+void profiler::startup(const string& output_filename,
+             const vector<string>& source_progress_names,
+             const string& fixed_line_name) {
+  // Set up signal handlers
+  setSignalHandler(SampleSignal, samples_ready);
+  setSignalHandler(SIGSEGV, on_error);
   
-  /// Flag is set when shutdown has been run
-  atomic_flag shutdownRun = ATOMIC_FLAG_INIT;
-  
-  /// The fixed line for causal profiling, if any
-  shared_ptr<line> fixed_line;
-  
-  // Thread tracking
-  unordered_map<pid_t, pthread_t> threads;  //< A hash map from tid to pthread identifier
-  unordered_set<pid_t> deadThreads;        //< A hash set of threads that have exited
-  spinlock threadsLock;                    //< A lock to guard the threads map
-  /// A version number to indicate when the set of threads has changed
-  atomic<size_t> threadsVersion = ATOMIC_VAR_INIT(0);
-  
-  /// The profiler thread handle
-  pthread_t profilerThread;
-  
-  /// A flag to signal the profiler thread to exit
-  atomic<bool> profilerRunning = ATOMIC_VAR_INIT(true);
-  
-  /// The map from source to memory locations constructed by causal_support
-  memory_map& get_memory_map() {
-    static char buf[sizeof(memory_map)];
-    static memory_map* the_map = new(buf) memory_map();
-    return *the_map;
-  }
-  
-  void include_file(const string& filename, uintptr_t load_address) {
-    PREFER(get_memory_map().process_file(filename, load_address))
-      << "Failed to locate debug version of " << filename;
-  }
-  
-  /**
-   * Set up the profiling environment and start the main profiler thread
-   * argv, then initialize the profiler.
-   */
-  void startup(const string& output_filename,
-               const vector<string>& source_progress_names,
-               const string& fixed_line_name) {
-    // Set up signal handlers
-    setSignalHandler(PauseSignal, onPause);
-    setSignalHandler(SIGSEGV, onError);
-    
-    // If a non-empty fixed line was provided, attempt to locate it
-    if(fixed_line_name != "") {
-      fixed_line = get_memory_map().find_line(fixed_line_name);
-      PREFER(fixed_line) << "Fixed line \"" << fixed_line_name << "\" was not found.";
-    }
-
-    // Create the profiler output object
-    out = new output(output_filename);
-    
-    // Create the profiler thread
-    REQUIRE(Real::pthread_create()(&profilerThread, NULL, profilerMain, NULL) == 0)
-      << "Failed to create profiler thread";
-  
-    // Create breakpoint-based progress counters for all the lines specified via command-line
-    for(const string& line_name : source_progress_names) {
-      shared_ptr<line> l = get_memory_map().find_line(line_name);
-      if(l) {
-        WARNING << "Found line \"" << line_name << "\" but breakpoint placement hasn't been implemented for lines.";
-        // TODO: Place breakpoint-based counter
-        // Old code was:
-        // registerCounter(new PerfCounter(ProgressCounter, b->getInterval().getBase(), name.c_str()));
-      } else {
-        WARNING << "Progress line \"" << line_name << "\" was not found.";
-      }
-    }
+  // If a non-empty fixed line was provided, attempt to locate it
+  if(fixed_line_name != "") {
+    _fixed_line = _map.find_line(fixed_line_name);
+    PREFER(_fixed_line) << "Fixed line \"" << fixed_line_name << "\" was not found.";
   }
 
-  /**
-   * Flush output and terminate the profiler
-   */
-  void shutdown() {
-    if(shutdownRun.test_and_set() == false) {
-      profilerRunning.store(false);
-      pthread_join(profilerThread, nullptr);
-      delete out;
-    }
-  }
+  // Create the profiler output object
+  _out = new output(output_filename);
 
-  /**
-   * Register a new progress counter with the profiler. This may be called
-   * from any of the application's threads.
-   */
-  void registerCounter(Counter* c) {
-    out->add_counter(c);
+  // Create breakpoint-based progress counters for all the lines specified via command-line
+  for(const string& line_name : source_progress_names) {
+    shared_ptr<line> l = _map.find_line(line_name);
+    if(l) {
+      WARNING << "Found line \"" << line_name << "\" but breakpoint placement hasn't been implemented for lines.";
+      // TODO: Place breakpoint-based counter
+      // Old code was:
+      // registerCounter(new PerfCounter(ProgressCounter, b->getInterval().getBase(), name.c_str()));
+    } else {
+      WARNING << "Progress line \"" << line_name << "\" was not found.";
+    }
   }
-  
-  void threadStartup() {
-    threadsLock.lock();
-    threads.insert(pair<pid_t, pthread_t>(gettid(), pthread_self()));
-    threadsVersion++;
-    threadsLock.unlock();
+}
+
+/**
+ * Flush output and terminate the profiler
+ */
+void profiler::shutdown() {
+  if(_shutdown_run.test_and_set() == false) {
+    delete _out;
   }
+}
   
-  void threadShutdown() {
-    threadsLock.lock();
-    deadThreads.insert(gettid());
-    threadsVersion++;
-    threadsLock.unlock();
-  }
+void profiler::thread_startup(size_t parent_round, size_t parent_delays) {
+  local_round = parent_round;
+  local_delays = parent_delays;
   
-  class ProfilerState {
-  private:
-    enum Mode {
-      Baseline,
-      Speedup,
-      Flush,
-      Legacy
-    };
-    
-    Mode mode = Baseline;
-    
-    default_random_engine generator;
-    uniform_int_distribution<size_t> delayDist;
-    vector<struct pollfd> pollers;
-    map<pid_t, perf_event> events;
-    map<Counter*, size_t> counterSnapshot;
-    size_t currentVersion = 0;
-    size_t roundSamples = 0;
-    
-    /// The count of visits or delays for each thread
-    unordered_map<pid_t, size_t> localVisits;
-    
-    /// The currently selected line
-    shared_ptr<line> selectedLine;
-    
-    /// The perf event configuration
-    struct perf_event_attr pe = {
-      .type = PERF_TYPE_HARDWARE,
-      .config = PERF_COUNT_HW_CPU_CYCLES,
-      .sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_TID | PERF_SAMPLE_TIME | PERF_SAMPLE_CPU | PERF_SAMPLE_CALLCHAIN,
-      .sample_period = SamplePeriod,
-      .wakeup_events = SampleWakeupCount
-    };
-    
-  public:
-    ProfilerState() : generator(getTime()), delayDist(0, 8) {}
-    
-    void doBaseline() {
-      if(!profilerRunning) {
-        return;
-      }
-      
-      mode = Baseline;
-      roundSamples = 0;
-      
-      out->baseline_start();
-      
-      while(roundSamples < MinRoundSamples || !selectedLine) {
-        if(!profilerRunning) {
-          break;
-        }
-        collectSamples();
-      }
-      
-      out->baseline_end();
-    }
-    
-    void doSpeedup() {
-      if(!profilerRunning) {
-        return;
-      }
-      
-      // Set the mode to speedup
-      mode = Speedup;
-      // Clear the count of samples seen this round
-      roundSamples = 0;
-      // Generate a random delay size
-      size_t delay_size = delayDist(generator) * SamplePeriod / 8;
-      // Count the total number of delays/visits required for each thread
-      size_t delay_count = 0;
-      
-      // Log the beginning of the speedup period
-      out->speedup_start(selectedLine);
-      
-      // Run until enough samples have been processed
-      while(roundSamples < MinRoundSamples /*|| !countersChanged()*/) {
-        // Check for termination
-        if(!profilerRunning) {
-          break;
-        }
-        
-        // Clear the per-thread counts of visits to the selected line
-        localVisits.clear();
-        
-        // Process samples from all threads
-        collectSamples();
-        
-        // Find the maximum number of visits by any one thread to the selected line
-        size_t max_visits = 0;
-        // Loop over threads to check for a new max
-        for(auto& local : localVisits) {
-          if(local.second > max_visits) {
-            max_visits = local.second;
-          }
-        }
-        
-        // The total number of visits/delays should increase by the max visit count
-        delay_count += max_visits;
-        
-        // If there was at least one visit to the selected line, send out delays to each thread
-        if(max_visits > 0) {
-          // Lock the set of threads
-          threadsLock.lock();
-          
-          size_t max_pause = 0;
-          
-          // Loop over threads to send delays
-          for(auto& thread : threads) {
-            // Get the thread's task ID
-            pid_t tid = thread.first;
-            
-            // Compute the required pause time for this thread
-            size_t pause_time = delay_size * (max_visits - localVisits[tid]);
-            
-            // Set up siginfo_t structure to pass with signal
-            siginfo_t info = {
-              .si_code = SI_QUEUE,
-              .si_pid = getpid(),
-              .si_uid = getuid(),
-              .si_value = {
-                .sival_ptr = (void*)pause_time
-              }
-            };
-            
-            // Send the thread the pause signal
-            if(rt_tgsigqueueinfo(getpid(), tid, PauseSignal, &info) != -1) {
-              // If signaling the thread succeeded, update the max pause time
-              if(pause_time > max_pause) {
-                max_pause = pause_time;
-              }
-            }
-          }
-          
-          // Unlock the set of threads
-          threadsLock.unlock();
-          
-          // Wait until the thread with the longest pause time has had time to delay
-          wait(max_pause);
-        }
-      }
-      
-      // Log the end of the speedup round
-      out->speedup_end(delay_count, delay_size);
-      
-      // Flush any remaining samples before returning to baseline mode
-      mode = Flush;
-      collectSamples();
-    }
-    
-    /*void takeCounterSnapshot() {
-      counterSnapshot.clear();
-      
-      countersLock.lock();
-      for(Counter* c : counters) {
-        counterSnapshot[c] = c->getCount();
-      }
-      countersLock.unlock();
-    }*/
-    
-    bool countersChanged() {
-      return true;
-      // if there are no saved counters, don't wait forever!
-      if(counterSnapshot.size() == 0) {
-        return true;
-      }
-      
-      for(auto counter : counterSnapshot) {
-        if(counter.first->getCount() != counter.second) {
-          return true;
-        }
-      }
-      return false;
-    }
-    
-    void run() {
-      // Log profiler parameters and calibration information to the profiler output
-      out->startup(SamplePeriod);
-    
-      while(profilerRunning) {
-        doBaseline();
-        doSpeedup();
-      }
-    
-      out->shutdown();
-    }
-    
-    void collectSamples() {
-      updatePollers();
-    
-      int rc = poll(pollers.data(), pollers.size(), 10);
-      REQUIRE(rc != -1) << "Failed to poll event files";
-    
-      if(rc > 0) {
-        for(pair<const pid_t, perf_event>& event : events) {
-          event.second.process([this](const perf_event::record& r) {
-            if(!r.is_sample()) {
-              return;
-            }
-            
-            shared_ptr<line> l = get_memory_map().find_line(r.get_ip());
-            if(l != nullptr) {
-              roundSamples++;
-              // l->record_sample();
-        
-              if(mode == Baseline) {
-                // If the baseline round has run long enough and we're in a known line,
-                // use this line for the next speedup round
-                if(roundSamples >= MinRoundSamples) {
-                  if(fixed_line) {
-                    selectedLine = fixed_line;
-                  } else {
-                    selectedLine = l;
-                  }
-                }
-              } else if(mode == Speedup) {
-                // Check if the sample is in the selected line
-                if(l == selectedLine) {
-                  localVisits[r.get_tid()]++;
-                }
-              }
-            }
-          });
-        }
-      }
-    }
-    
-    void updatePollers() {
-      size_t newest_version = threadsVersion.load();
-    
-      if(currentVersion < newest_version) {
-        threadsLock.lock();
-    
-        // Remove any dead threads
-        for(pid_t tid : deadThreads) {
-          // Remove the thread from the thread map
-          auto threads_iter = threads.find(tid);
-          if(threads_iter != threads.end()) {
-            threads.erase(threads_iter);
-          }
-      
-          // Remove the thread's event from the events map
-          auto events_iter = events.find(tid);
-          if(events_iter != events.end()) {
-            events_iter->second.stop();
-            events.erase(events_iter);
-          }
-        }
-    
-        // Resize the pollers vector
-        pollers.resize(threads.size());
-    
-        // Fill the pollers vector with pollfd structs
-        size_t i = 0;
-        for(pair<const pid_t, pthread_t> thread : threads) {
-          pid_t tid = thread.first;
-          // If this thread doesn't have an event yet, create one
-          auto events_iter = events.find(tid);
-          if(events_iter == events.end()) {
-            events.emplace(tid, perf_event(pe, tid));
-          }
-      
-          events[tid].start();
-      
-          pollers[i] = {
-            .fd = events[tid].get_fd(),
-            .events = POLLIN
-          };
-      
-          i++;
-        }
-      
-        currentVersion = threadsVersion.load();
-    
-        threadsLock.unlock();
-      }
-    }
+  struct perf_event_attr pe = {
+    .type = PERF_TYPE_HARDWARE,
+    .config = PERF_COUNT_HW_CPU_CYCLES,
+    .sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_CALLCHAIN,
+    .sample_period = SamplePeriod,
+    .wakeup_events = SampleWakeupCount, // This is ignored on linux 3.13 (why?)
+    .exclude_idle = 1,
+    .exclude_kernel = 1,
+    .disabled = 1
   };
   
-  /**
-   * The body of the main profiler thread
-   */
-  void* profilerMain(void* arg) {
-    ProfilerState s;
-    s.run();
-    
-    return NULL;
+  // Set up the thread-local perf_event sampler
+  perf_event* s = new perf_event(pe);
+  s->set_ready_signal(SampleSignal);
+  s->start();
+  
+  // Place the sampler in the shared atomic pointer
+  sampler.store(s);
+}
+
+void profiler::thread_shutdown() {
+  // TODO: catch up on delays before exiting
+  
+  // Claim the sampler object and free it
+  perf_event* s = sampler.exchange(nullptr);
+  delete s;
+}
+
+size_t profiler::get_local_round() {
+  return local_round;
+}
+
+size_t profiler::get_local_delays() {
+  return local_delays;
+}
+
+int x = 0;
+
+void samples_ready(int signum, siginfo_t* info, void* p) {
+  perf_event* s = sampler.exchange(nullptr);
+  
+  if(!s) {
+    return;
   }
-
-  void onPause(int signum, siginfo_t* info, void* p) {
-    size_t pause_time = (size_t)info->si_value.sival_ptr;
-    wait(pause_time);
+  
+  //fprintf(stderr, "%p\n", s);
+  
+  s->stop();
+  
+  if(info->si_code == POLL_IN) {
+    //INFO << "POLL_IN";
+  } else if(info->si_code == POLL_HUP) {
+    INFO << "POLL_HUP";
+  } else {
+    INFO << "POLL unknown!";
   }
-
-  void onError(int signum, siginfo_t* info, void* p) {
-    fprintf(stderr, "Signal %d at %p\n", signum, info->si_addr);
-
-    void* buf[256];
-    int frames = backtrace(buf, 256);
-    char** syms = backtrace_symbols(buf, frames);
-
-    for(int i=0; i<frames; i++) {
-      fprintf(stderr, "  %d: %s\n", i, syms[i]);
+  
+  size_t samples = 0;
+  s->process([&samples](const perf_event::record& r) {
+    if(r.is_sample()) {
+      samples++;
+      //fprintf(stderr, "Sample at %p\n", (void*)r.get_ip());
     }
+  });
+  
+  //INFO << "Processed " << samples << " samples";
+  
+  s->start();
+  
+  // Return the sampler to the shared atomic pointer
+  sampler.exchange(s);
+}
 
-    Real::_exit()(2);
+void on_error(int signum, siginfo_t* info, void* p) {
+  fprintf(stderr, "Signal %d at %p\n", signum, info->si_addr);
+
+  void* buf[256];
+  int frames = backtrace(buf, 256);
+  char** syms = backtrace_symbols(buf, frames);
+
+  for(int i=0; i<frames; i++) {
+    fprintf(stderr, "  %d: %s\n", i, syms[i]);
   }
+
+  Real::_exit()(2);
 }

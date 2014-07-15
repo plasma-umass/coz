@@ -42,6 +42,9 @@ public:
   /// Get the file descriptor associated with this perf event
   int get_fd();
   
+  /// Configure the perf_event file to deliver a signal when samples are ready to be processed
+  void set_ready_signal(int sig);
+  
   /// Apply a function to all available records in the mmapped ring buffer
   void process(std::function<void(const record&)> handler);
   
@@ -125,6 +128,10 @@ public:
     const perf_event& _source;
     struct perf_event_header* _header;
   };
+  
+  void validate() {
+    REQUIRE(_mapping != nullptr) << "Uh oh";
+  }
     
 private:
   // Disallow copy and assignment

@@ -25,7 +25,7 @@ main_fn_t real_main;
  * Called by the application to register a progress counter
  */
 extern "C" void __causal_register_counter(CounterType kind, size_t* counter, const char* name) {
-  profiler::registerCounter(new SourceCounter(kind, counter, name));
+  profiler::get_instance().register_counter(new SourceCounter(kind, counter, name));
 }
 
 /**
@@ -73,7 +73,7 @@ int wrapped_main(int argc, char** argv, char** env) {
         if(filename.find(pat) != string::npos) {
           INFO << "Processing file " << filename;
           // When a match is found, tell the profiler to include the file
-          profiler::include_file(filename, load_address);
+          profiler::get_instance().include_file(filename, load_address);
           break;
         }
       }
@@ -81,14 +81,14 @@ int wrapped_main(int argc, char** argv, char** env) {
   }
   
   // Start the profiler
-  profiler::startup(args["output"].as<string>(),
-                    args["progress"].as<vector<string>>(),
-                    args["fixed"].as<string>());
+  profiler::get_instance().startup(args["output"].as<string>(),
+                                   args["progress"].as<vector<string>>(),
+                                   args["fixed"].as<string>());
   
   // Run the real main function
   int result = real_main(argc - causal_argc - 1, &argv[causal_argc + 1], env);
   // Shut down the profiler
-  profiler::shutdown();
+  profiler::get_instance().shutdown();
   
   return result;
 }
