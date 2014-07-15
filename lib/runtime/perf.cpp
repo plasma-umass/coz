@@ -50,8 +50,6 @@ perf_event::perf_event(struct perf_event_attr& pe, pid_t pid, int cpu) :
   pe.size = sizeof(struct perf_event_attr);
   pe.disabled = 1;
   
-  _tid = gettid();
-  
   // Open the file
   _fd = perf_event_open(&pe, pid, cpu, -1, 0);
   REQUIRE(_fd != -1) << "Failed to open perf event";
@@ -85,7 +83,6 @@ perf_event::perf_event(perf_event&& other) {
   other._mapping = nullptr;
   
   // Copy over the sample type and read format
-  _tid = other._tid;
   _sample_type = other._sample_type;
   _read_format = other._read_format;
 }
@@ -115,7 +112,6 @@ void perf_event::operator=(perf_event&& other) {
   other._mapping = nullptr;
   
   // Copy over the sample type and read format
-  _tid = other._tid;
   _sample_type = other._sample_type;
   _read_format = other._read_format;
 }
