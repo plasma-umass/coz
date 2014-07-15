@@ -1,5 +1,5 @@
 ROOT = ../..
-TARGETS = loopy
+TARGET = loopy
 LIBS = pthread dl
 
 include $(ROOT)/common.mk

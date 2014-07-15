@@ -41,8 +41,13 @@ int main(int argc, char** argv, char** env) {
   // Set the program name in the first argument, otherwise file name resolution won't work
   argv[0] = prog_name;
   
+#if !defined(NDEBUG)
   // Set the preload string to the path to the debug causal library
   string causal_preload = CAUSAL_ROOT_PATH "/debug/lib/libcausal.so";
+#else
+  // Preload the release version of the causal library
+  string causal_preload = CAUSAL_ROOT_PATH "/release/lib/libcausal.so";
+#endif
   
   // Loop over the environment array, looking for an LD_PRELOAD entry
   bool ld_preload_found = false;

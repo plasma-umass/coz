@@ -1,7 +1,8 @@
 ROOT = ../..
-TARGETS = pbzip2
+TARGET = pbzip2
 LIBS = pthread dl
 ARGS = -c < data/input.txt > data/output.txt
+TEST_ARGS = -c < data/input.txt > data/output.txt
 
 all:: debug
 	
@@ -32,4 +33,7 @@ data/input.txt:
 	cp ../linear_regression/linear_regression_datafiles/key_file_500MB.txt data/input.txt
 
 bench:: debug/bin/pbzip2 setup
-	causal -i libbz2 --- debug/bin/pbzip2 $(ARGS)
+	$(ROOT)/release/bin/causal --- debug/bin/pbzip2 $(ARGS)
+
+test:: debug/bin/pbzip2 setup
+	$(ROOT)/debug/bin/causal --- debug/bin/pbzip2 $(TEST_ARGS)

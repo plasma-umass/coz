@@ -1,7 +1,8 @@
 ROOT = ../..
-TARGETS = histogram
+TARGET = histogram
 LIBS = pthread dl
 ARGS = histogram_datafiles/large.bmp
+TEST_ARGS = histogram_datafiles/small.bmp
 
 include $(ROOT)/common.mk
 
@@ -13,5 +14,7 @@ histogram_datafiles/%:
 	rm histogram.tar.gz
 
 bench:: debug/bin/histogram setup
-	causal --- debug/bin/histogram $(ARGS)
+	$(ROOT)/release/bin/causal --- debug/bin/histogram $(ARGS)
 	
+test:: debug/bin/histogram setup
+	$(ROOT)/debug/bin/causal --- debug/bin/histogram $(TEST_ARGS)

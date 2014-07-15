@@ -71,36 +71,36 @@ DEBUG_OBJS = $(addprefix debug/, $(OBJS))
 RELEASE_OBJS = $(addprefix release/, $(OBJS))
 
 # Separate target names by type
-SHLIB_TARGETS = $(filter %.so, $(TARGETS))
-LIB_TARGETS = $(filter %.a, $(TARGETS))
-BIN_TARGETS = $(filter-out %.so, $(filter-out %.a, $(TARGETS)))
+SHLIB_TARGET = $(filter %.so, $(TARGET))
+LIB_TARGET = $(filter %.a, $(TARGET))
+BIN_TARGET = $(filter-out %.so, $(filter-out %.a, $(TARGET)))
 
 # Add the local debug path prefix to each target type
-DEBUG_SHLIB_TARGETS = $(addprefix debug/lib/, $(SHLIB_TARGETS))
-DEBUG_LIB_TARGETS = $(addprefix debug/lib/, $(LIB_TARGETS))
-DEBUG_BIN_TARGETS = $(addprefix debug/bin/, $(BIN_TARGETS))
-DEBUG_TARGETS = $(DEBUG_SHLIB_TARGETS) $(DEBUG_LIB_TARGETS) $(DEBUG_BIN_TARGETS)
+DEBUG_SHLIB_TARGET = $(addprefix debug/lib/, $(SHLIB_TARGET))
+DEBUG_LIB_TARGET = $(addprefix debug/lib/, $(LIB_TARGET))
+DEBUG_BIN_TARGET = $(addprefix debug/bin/, $(BIN_TARGET))
+DEBUG_TARGET = $(DEBUG_SHLIB_TARGET) $(DEBUG_LIB_TARGET) $(DEBUG_BIN_TARGET)
 
 # Add the local release path prefix to each target type
-RELEASE_SHLIB_TARGETS = $(addprefix release/lib/, $(SHLIB_TARGETS))
-RELEASE_LIB_TARGETS = $(addprefix release/lib/, $(LIB_TARGETS))
-RELEASE_BIN_TARGETS = $(addprefix release/bin/, $(BIN_TARGETS))
-RELEASE_TARGETS = $(RELEASE_SHLIB_TARGETS) $(RELEASE_LIB_TARGETS) $(RELEASE_BIN_TARGETS)
+RELEASE_SHLIB_TARGET = $(addprefix release/lib/, $(SHLIB_TARGET))
+RELEASE_LIB_TARGET = $(addprefix release/lib/, $(LIB_TARGET))
+RELEASE_BIN_TARGET = $(addprefix release/bin/, $(BIN_TARGET))
+RELEASE_TARGET = $(RELEASE_SHLIB_TARGET) $(RELEASE_LIB_TARGET) $(RELEASE_BIN_TARGET)
 
-debug::	$(addprefix $(INSTALL_DIR)/, $(DEBUG_TARGETS))
+debug::	$(addprefix $(INSTALL_DIR)/, $(DEBUG_TARGET))
 
-release:: $(addprefix $(INSTALL_DIR)/, $(RELEASE_TARGETS))
+release:: $(addprefix $(INSTALL_DIR)/, $(RELEASE_TARGET))
 
 ifneq ($(INSTALL),)
 
 # Copy debug files to the root debug directory
-$(addprefix $(INSTALL_DIR)/, $(DEBUG_TARGETS)):: $(DEBUG_TARGETS)
+$(addprefix $(INSTALL_DIR)/, $(DEBUG_TARGET)):: $(DEBUG_TARGET)
 	@echo $(INDENT)[make] Copying `basename $@` to `dirname $@`
 	@mkdir -p `dirname $@`
 	@cp $< $@
 
 # Copy release files to the root release directory
-$(addprefix $(INSTALL_DIR)/, $(RELEASE_TARGETS)):: $(RELEASE_TARGETS)
+$(addprefix $(INSTALL_DIR)/, $(RELEASE_TARGET)):: $(RELEASE_TARGET)
 	@echo $(INDENT)[make] Copying `basename $@` to `dirname $@`
 	@mkdir -p `dirname $@`
 	@cp $< $@
@@ -131,17 +131,17 @@ debug/obj/%.o:: %.C Makefile $(ROOT)/common.mk $(INCLUDE_DIRS) $(INCLUDES)
 
 # Linking rules for debug
 
-$(DEBUG_SHLIB_TARGETS):: $(DEBUG_OBJS)  $(INCLUDE_DIRS) $(INCLUDES) Makefile $(ROOT)/common.mk
+$(DEBUG_SHLIB_TARGET):: $(DEBUG_OBJS)  $(INCLUDE_DIRS) $(INCLUDES) Makefile $(ROOT)/common.mk
 	@echo $(INDENT)[$(notdir $(firstword $(CXXLIB)))] Linking `basename $@` for debug build
 	@mkdir -p debug/lib
 	@$(CXXLIB) $(CXXFLAGS) $(LINKFLAGS) $(DEBUG_LINKFLAGS) $(INCFLAGS) $(DEBUG_OBJS) -o $@ $(LIBFLAGS)
 
-$(DEBUG_LIB_TARGETS):: $(DEBUG_OBJS) $(INCLUDE_DIRS) $(INCLUDES) Makefile $(ROOT)/common.mk
+$(DEBUG_LIB_TARGET):: $(DEBUG_OBJS) $(INCLUDE_DIRS) $(INCLUDES) Makefile $(ROOT)/common.mk
 	@echo $(INDENT)[ar] Linking `basename $@` for debug build
 	@mkdir -p debug/lib
 	@ar rcs $@ $(DEBUG_OBJS)
 
-$(DEBUG_BIN_TARGETS):: $(DEBUG_OBJS) $(INCLUDE_DIRS) $(INCLUDES) Makefile $(ROOT)/common.mk
+$(DEBUG_BIN_TARGET):: $(DEBUG_OBJS) $(INCLUDE_DIRS) $(INCLUDES) Makefile $(ROOT)/common.mk
 	@echo $(INDENT)[$(notdir $(firstword $(CXX)))] Linking `basename $@` for debug build
 	@mkdir -p debug/bin
 	@$(CXX) $(CXXFLAGS) $(LINKFLAGS) $(DEBUG_LINKFLAGS) $(INCFLAGS) $(DEBUG_OBJS) -o $@ $(LIBFLAGS)
@@ -170,17 +170,17 @@ release/obj/%.o:: %.C Makefile $(ROOT)/common.mk $(INCLUDE_DIRS) $(INCLUDES)
 
 # Linking rules for release
 
-$(RELEASE_SHLIB_TARGETS):: $(RELEASE_OBJS)  $(INCLUDE_DIRS) $(INCLUDES) Makefile $(ROOT)/common.mk
+$(RELEASE_SHLIB_TARGET):: $(RELEASE_OBJS)  $(INCLUDE_DIRS) $(INCLUDES) Makefile $(ROOT)/common.mk
 	@echo $(INDENT)[$(notdir $(firstword $(CXXLIB)))] Linking `basename $@` for release build
 	@mkdir -p release/lib
 	@$(CXXLIB) $(CXXFLAGS) $(LINKFLAGS) $(RELEASE_LINKFLAGS) $(INCFLAGS) $(RELEASE_OBJS) -o $@ $(LIBFLAGS)
 
-$(RELEASE_LIB_TARGETS):: $(RELEASE_OBJS) $(INCLUDE_DIRS) $(INCLUDES) Makefile $(ROOT)/common.mk
+$(RELEASE_LIB_TARGET):: $(RELEASE_OBJS) $(INCLUDE_DIRS) $(INCLUDES) Makefile $(ROOT)/common.mk
 	@echo $(INDENT)[ar] Linking `basename $@` for release build
 	@mkdir -p release/lib
 	@ar rcs $@ $(RELEASE_OBJS)
 
-$(RELEASE_BIN_TARGETS):: $(RELEASE_OBJS) $(INCLUDE_DIRS) $(INCLUDES) Makefile $(ROOT)/common.mk
+$(RELEASE_BIN_TARGET):: $(RELEASE_OBJS) $(INCLUDE_DIRS) $(INCLUDES) Makefile $(ROOT)/common.mk
 	@echo $(INDENT)[$(notdir $(firstword $(CXX)))] Linking `basename $@` for release build
 	@mkdir -p release/bin
 	@$(CXX) $(CXXFLAGS) $(LINKFLAGS) $(RELEASE_LINKFLAGS) $(INCFLAGS) $(RELEASE_OBJS) -o $@ $(LIBFLAGS)

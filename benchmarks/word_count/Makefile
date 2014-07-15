@@ -1,7 +1,8 @@
 ROOT = ../..
-TARGETS = word_count
+TARGET = word_count
 LIBS = pthread dl
 ARGS = word_count_datafiles/word_100MB.txt
+TEST_ARGS = word_count_datafiles/word_10MB.txt
 
 include $(ROOT)/common.mk
 
@@ -13,4 +14,7 @@ word_count_datafiles/%:
 	rm word_count.tar.gz
 
 bench:: debug/bin/word_count setup
-	causal --- debug/bin/word_count $(ARGS)
+	$(ROOT)/release/bin/causal --- debug/bin/word_count $(ARGS)
+
+test:: debug/bin/word_count setup
+	$(ROOT)/debug/bin/causal --- debug/bin/word_count $(TEST_ARGS)

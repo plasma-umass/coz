@@ -1,7 +1,8 @@
 ROOT = ../..
-TARGETS = string_match
+TARGET = string_match
 LIBS = pthread dl
 ARGS = string_match_datafiles/key_file_500MB.txt > /dev/null
+TEST_ARGS = string_match_datafiles/key_file_50MB.txt > /dev/null
 
 include $(ROOT)/common.mk
 
@@ -13,4 +14,7 @@ string_match_datafiles/%:
 	rm string_match.tar.gz
 
 bench:: debug/bin/string_match setup
-	causal --- debug/bin/string_match $(ARGS)
+	$(ROOT)/release/bin/causal --- debug/bin/string_match $(ARGS)
+
+test:: debug/bin/string_match setup
+	$(ROOT)/debug/bin/causal --- debug/bin/string_match $(TEST_ARGS)

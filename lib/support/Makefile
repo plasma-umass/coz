@@ -1,5 +1,5 @@
 ROOT = ../..
-TARGETS = libcausal_support.a
+TARGET = libcausal_support.a
 INSTALL = 1
 LIBS = dwarf++ elf++ boost_filesystem boost_system
 INCLUDE_DIRS = $(ROOT)/deps/cppgoodies/include \
