@@ -16,7 +16,7 @@
 
 extern "C" int main(int argc, char** argv);
 
-class Real {
+class real {
 public:
   MAKE_WRAPPER(main, RTLD_NEXT);
   

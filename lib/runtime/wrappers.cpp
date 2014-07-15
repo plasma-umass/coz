@@ -31,7 +31,7 @@ extern "C" sighandler_t signal(int signum, sighandler_t handler) {
   if(signum == SampleSignal) {
     return NULL;
   } else {
-    return Real::signal()(signum, handler);
+    return real::signal()(signum, handler);
   }
 }
 
@@ -44,9 +44,9 @@ extern "C" int sigaction(int signum, const struct sigaction* act, struct sigacti
   } else if(act != NULL && sigismember(&act->sa_mask, SampleSignal)) {
     struct sigaction my_act = *act;
     sigdelset(&my_act.sa_mask, SampleSignal);
-    return Real::sigaction()(signum, &my_act, oldact);
+    return real::sigaction()(signum, &my_act, oldact);
   } else {
-    return Real::sigaction()(signum, act, oldact);
+    return real::sigaction()(signum, act, oldact);
   }
 }
 
@@ -58,11 +58,11 @@ extern "C" int sigprocmask(int how, const sigset_t* set, sigset_t* oldset) {
     if(set != NULL && sigismember(set, SampleSignal)) {
       sigset_t myset = *set;
       sigdelset(&myset, SampleSignal);
-      return Real::sigprocmask()(how, &myset, oldset);
+      return real::sigprocmask()(how, &myset, oldset);
     }
   }
   
-  return Real::sigprocmask()(how, set, oldset);
+  return real::sigprocmask()(how, set, oldset);
 }
 
 /**
@@ -73,11 +73,11 @@ extern "C" int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset) {
     if(set != NULL && sigismember(set, SampleSignal)) {
       sigset_t myset = *set;
       sigdelset(&myset, SampleSignal);
-      return Real::pthread_sigmask()(how, &myset, oldset);
+      return real::pthread_sigmask()(how, &myset, oldset);
     }
   }
   
-  return Real::pthread_sigmask()(how, set, oldset);
+  return real::pthread_sigmask()(how, set, oldset);
 }
 
 /**
@@ -104,7 +104,7 @@ extern "C" int pthread_create(pthread_t* thread, const pthread_attr_t* attr, thr
   thread_wrapper* arg_wrapper = new thread_wrapper(fn, arg,
       profiler::get_instance().get_local_round(),
       profiler::get_instance().get_local_delays());
-  int result = Real::pthread_create()(thread, attr, thread_entry, arg_wrapper);
+  int result = real::pthread_create()(thread, attr, thread_entry, arg_wrapper);
   return result;
 }
 
@@ -113,7 +113,7 @@ extern "C" int pthread_create(pthread_t* thread, const pthread_attr_t* attr, thr
  */
 extern "C" void pthread_exit(void* result) {
 	profiler::get_instance().thread_shutdown();
-	Real::pthread_exit()(result);
+	real::pthread_exit()(result);
 }
 
 /**
@@ -121,7 +121,7 @@ extern "C" void pthread_exit(void* result) {
  */
 extern "C" void exit(int status) {
   profiler::get_instance().shutdown();
-  Real::exit()(status);
+  real::exit()(status);
 }
 
 /**
@@ -129,7 +129,7 @@ extern "C" void exit(int status) {
  */
 extern "C" void _exit(int status) {
   profiler::get_instance().shutdown();
-	Real::_exit()(status);
+	real::_exit()(status);
 }
 
 /**
@@ -137,5 +137,5 @@ extern "C" void _exit(int status) {
  */
 extern "C" void _Exit(int status) {
   profiler::get_instance().shutdown();
-  Real::_Exit()(status);
+  real::_Exit()(status);
 }

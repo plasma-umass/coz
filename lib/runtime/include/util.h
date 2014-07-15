@@ -37,16 +37,6 @@ static inline void wait(size_t ns) {
   while(nanosleep(&ts, &ts) != 0) {}
 }
 
-static void set_signal_handler(int signum, void (*handler)(int, siginfo_t*, void*)) {
-  // Set up the cycle sampler's signal handler
-  struct sigaction sa;
-  sa.sa_sigaction = handler;
-  sa.sa_flags = SA_SIGINFO;
-  sigemptyset(&sa.sa_mask);
-  sigaddset(&sa.sa_mask, signum);
-  Real::sigaction()(signum, &sa, nullptr);
-}
-
 static inline int rt_tgsigqueueinfo(pid_t tgid, pid_t tid, int sig, siginfo_t *uinfo) {
   return syscall(__NR_rt_tgsigqueueinfo, tgid, tid, sig, uinfo);
 }

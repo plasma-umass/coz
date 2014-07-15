@@ -56,9 +56,20 @@ void profiler::register_counter(Counter* c) {
 void profiler::startup(const string& output_filename,
              const vector<string>& source_progress_names,
              const string& fixed_line_name) {
-  // Set up signal handlers
-  set_signal_handler(SampleSignal, samples_ready);
-  set_signal_handler(SIGSEGV, on_error);
+  
+  // Set up the sampling signal handler
+  struct sigaction sa = {
+    .sa_sigaction = samples_ready,
+    .sa_flags = SA_SIGINFO | SA_ONSTACK
+  };
+  real::sigaction()(SampleSignal, &sa, nullptr);
+  
+  // Set up handlers for errors
+  sa = {
+    .sa_sigaction = on_error,
+    .sa_flags = SA_SIGINFO
+  };
+  real::sigaction()(SIGSEGV, &sa, nullptr);
   
   // If a non-empty fixed line was provided, attempt to locate it
   if(fixed_line_name != "") {
@@ -167,5 +178,5 @@ void on_error(int signum, siginfo_t* info, void* p) {
     fprintf(stderr, "  %d: %s\n", i, syms[i]);
   }
 
-  Real::_exit()(2);
+  real::_exit()(2);
 }
