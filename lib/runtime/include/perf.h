@@ -46,7 +46,7 @@ public:
   void set_ready_signal(int sig);
   
   /// Apply a function to all available records in the mmapped ring buffer
-  void process(std::function<void(const record&)> handler);
+  void process(void (*handler)(const record&));
   
   /// An enum class with all the available sampling data
   enum class sample : uint64_t {

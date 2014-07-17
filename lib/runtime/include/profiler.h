@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -15,9 +16,10 @@
 
 enum {
   SampleSignal = SIGPROF,
-  SamplePeriod = 21000000, // 10ms
+  SamplePeriod = 100000, // 100us
   SampleWakeupCount = 10,
-  MinRoundSamples = 1000
+  MinRoundSamples = 200,
+  SpeedupDivisions = 20
 };
 
 class profiler {
@@ -49,9 +51,23 @@ public:
   }
 
 private:
-  profiler() {}
+  profiler() : _generator(get_time()), _delay_dist(0, SpeedupDivisions) {}
   profiler(const profiler&) = delete;
   void operator=(const profiler&) = delete;
+  
+  /// Process all available samples and insert delays. This operation will return false if the sampler is not immediately available.
+  bool process_samples();
+  
+  /// Process all available samples and insert delays. This operation will block until it succeeds.
+  void must_process_samples();
+  
+  /// Static wrapper for the sample processing function
+  static void call_process_one_sample(const perf_event::record& r);
+  
+  /// Process a single sample (callback from perf_event)
+  void process_one_sample(const perf_event::record& r);
+  
+  static void samples_ready(int signum, siginfo_t* info, void* p);
   
   /// Handle to the profiler's output
   output* _out;
@@ -66,19 +82,34 @@ private:
   causal_support::memory_map _map;
   
   /// The current round number
-  std::atomic<size_t> _global_round;
+  std::atomic<size_t> _global_round = ATOMIC_VAR_INIT(0);
   
   /// The total number of delays inserted this round
-  std::atomic<size_t> _global_delays;
+  std::atomic<size_t> _global_delays = ATOMIC_VAR_INIT(0);
   
   /// The number of samples collected this round
-  std::atomic<size_t> _round_samples;
+  std::atomic<size_t> _round_samples = ATOMIC_VAR_INIT(0);
   
-  /// The currently selected line for "speedup"
-  std::shared_ptr<causal_support::line> _selected_line;
+  /**
+   * The currently selected line for "speedup". This should never actually be read.
+   * Only exists to ensure keep an accurate reference count. Use _selected_line instead.
+   */
+  std::shared_ptr<causal_support::line> _sentinel_selected_line;
+  
+  /**
+   * The currently selected line for "speedup". Any thread that clears this line must
+   * also clear the _sentinel_selected_line to decrement the reference count.
+   */
+  std::atomic<causal_support::line*> _selected_line = ATOMIC_VAR_INIT(nullptr);
   
   /// The current delay size
-  size_t _delay_size;
+  std::atomic<size_t> _delay_size;
+  
+  /// Random number source
+  std::default_random_engine _generator;
+  
+  /// Distribution for random delays
+  std::uniform_int_distribution<size_t> _delay_dist;
 };
 
 #endif

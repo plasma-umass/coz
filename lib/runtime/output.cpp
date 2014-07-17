@@ -32,10 +32,12 @@ void output::add_counter(Counter* c) {
  * Log the start of a profile run, along with instrumentation calibration info
  */
 void output::startup(size_t sample_period) {
+  _output_lock.lock();
   fprintf(_f, "startup\ttime=%lu\n", get_time());
   fprintf(_f, "info\tsample-period=%lu\n", sample_period);
   //fprintf(_f, "info\tsource-counter-overhead=%lu\n", SourceCounter::calibrate());
   fprintf(_f, "info\tperf-counter-overhead=%lu\n", PerfCounter::calibrate());
+  _output_lock.unlock();
 
   // Drop all counters, so we don't use any calibration counters during the real execution
   //counters.clear();
@@ -45,7 +47,9 @@ void output::startup(size_t sample_period) {
  * Log profiler shutdown
  */
 void output::shutdown() {
+  _output_lock.lock();
   fprintf(_f, "shutdown\ttime=%lu\n", get_time());
+  _output_lock.unlock();
 }
 
 /**
@@ -59,39 +63,25 @@ void output::write_counters() {
 }
 
 /**
- * Log the beginning of a baseline profiling round
- */
-void output::baseline_start() {
-  // Write out time and progress counter values
-  fprintf(_f, "start-baseline\ttime=%lu\n", get_time());
-  write_counters();
-}
-
-/**
- * Log the end of a baseline profiling round
- */
-void output::baseline_end() {
-  // Write out time and progress counter values
-  fprintf(_f, "end-baseline\ttime=%lu\n", get_time());
-  write_counters();
-}
-
-/**
  * Log the beginning of a speedup profiling round
  */
-void output::speedup_start(shared_ptr<line> selected) {
+void output::start_round(line* selected) {
+  _output_lock.lock();
   // Write out time, selected line, and progress counter values
-  fprintf(_f, "start-speedup\tline=%s:%lu\ttime=%lu\n",
+  fprintf(_f, "start-round\tline=%s:%lu\ttime=%lu\n",
       selected->get_file()->get_name().c_str(), selected->get_line(), get_time());
   write_counters();
+  _output_lock.unlock();
 }
 
 /**
  * Log the end of a speedup profiling round
  */
-void output::speedup_end(size_t num_delays, size_t delay_size) {
+void output::end_round(size_t num_delays, size_t delay_size) {
+  _output_lock.lock();
   // Write out time, progress counter values, delay count, and total delay
-  fprintf(_f, "end-speedup\tdelays=%lu\tdelay-size=%lu\ttime=%lu\n",
+  fprintf(_f, "end-round\tdelays=%lu\tdelay-size=%lu\ttime=%lu\n",
       num_delays, delay_size, get_time());
   write_counters();
+  _output_lock.unlock();
 }

@@ -1,5 +1,5 @@
 ROOT = ..
 DIRS = loopy
-RECURSIVE_TARGETS = debug release test
+RECURSIVE_TARGETS = debug test
 
 include $(ROOT)/common.mk

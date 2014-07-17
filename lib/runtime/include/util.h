@@ -29,12 +29,15 @@ static size_t get_time() {
 #endif
 }
 
-static inline void wait(size_t ns) {
+static inline size_t wait(size_t ns) {
   struct timespec ts;
   ts.tv_nsec = ns % (1000 * 1000 * 1000);
   ts.tv_sec = (ns - ts.tv_nsec) / (1000 * 1000 * 1000);
   
+  size_t start_time = get_time();
   while(nanosleep(&ts, &ts) != 0) {}
+  
+  return get_time() - start_time;
 }
 
 static inline int rt_tgsigqueueinfo(pid_t tgid, pid_t tid, int sig, siginfo_t *uinfo) {

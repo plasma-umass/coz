@@ -24,7 +24,10 @@ main_fn_t real_main;
 /**
  * Called by the application to register a progress counter
  */
-extern "C" void __causal_register_counter(CounterType kind, size_t* counter, const char* name) {
+extern "C" void __causal_register_counter(CounterType kind,
+                                          size_t* counter,
+                                          size_t* backoff,
+                                          const char* name) {
   profiler::get_instance().register_counter(new SourceCounter(kind, counter, name));
 }
 
@@ -85,8 +88,15 @@ int wrapped_main(int argc, char** argv, char** env) {
                                    args["progress"].as<vector<string>>(),
                                    args["fixed"].as<string>());
   
+  // Start the profiler on the main thread (round and delays are zero)
+  profiler::get_instance().thread_startup(0, 0);
+  
   // Run the real main function
   int result = real_main(argc - causal_argc - 1, &argv[causal_argc + 1], env);
+  
+  // Stop the profiler on the main thread
+  profiler::get_instance().thread_shutdown();
+  
   // Shut down the profiler
   profiler::get_instance().shutdown();
   

@@ -35,7 +35,7 @@ INCLUDE_DIRS += $(ROOT)/include
 RECURSIVE_TARGETS ?= clean debug release
 
 # Build by default
-all:: debug
+all:: debug release
 
 .PHONY: all debug release clean
 

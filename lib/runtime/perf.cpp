@@ -150,7 +150,7 @@ void perf_event::set_ready_signal(int sig) {
       << "failed to set the owner of the perf_event file";
 }
 
-void perf_event::process(function<void(const record&)> handler) {
+void perf_event::process(void (*handler)(const record&)) {
   // If this isn't a sampling event, just return
   if(_mapping == nullptr)
     return;
