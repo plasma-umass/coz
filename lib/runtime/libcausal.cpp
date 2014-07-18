@@ -83,6 +83,9 @@ int wrapped_main(int argc, char** argv, char** env) {
     }
   }
   
+  // Collect all the real function pointers for interposed functions
+  real::init();
+  
   // Start the profiler
   profiler::get_instance().startup(args["output"].as<string>(),
                                    args["progress"].as<vector<string>>(),
@@ -125,9 +128,17 @@ extern "C" {
 	  profiler::get_instance().handle_pthread_exit(result);
   }
   
+  int pthread_join(pthread_t t, void** retval) {
+    profiler::get_instance().snapshot_delays();
+    int result = real::pthread_join(t, retval);
+    profiler::get_instance().skip_delays();
+    
+    return result;
+  }
+  
   int pthread_mutex_lock(pthread_mutex_t* mutex) {
     profiler::get_instance().snapshot_delays();
-    int result = real::pthread_mutex_lock()(mutex);            
+    int result = real::pthread_mutex_lock(mutex);            
     profiler::get_instance().skip_delays();
     
     return result;   
@@ -135,12 +146,16 @@ extern "C" {
   
   int pthread_mutex_unlock(pthread_mutex_t* mutex) {
     profiler::get_instance().catch_up();
-    return real::pthread_mutex_unlock()(mutex);
+    return real::pthread_mutex_unlock(mutex);
+  }
+  
+  int pthread_cond_init(pthread_cond_t* cond, const pthread_condattr_t* attr) {
+    return real::pthread_cond_init(cond, attr);
   }
   
   int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
     profiler::get_instance().snapshot_delays();
-    int result = real::pthread_cond_wait()(cond, mutex);            
+    int result = real::pthread_cond_wait(cond, mutex);            
     profiler::get_instance().skip_delays();
     
     return result;  
@@ -149,18 +164,27 @@ extern "C" {
   int pthread_cond_timedwait(pthread_cond_t* cond,
                              pthread_mutex_t* mutex,
                              const struct timespec* time) {
-    FATAL << "Unsupported!";
-    return -1;
+                               profiler::get_instance().snapshot_delays();
+    int result = real::pthread_cond_timedwait(cond, mutex, time);
+    if(result == 0) {
+      profiler::get_instance().skip_delays();
+    }
+    
+    return result;
   }
   
   int pthread_cond_signal(pthread_cond_t* cond) {
     profiler::get_instance().catch_up();
-    return real::pthread_cond_signal()(cond);
+    return real::pthread_cond_signal(cond);
   }
   
   int pthread_cond_broadcast(pthread_cond_t* cond) {
     profiler::get_instance().catch_up();
-    return real::pthread_cond_broadcast()(cond);
+    return real::pthread_cond_broadcast(cond);
+  }
+  
+  int pthread_cond_destroy(pthread_cond_t* cond) {
+    return real::pthread_cond_destroy(cond);
   }
 }
 
@@ -169,7 +193,7 @@ extern "C" {
  */
 extern "C" void exit(int status) {
   profiler::get_instance().shutdown();
-  real::exit()(status);
+  real::exit(status);
 }
 
 /**
@@ -177,7 +201,7 @@ extern "C" void exit(int status) {
  */
 extern "C" void _exit(int status) {
   profiler::get_instance().shutdown();
-	real::_exit()(status);
+	real::_exit(status);
 }
 
 /**
@@ -185,17 +209,29 @@ extern "C" void _exit(int status) {
  */
 extern "C" void _Exit(int status) {
   profiler::get_instance().shutdown();
-  real::_Exit()(status);
+  real::_Exit(status);
 }
 
 /**
  * Prevent profiled applications from registering a handler for the profiler's sampling signal 
  */
 extern "C" sighandler_t signal(int signum, sighandler_t handler) {
-  if(signum == SampleSignal) {
+  if(signum == SampleSignal || signum == SIGSEGV || signum == SIGABRT) {
     return NULL;
   } else {
-    return real::signal()(signum, handler);
+    return real::signal(signum, handler);
+  }
+}
+
+void clean_mask(sigset_t* set) {
+  if(sigismember(set, SampleSignal)) {
+    sigdelset(set, SampleSignal);
+  }
+  if(sigismember(set, SIGSEGV)) {
+    sigdelset(set, SIGSEGV);
+  }
+  if(sigismember(set, SIGABRT)) {
+    sigdelset(set, SIGABRT);
   }
 }
 
@@ -203,14 +239,14 @@ extern "C" sighandler_t signal(int signum, sighandler_t handler) {
  * Prevent profiled applications from registering a handler for the profiler's sampling signal
  */
 extern "C" int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact) {
-  if(signum == SampleSignal) {
+  if(signum == SampleSignal || signum == SIGSEGV || signum == SIGABRT) {
     return 0;
-  } else if(act != NULL && sigismember(&act->sa_mask, SampleSignal)) {
+  } else if(act != NULL) {
     struct sigaction my_act = *act;
-    sigdelset(&my_act.sa_mask, SampleSignal);
-    return real::sigaction()(signum, &my_act, oldact);
+    clean_mask(&my_act.sa_mask);
+    return real::sigaction(signum, &my_act, oldact);
   } else {
-    return real::sigaction()(signum, act, oldact);
+    return real::sigaction(signum, act, oldact);
   }
 }
 
@@ -219,14 +255,14 @@ extern "C" int sigaction(int signum, const struct sigaction* act, struct sigacti
  */
 extern "C" int sigprocmask(int how, const sigset_t* set, sigset_t* oldset) {
   if(how == SIG_BLOCK || how == SIG_SETMASK) {
-    if(set != NULL && sigismember(set, SampleSignal)) {
+    if(set != NULL) {
       sigset_t myset = *set;
-      sigdelset(&myset, SampleSignal);
-      return real::sigprocmask()(how, &myset, oldset);
+      clean_mask(&myset);
+      return real::sigprocmask(how, &myset, oldset);
     }
   }
   
-  return real::sigprocmask()(how, set, oldset);
+  return real::sigprocmask(how, set, oldset);
 }
 
 /**
@@ -234,12 +270,13 @@ extern "C" int sigprocmask(int how, const sigset_t* set, sigset_t* oldset) {
  */
 extern "C" int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset) {
   if(how == SIG_BLOCK || how == SIG_SETMASK) {
-    if(set != NULL && sigismember(set, SampleSignal)) {
+    if(set != NULL) {
       sigset_t myset = *set;
-      sigdelset(&myset, SampleSignal);
-      return real::pthread_sigmask()(how, &myset, oldset);
+      clean_mask(&myset);
+      
+      return real::pthread_sigmask(how, &myset, oldset);
     }
   }
   
-  return real::pthread_sigmask()(how, set, oldset);
+  return real::pthread_sigmask(how, set, oldset);
 }

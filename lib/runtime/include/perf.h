@@ -39,14 +39,11 @@ public:
   /// Stop counting events
   void stop();
   
-  /// Get the file descriptor associated with this perf event
-  int get_fd();
+  /// Close the perf_event file and unmap the ring buffer
+  void close();
   
   /// Configure the perf_event file to deliver a signal when samples are ready to be processed
   void set_ready_signal(int sig);
-  
-  /// Apply a function to all available records in the mmapped ring buffer
-  void process(void (*handler)(const record&));
   
   /// An enum class with all the available sampling data
   enum class sample : uint64_t {
@@ -91,9 +88,11 @@ public:
     mmap2 = PERF_RECORD_MMAP2
   };
   
+  class iterator;
+  
   /// A generic record type
   struct record {
-    friend class perf_event;
+    friend class perf_event::iterator;
   public:
     record_type get_type() const { return static_cast<record_type>(_header->type); }
     
@@ -119,18 +118,59 @@ public:
     record(const perf_event& source, struct perf_event_header* header) :
         _source(source), _header(header) {}
     
-    record(const record&) = delete;
-    record(record&&) = delete;
-    void operator=(const record&) = delete;
-    
     template<perf_event::sample s, typename T=void*> T locate_field() const;
     
     const perf_event& _source;
     struct perf_event_header* _header;
   };
   
-  void validate() {
-    REQUIRE(_mapping != nullptr) << "Uh oh";
+  class iterator {
+  public:
+    iterator(perf_event& source, struct perf_event_mmap_page* mapping) : 
+        _source(source), _mapping(mapping) {
+      if(mapping != nullptr) {
+        _index = mapping->data_tail;
+        _head = mapping->data_head;
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+      } else {
+        _index = 0;
+        _head = 0;
+      }
+    }
+    
+    ~iterator() {
+      if(_mapping != nullptr) {
+        _mapping->data_tail = _index;
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+      }
+    }
+    
+    void next();
+    record get();
+    bool has_data() const;
+    
+    iterator& operator++() { next(); return *this; }
+    record operator*() { return get(); }
+    bool operator!=(const iterator& other) { return has_data() != other.has_data(); }
+    
+  private:
+    perf_event& _source;
+    size_t _index;
+    size_t _head;
+    struct perf_event_mmap_page* _mapping;
+    
+    // Buffer to hold the current record. Just a hack until records play nice with the ring buffer
+    uint8_t _buf[4096];
+  };
+  
+  /// Get an iterator to the beginning of the memory mapped ring buffer
+  iterator begin() {
+    return iterator(*this, _mapping);
+  }
+  
+  // Get an iterator to the end of the memory mapped ring buffer
+  iterator end() {
+    return iterator(*this, nullptr);
   }
     
 private:
@@ -139,7 +179,8 @@ private:
   void operator=(const perf_event&) = delete;
   
   // Copy data out of the mmap ring buffer
-  void copy_from_ring_buffer(size_t index, void* dest, size_t bytes);
+  static void copy_from_ring_buffer(struct perf_event_mmap_page* mapping,
+                                    size_t index, void* dest, size_t bytes);
   
   /// File descriptor for the perf event
   long _fd = -1;

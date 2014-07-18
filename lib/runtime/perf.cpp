@@ -64,7 +64,7 @@ perf_event::perf_event(struct perf_event_attr& pe, pid_t pid, int cpu) :
 perf_event::perf_event(perf_event&& other) {
   // Release resources if the current perf_event is initialized and not equal to this one
   if(_fd != -1 && _fd != other._fd) {
-    close(_fd);
+    ::close(_fd);
     INFO << "Closed perf event fd " << _fd;
   }
   
@@ -86,17 +86,14 @@ perf_event::perf_event(perf_event&& other) {
 
 /// Close the perf_event file descriptor and unmap the ring buffer
 perf_event::~perf_event() {
-  if(_fd != -1)
-    close(_fd);
-  if(_mapping != nullptr)
-    munmap(_mapping, MmapSize);
+  close();
 }
 
 /// Move assignment
 void perf_event::operator=(perf_event&& other) {
   // Release resources if the current perf_event is initialized and not equal to this one
   if(_fd != -1 && _fd != other._fd)
-    close(_fd);
+    ::close(_fd);
   if(_mapping != nullptr && _mapping != other._mapping)
     munmap(_mapping, MmapSize);
   
@@ -122,18 +119,30 @@ uint64_t perf_event::get_count() const {
 
 /// Start counting events
 void perf_event::start() {
-  REQUIRE(ioctl(_fd, PERF_EVENT_IOC_ENABLE, 0) != -1) << "Failed to start perf event: "
-      << strerror(errno);
+  if(_fd != -1) {
+    REQUIRE(ioctl(_fd, PERF_EVENT_IOC_ENABLE, 0) != -1) << "Failed to start perf event: "
+        << strerror(errno);
+  }
 }
 
 /// Stop counting events
 void perf_event::stop() {
-  REQUIRE(ioctl(_fd, PERF_EVENT_IOC_DISABLE, 0) != -1) << "Failed to stop perf event: "
-      << strerror(errno) << " (" << _fd << ")";
+  if(_fd != -1) {
+    REQUIRE(ioctl(_fd, PERF_EVENT_IOC_DISABLE, 0) != -1) << "Failed to stop perf event: "
+        << strerror(errno) << " (" << _fd << ")";
+  }
 }
 
-int perf_event::get_fd() {
-  return _fd;
+void perf_event::close() {
+  if(_fd != -1) {
+    ::close(_fd);
+    _fd = -1;
+  }
+  
+  if(_mapping != nullptr) {
+    munmap(_mapping, MmapSize);
+    _mapping = nullptr;
+  }
 }
 
 void perf_event::set_ready_signal(int sig) {
@@ -150,46 +159,54 @@ void perf_event::set_ready_signal(int sig) {
       << "failed to set the owner of the perf_event file";
 }
 
-void perf_event::process(void (*handler)(const record&)) {
-  // If this isn't a sampling event, just return
-  if(_mapping == nullptr)
-    return;
+void perf_event::iterator::next() {
+  struct perf_event_header hdr;
   
-  // Read the start and end indices
-  uint64_t data_tail = _mapping->data_tail;
-  uint64_t data_head = _mapping->data_head;
+  // Copy out the record header
+  perf_event::copy_from_ring_buffer(_mapping, _index, &hdr, sizeof(struct perf_event_header));
   
-  // Ensure ring buffer contents are up to date (required, according to manpage)
-  __atomic_thread_fence(__ATOMIC_SEQ_CST);
-
-  size_t index = data_tail;
-  // Loop as long as there is space for at least one header
-  while(index + sizeof(struct perf_event_header) < data_head) {
-    struct perf_event_header hdr;
-    copy_from_ring_buffer(index, &hdr, sizeof(struct perf_event_header));
-    
-    // If the record hasn't been completely written, stop
-    if(index + hdr.size > data_head) {
-      break;
-    }
-    
-    // Copy the record out of the ring buffer
-    uint8_t record_data[hdr.size];
-    copy_from_ring_buffer(index, record_data, hdr.size);
-    
-    struct perf_event_header* header = reinterpret_cast<struct perf_event_header*>(record_data);
-    handler(perf_event::record(*this, header));
-    
-    index += hdr.size;
-  }
-
-  // Advance the tail pointer in the ring buffer
-  _mapping->data_tail = index;
-  __atomic_thread_fence(__ATOMIC_SEQ_CST);
+  // Advance to the next record
+  _index += hdr.size;
 }
 
-void perf_event::copy_from_ring_buffer(uint64_t index, void* dest, size_t bytes) {
-  uintptr_t base = reinterpret_cast<uintptr_t>(_mapping) + PageSize;
+perf_event::record perf_event::iterator::get() {
+  // Copy out the record header
+  perf_event::copy_from_ring_buffer(_mapping, _index, _buf, sizeof(struct perf_event_header));
+  
+  // Get a pointer to the header
+  struct perf_event_header* header = reinterpret_cast<struct perf_event_header*>(_buf);
+  
+  // Copy out the entire record
+  perf_event::copy_from_ring_buffer(_mapping, _index, _buf, header->size);
+  
+  return perf_event::record(_source, header);
+}
+
+bool perf_event::iterator::has_data() const {
+  // If there is no ring buffer, there is no data
+  if(_mapping == nullptr) {
+    return false;
+  }
+  
+  // If there isn't enough data in the ring buffer to hold a header, there is no data
+  if(_index + sizeof(struct perf_event_header) >= _head) {
+    return false;
+  }
+  
+  struct perf_event_header hdr;
+  perf_event::copy_from_ring_buffer(_mapping, _index, &hdr, sizeof(struct perf_event_header));
+  
+  // If the first record is larger than the available data, nothing can be read
+  if(_index + hdr.size > _head) {
+    return false;
+  }
+  
+  return true;
+}
+
+void perf_event::copy_from_ring_buffer(struct perf_event_mmap_page* mapping,
+                                       uint64_t index, void* dest, size_t bytes) {
+  uintptr_t base = reinterpret_cast<uintptr_t>(mapping) + PageSize;
   size_t start_index = index % DataSize;
   size_t end_index = start_index + bytes;
   
