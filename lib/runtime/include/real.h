@@ -32,6 +32,13 @@ public:
   MAKE_WRAPPER(pthread_create, RTLD_NEXT);
   MAKE_WRAPPER(pthread_exit, RTLD_NEXT);
   MAKE_WRAPPER(pthread_sigmask, RTLD_NEXT);
+  MAKE_WRAPPER(pthread_mutex_lock, RTLD_NEXT);
+  MAKE_WRAPPER(pthread_mutex_unlock, RTLD_NEXT);
+  MAKE_WRAPPER(pthread_mutex_trylock, RTLD_NEXT);
+  MAKE_WRAPPER(pthread_cond_wait, RTLD_NEXT);
+  MAKE_WRAPPER(pthread_cond_timedwait, RTLD_NEXT);
+  MAKE_WRAPPER(pthread_cond_signal, RTLD_NEXT);
+  MAKE_WRAPPER(pthread_cond_broadcast, RTLD_NEXT);
 };
 
 #endif

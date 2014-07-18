@@ -14,6 +14,9 @@
 #include "perf.h"
 #include "support.h"
 
+/// Type of a thread entry function
+typedef void* (*thread_fn_t)(void*);
+
 enum {
   SampleSignal = SIGPROF,
   SamplePeriod = 100000, // 100us
@@ -30,19 +33,18 @@ public:
                const std::vector<std::string>& source_progress_names,
                const std::string& fixed_line_name);
   void shutdown();
-  void thread_startup(size_t parent_round, size_t parent_delays);
-  void thread_shutdown();
   
-  inline size_t get_global_round() {
-    return _global_round.load();
-  }
+  int handle_pthread_create(pthread_t*, const pthread_attr_t*, thread_fn_t, void*);
+  void handle_pthread_exit(void*) __attribute__((noreturn));
   
-  inline size_t get_global_delays() {
-    return _global_delays.load();
-  }
+  /// Take a snapshot of the global delay counter
+  void snapshot_delays();
   
-  size_t get_local_round();
-  size_t get_local_delays();
+  /// Skip any global delays added since the last snapshot
+  void skip_delays();
+  
+  /// Catch up on delays
+  void catch_up();
   
   static profiler& get_instance() {
     static char buf[sizeof(profiler)];
@@ -55,11 +57,17 @@ private:
   profiler(const profiler&) = delete;
   void operator=(const profiler&) = delete;
   
+  /// Entry point for wrapped threads
+  static void* start_thread(void* arg);
+  
+  /// Set up the sampler for the current thread
+  void start_sampler();
+  
+  /// Stop sampling in the current thread
+  void stop_sampler();
+  
   /// Process all available samples and insert delays. This operation will return false if the sampler is not immediately available.
   bool process_samples();
-  
-  /// Process all available samples and insert delays. This operation will block until it succeeds.
-  void must_process_samples();
   
   /// Static wrapper for the sample processing function
   static void call_process_one_sample(const perf_event::record& r);
@@ -67,6 +75,7 @@ private:
   /// Process a single sample (callback from perf_event)
   void process_one_sample(const perf_event::record& r);
   
+  /// Signal handler called when samples are ready to be processed
   static void samples_ready(int signum, siginfo_t* info, void* p);
   
   /// Handle to the profiler's output
