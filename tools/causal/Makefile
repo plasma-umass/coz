@@ -1,5 +1,5 @@
 ROOT = ../..
-TARGETS = causal
+TARGET = causal
 INSTALL = 1
 LIBS = boost_program_options
 INCLUDE_DIRS = $(ROOT)/lib/runtime/include

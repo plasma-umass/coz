@@ -11,6 +11,10 @@ public:
     }
   }
   
+  inline bool trylock() {
+    return !_flag.test_and_set();
+  }
+  
   inline void unlock() {
     _flag.clear();
   }

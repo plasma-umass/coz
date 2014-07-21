@@ -254,8 +254,19 @@ namespace causal_support {
   }
   
   shared_ptr<line> memory_map::find_line(const string& name) {
-    WARNING << "Line name searches are not yet implemented!";
-    return shared_ptr<line>();
+    string::size_type colon_pos = name.find_first_of(':');
+    if(colon_pos == string::npos) {
+      WARNING << "Could not identify file name in input " << name;
+      return shared_ptr<line>();
+    }
+    
+    string filename = name.substr(0, colon_pos);
+    string line_no_str = name.substr(colon_pos + 1);
+    
+    size_t line_no;
+    stringstream(line_no_str) >> line_no;
+    
+    return memory_map::get_file(filename)->get_line(line_no);
   }
   
   shared_ptr<line> memory_map::find_line(uintptr_t addr) {

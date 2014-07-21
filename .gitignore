@@ -13,50 +13,54 @@ lib/support/release
 tools/inspect/debug
 tools/inspect/release
 
-tests/*/profile.log
-tests/*/results.csv
-tests/*/Rplots.pdf
+tests/loopy/debug
+tests/loopy/release
+tests/loopy/profile.log
 
-tests/histogram/debug
-tests/histogram/release
-tests/histogram/histogram_datafiles
+benchmarks/*/profile.log
+benchmarks/*/results.csv
+benchmarks/*/Rplots.pdf
 
-tests/kmeans/debug
-tests/kmeans/release
+benchmarks/histogram/debug
+benchmarks/histogram/release
+benchmarks/histogram/histogram_datafiles
 
-tests/linear_regression/debug
-tests/libear_regression/release
-tests/linear_regression/linear_regression_datafiles
+benchmarks/kmeans/debug
+benchmarks/kmeans/release
 
-tests/matrix_multiply/debug
-tests/matrix_multiply/release
-tests/matrix_multiply/matrix_file_A.txt
-tests/matrix_multiply/matrix_file_B.txt
-tests/matrix_multiply/matrix_file_out_pthreads.txt
+benchmarks/linear_regression/debug
+benchmarks/libear_regression/release
+benchmarks/linear_regression/linear_regression_datafiles
 
-tests/pbzip2/debug
-tests/pbzip2/release
-tests/pbzip2/data/input.txt
-tests/pbzip2/data/output.txt
-tests/pbzip2/bzip2-1.0.6
+benchmarks/matrix_multiply/debug
+benchmarks/matrix_multiply/release
+benchmarks/matrix_multiply/matrix_file_A.txt
+benchmarks/matrix_multiply/matrix_file_B.txt
+benchmarks/matrix_multiply/matrix_file_out_pthreads.txt
 
-tests/pca/debug
-tests/pca/release
+benchmarks/pbzip2/debug
+benchmarks/pbzip2/release
+benchmarks/pbzip2/data/input.txt
+benchmarks/pbzip2/data/output.txt
+benchmarks/pbzip2/bzip2-1.0.6
 
-tests/producer_consumer/debug
-tests/producer_consumer/release
+benchmarks/pca/debug
+benchmarks/pca/release
 
-tests/string_match/debug
-tests/string_match/release
-tests/string_match/string_match_datafiles
+benchmarks/producer_consumer/debug
+benchmarks/producer_consumer/release
 
-tests/unbalanced/debug
-tests/unbalanced/release
+benchmarks/string_match/debug
+benchmarks/string_match/release
+benchmarks/string_match/string_match_datafiles
 
-tests/word_count/debug
-tests/word_count/release
-tests/word_count/word_count_datafiles
+benchmarks/unbalanced/debug
+benchmarks/unbalanced/release
 
-tests/work_queue/debug
-tests/work_queue/release
+benchmarks/word_count/debug
+benchmarks/word_count/release
+benchmarks/word_count/word_count_datafiles
+
+benchmarks/work_queue/debug
+benchmarks/work_queue/release
 

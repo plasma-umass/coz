@@ -1,5 +1,5 @@
 ROOT = ../..
-TARGETS = inspect
+TARGET = inspect
 INSTALL = 1
 LIBS = causal_support dwarf++ elf++ boost_filesystem boost_system
 INCLUDE_DIRS = $(ROOT)/lib/support/include \

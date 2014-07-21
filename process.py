@@ -34,29 +34,13 @@ def main(filename):
     elif command == 'info':
       if 'sample-period' in data:
         period = int(data['sample-period'])
-      
-    elif command == 'start-baseline':
-      phase_start_time = int(data['time'])
-      (i, counter_start_values) = readCounters(lines, i)
-      
-    elif command == 'end-baseline':
-      phase_time = int(data['time']) - phase_start_time
-      (i, counter_end_values) = readCounters(lines, i)
-      
-      for counter in counter_start_values:
-        if counter in counter_end_values:
-          difference = counter_end_values[counter] - counter_start_values[counter]
-          if difference > 0:
-            if counter not in baseline_rates:
-              baseline_rates[counter] = []
-            baseline_rates[counter].append((difference, phase_time))
-      
-    elif command == 'start-speedup':
+        
+    elif command == 'start-round':
       phase_start_time = int(data['time'])
       speedup_line = data['line']
       (i, counter_start_values) = readCounters(lines, i)
       
-    elif command == 'end-speedup':
+    elif command == 'end-round':
       phase_time = int(data['time']) - phase_start_time
       delay_count = int(data['delays'])
       delay_size = int(data['delay-size'])
@@ -78,6 +62,16 @@ def main(filename):
             if counter not in speedup_rates[speedup_line][delay_size]:
               speedup_rates[speedup_line][delay_size][counter] = []
             speedup_rates[speedup_line][delay_size][counter].append((difference, phase_time))
+      
+      # When delay size is 0, this is also a baseline measurement
+      if delay_size == 0:
+        for counter in counter_start_values:
+          if counter in counter_end_values:
+            difference = counter_end_values[counter] - counter_start_values[counter]
+            if difference > 0:
+              if counter not in baseline_rates:
+                baseline_rates[counter] = []
+              baseline_rates[counter].append((difference, phase_time))
   
   print "line\tline_speedup\tcounter\tcounter_speedup\tbaseline_period\tspeedup_period\tsamples"
   
@@ -87,7 +81,10 @@ def main(filename):
     if line.startswith(os.getcwd()):
       print_line = line[(len(os.getcwd())+1):]
     
-    for delay_size in speedup_rates[line]:
+    delay_sizes = speedup_rates[line].keys()
+    delay_sizes.sort()
+    
+    for delay_size in delay_sizes:
       for counter in speedup_rates[line][delay_size]:
         if counter in baseline_rates:
           baseline_period = avgPeriod(baseline_rates[counter])

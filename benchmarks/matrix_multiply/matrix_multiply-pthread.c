@@ -145,12 +145,11 @@ void *matrixmult_map(void *args_in)
 	    {
 		    b_ptr = data->matrix_B + i;
 		    value = 0;
-
-		    for(j=0;j<data->matrix_len ; j++)
+        for(j=0;j<data->matrix_len ; j++)
 		    {
 			    value += ( a_ptr[j] * (*b_ptr));
 			    b_ptr+= data->matrix_len;
-		    }
+		    }        
 		    x_loc = (data->row_num + row_count);
 		    y_loc = i;
 		    //printf("THe location is %d %d, value is %d\n",x_loc, y_loc, value);
@@ -277,8 +276,12 @@ int main(int argc, char *argv[]) {
     
 
     gettimeofday(&endtime,0);
+    
+    size_t start_usec = starttime.tv_sec * 1000000 + starttime.tv_usec;
+    size_t end_usec = endtime.tv_sec * 1000000 + endtime.tv_usec;
+    float usec = end_usec - start_usec;
 
-    printf("MatrixMult_pthreads: Multiply Completed time = %ld\n", (endtime.tv_sec - starttime.tv_sec));
+    fprintf(stderr, "runtime = %f\n", (usec / 1000000));
 
     for(i=0;i<matrix_len*matrix_len;i++)
     {
@@ -287,7 +290,7 @@ int main(int argc, char *argv[]) {
 
 	    dprintf("%d ",mm_data.output[i]);
 
-	    //write(fd_out,&(mm_data.output[i]),sizeof(int));
+	    write(fd_out,&(mm_data.output[i]),sizeof(int));
     }
     dprintf("\n");
 

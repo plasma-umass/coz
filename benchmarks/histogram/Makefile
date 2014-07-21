@@ -1,7 +1,8 @@
 ROOT = ../..
-TARGETS = histogram
+TARGET = histogram
 LIBS = pthread dl
 ARGS = histogram_datafiles/large.bmp
+TEST_ARGS = histogram_datafiles/small.bmp
 
 include $(ROOT)/common.mk
 
@@ -12,6 +13,8 @@ histogram_datafiles/%:
 	tar xvzf histogram.tar.gz
 	rm histogram.tar.gz
 
-test:: debug/bin/histogram setup
-	LD_PRELOAD=$(ROOT)/debug/lib/libcausal.so ./debug/bin/histogram $(ARGS)
+bench:: debug/bin/histogram setup
+	$(ROOT)/release/bin/causal --- debug/bin/histogram $(ARGS)
 	
+test:: debug/bin/histogram setup
+	$(ROOT)/debug/bin/causal --- debug/bin/histogram $(TEST_ARGS)

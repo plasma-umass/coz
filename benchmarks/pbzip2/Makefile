@@ -1,7 +1,8 @@
 ROOT = ../..
-TARGETS = pbzip2
+TARGET = pbzip2
 LIBS = pthread dl
 ARGS = -c < data/input.txt > data/output.txt
+TEST_ARGS = -c < data/input.txt > data/output.txt
 
 all:: debug
 	
@@ -31,5 +32,8 @@ data/input.txt:
 	mkdir -p data
 	cp ../linear_regression/linear_regression_datafiles/key_file_500MB.txt data/input.txt
 
+bench:: debug/bin/pbzip2 setup
+	$(ROOT)/release/bin/causal --- debug/bin/pbzip2 $(ARGS)
+
 test:: debug/bin/pbzip2 setup
-	LD_PRELOAD=$(ROOT)/debug/lib/libcausal.so ./debug/bin/pbzip2 --causal-profile libbz2 $(ARGS)
+	$(ROOT)/debug/bin/causal --- debug/bin/pbzip2 $(TEST_ARGS)

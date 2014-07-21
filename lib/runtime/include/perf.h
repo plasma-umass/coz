@@ -1,287 +1,197 @@
 #if !defined(CAUSAL_RUNTIME_PERF_H)
 #define CAUSAL_RUNTIME_PERF_H
 
-#include <asm/unistd.h>
-#include <fcntl.h>
 #include <linux/hw_breakpoint.h>
 #include <linux/perf_event.h>
-#include <poll.h>
-#include <signal.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
-#include <unistd.h>
+#include <sys/types.h>
 
-#include <atomic>
-#include <utility>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
+#include <cstdint>
+#include <functional>
 
 #include "log.h"
-#include "spinlock.h"
+#include "wrapped_array.h"
 
-static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid, int cpu, int group_fd, unsigned long flags) {
-  return syscall(__NR_perf_event_open, hw_event, pid, cpu, group_fd, flags);
-}
-
-static pid_t gettid() {
-  return syscall(__NR_gettid);
-}
-
-class PerfEvent {
+class perf_event {
 public:
+  enum class record_type;
+  class record;
+  class sample_record;
+  
   /// Default constructor
-  PerfEvent() {}
-  
-  /// Create a perf event from the settings structure
-  PerfEvent(struct perf_event_attr& pe, pid_t pid = 0, int cpu = -1, int group_fd = -1, unsigned long flags = 0) {
-    // Set some mandatory fields
-    pe.size = sizeof(struct perf_event_attr);
-    pe.disabled = 1;
-    
-    // Open the file
-    _fd = perf_event_open(&pe, pid, cpu, group_fd, flags);
-    REQUIRE(_fd != -1) << "Failed to open perf event";
-    
-    // If sampling, map the perf event file
-    if(pe.sample_type != 0 && pe.sample_period != 0) {
-      //REQUIRE(pe.sample_type == (PERF_SAMPLE_IP | PERF_SAMPLE_TID | PERF_SAMPLE_TIME)) << "Unsupported sample type";
-      _mapping = MappedEvent(_fd);
-    }
-  }
-  
+  perf_event();
+  /// Open a perf_event file using the given options structure
+  perf_event(struct perf_event_attr& pe, pid_t pid = 0, int cpu = -1);
   /// Move constructor
-  PerfEvent(PerfEvent&& other) {
-    _fd = __atomic_exchange_n(&other._fd, -1, __ATOMIC_SEQ_CST);
-    if(_fd != -1) {
-      _mapping = std::move(other._mapping);
-    }
-  }
+  perf_event(perf_event&& other);
   
-  /// No copying allowed
-  PerfEvent(const PerfEvent&) = delete;
+  /// Close the perf event file and unmap the ring buffer
+  ~perf_event();
   
-  /// No assignment allowed
-  void operator=(const PerfEvent&) = delete;
-  
-  /// Destructor
-  ~PerfEvent() {
-    // Atomically claim the file descriptor and close it if set
-    int to_close = __atomic_exchange_n(&_fd, -1, __ATOMIC_SEQ_CST);
-    if(to_close != -1) {
-      close(to_close);
-    }
-  }
-  
-  /// Move assignment
-  void operator=(PerfEvent&& other) {
-    // take other perf event's file descriptor and replace it with -1
-    _fd = __atomic_exchange_n(&other._fd, -1, __ATOMIC_SEQ_CST);
-    if(_fd != -1) {
-      _mapping = std::move(other._mapping);
-    }
-  }
+  /// Move assignment is supported
+  void operator=(perf_event&& other);
   
   /// Read event count
-  uint64_t getCount() const {
-    uint64_t count;
-    read(_fd, &count, sizeof(uint64_t));
-    return count;
-  }
+  uint64_t get_count() const;
   
-  /// Start counting events
-  void start() {
-    REQUIRE(ioctl(_fd, PERF_EVENT_IOC_ENABLE, 0) != -1) << "Failed to start perf event";
-  }
+  /// Start counting events and collecting samples
+  void start();
   
   /// Stop counting events
-  void stop() {
-    REQUIRE(ioctl(_fd, PERF_EVENT_IOC_DISABLE, 0) != -1) << "Failed to stop perf event";
-  }
+  void stop();
   
-  int getFileDescriptor() {
-    return _fd;
-  }
+  /// Close the perf_event file and unmap the ring buffer
+  void close();
   
-  template<typename T>
-  void process(T& t) {
-    return _mapping.process<T>(t);
-  }
+  /// Configure the perf_event file to deliver a signal when samples are ready to be processed
+  void set_ready_signal(int sig);
   
-  template<typename T>
-  void process(T* t) {
-    return _mapping.process<T>(*t);
-  }
-  
-  template<typename T>
-  void process() {
-    T t;
-    return process(t);
-  }
-  
-  struct SampleRecord {
-  public:
-    struct perf_event_header header;
-    uint64_t ip;
-    uint32_t pid, tid;
-    uint64_t time;
-    
-    bool inUser() {
-      return (header.misc & PERF_RECORD_MISC_CPUMODE_MASK) == PERF_RECORD_MISC_USER;
-    }
-  
-    bool inKernel() {
-      return (header.misc & PERF_RECORD_MISC_CPUMODE_MASK) == PERF_RECORD_MISC_KERNEL;
-    }
-  } __attribute__((packed));
-  
-  class MappedEvent {
-  private:
-    enum { DataPages = 16 };
-    enum { PageSize = 0x1000 };
-    enum { DataSize = DataPages * PageSize };
-    enum { MmapSize = DataSize + PageSize };
-    
-  public:
-    /// Default constructor
-    MappedEvent() {}
-    
-    /// Map a file descriptor
-    MappedEvent(int fd) {
-      _header = (struct perf_event_mmap_page*)mmap(NULL, MmapSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-      REQUIRE(_header != MAP_FAILED) << "Failed to mmap perf event file";
-    }
-    
-    /// Move constructor
-    MappedEvent(MappedEvent&& other) {
-      _header = __atomic_exchange_n(&other._header, nullptr, __ATOMIC_SEQ_CST);
-    }
-    
-    /// No copying allowed
-    MappedEvent(const MappedEvent&) = delete;
-    
-    /// Destructor
-    ~MappedEvent() {
-      void* to_unmap = __atomic_exchange_n(&_header, nullptr, __ATOMIC_SEQ_CST);
-      if(to_unmap != nullptr) {
-        REQUIRE(munmap(to_unmap, MmapSize) != -1) << "Failed to munmap perf event file";
-      }
-    }
-    
-    /// No assignment allowed
-    void operator=(const MappedEvent&) = delete;
-    
-    /// Move assignment
-    void operator=(MappedEvent&& other) {
-      _header = __atomic_exchange_n(&other._header, nullptr, __ATOMIC_SEQ_CST);
-    }
-    
-    /**
-     * Process any available records. Instantiate with a type that defines the following methods:
-     *   void processMmap(const PerfEvent::MmapRecord&) (future)
-     *   void processLost(const PerfEvent::LostRecord&) (future)
-     *   void processComm(const PerfEvent::CommRecord&) (future)
-     *   void processThrottle(const PerfEvent::ThrottleRecord&) (future)
-     *   void processUnthrottle(const PerfEvent::UnthrottleRecord&) (future)
-     *   void processFork(const PerfEvent::ForkRecord&) (future)
-     *   void processRead(const PerfEvent::ReadRecord&) (future)
-     *   void processSample(const PerfEvent::SampleRecord&)
-     */
-    template<typename T>
-    void process(T& t) {
-      if(_header == nullptr) {
-        return;
-      }
-    
-      // Read the start and end indices
-      uint64_t data_tail = _header->data_tail;
-      uint64_t data_head = _header->data_head;
-      
-      // Ensure ring buffer contents are up to date (required, according to manpage)
-      __atomic_thread_fence(__ATOMIC_SEQ_CST);
-    
-      size_t index = data_tail;
-      // Loop as long as there is space for at least one header
-      while(index + sizeof(struct perf_event_header) < data_head) {
-        struct perf_event_header hdr = copyData<struct perf_event_header>(index);
-        
-        // If the record hasn't been completely written, stop
-        if(index + hdr.size > data_head) {
-          break;
-        }
-        
-        size_t rounded_index = index % DataSize;
-        
-        // Check if the record wraps around the ring buffer
-        if(rounded_index + hdr.size > DataSize) {
-          if(hdr.type == PERF_RECORD_SAMPLE) {
-            if(hdr.size >= sizeof(SampleRecord)) {
-              const SampleRecord r = copyData<SampleRecord>(index);
-              t.processSample(r);
-            } else {
-              WARNING << "Invalid sample record. Size = " << hdr.size;
-            }
-          } else {
-            WARNING << "Unhandled record type " << hdr.type << ", size " << hdr.size;
-            //WARNING << "Unhandled record type";
-          }
-          
-        } else {
-          void* record_base = (void*)((uintptr_t)_header + PageSize + rounded_index);
-          if(hdr.type == PERF_RECORD_SAMPLE) {
-            if(hdr.size >= sizeof(SampleRecord)) {
-              t.processSample(*reinterpret_cast<const SampleRecord*>(record_base));
-            } else {
-              WARNING << "Invalid sample record. Size = " << hdr.size;
-            }
-          } else {
-             WARNING << "Unhandled record type " << hdr.type << ", size " << hdr.size;
-            //WARNING << "Unhandled record type";
-          }
-        }
-        
-        index += hdr.size;
-      }
-   
-      // Advance the tail pointer in the ring buffer
-      _header->data_tail = index;
-      __atomic_thread_fence(__ATOMIC_SEQ_CST);
-    }
-    
-  private:
-    /// Copy data out of the ring buffer from a given position
-    template<typename T> T copyData(uint64_t pos) {
-      uintptr_t base = (uintptr_t)_header + PageSize;
-      uint64_t rounded_pos = pos % DataSize;
-    
-      // Check if the requested data will wrap around the ring buffer
-      if(rounded_pos + sizeof(T) > DataSize) {
-        // Data wraps. Copy in two chunks
-        uint64_t first_chunk = DataSize - rounded_pos;
-        char result_buffer[sizeof(T)];
-        memcpy(result_buffer, (void*)(base + rounded_pos), first_chunk);
-        memcpy((void*)((uintptr_t)result_buffer + first_chunk), (void*)base, sizeof(T) - first_chunk);
-        return *reinterpret_cast<T*>(result_buffer);
-      } else {
-        // No wrapping. Just return the object
-        return *reinterpret_cast<T*>(base + rounded_pos);
-      }
-    }
-    
-    /// The header page for the mapping
-    struct perf_event_mmap_page* _header = nullptr;
+  /// An enum class with all the available sampling data
+  enum class sample : uint64_t {
+    ip = PERF_SAMPLE_IP,
+    pid_tid = PERF_SAMPLE_TID,
+    time = PERF_SAMPLE_TIME,
+    addr = PERF_SAMPLE_ADDR,
+    id = PERF_SAMPLE_ID,
+    stream_id = PERF_SAMPLE_STREAM_ID,
+    cpu = PERF_SAMPLE_CPU,
+    period = PERF_SAMPLE_PERIOD,
+    read = PERF_SAMPLE_READ,
+    callchain = PERF_SAMPLE_CALLCHAIN,
+    raw = PERF_SAMPLE_RAW,
+    branch_stack = PERF_SAMPLE_BRANCH_STACK,
+    regs = PERF_SAMPLE_REGS_USER,
+    stack = PERF_SAMPLE_STACK_USER,
+    _end = PERF_SAMPLE_MAX
   };
+  
+  /// Check if this perf_event was configured to collect a type of sample data
+  inline bool is_sampling(sample s) const {
+    return _sample_type & static_cast<uint64_t>(s);
+  }
+  
+  /// Get the configuration for this perf_event's read format
+  inline uint64_t get_read_format() const {
+    return _read_format;
+  }
+  
+  /// An enum to distinguish types of records in the mmapped ring buffer
+  enum class record_type {
+    mmap = PERF_RECORD_MMAP,
+    lost = PERF_RECORD_LOST,
+    comm = PERF_RECORD_COMM,
+    exit = PERF_RECORD_EXIT,
+    throttle = PERF_RECORD_THROTTLE,
+    unthrottle = PERF_RECORD_UNTHROTTLE,
+    fork = PERF_RECORD_FORK,
+    read = PERF_RECORD_READ,
+    sample = PERF_RECORD_SAMPLE,
+    mmap2 = PERF_RECORD_MMAP2
+  };
+  
+  class iterator;
+  
+  /// A generic record type
+  struct record {
+    friend class perf_event::iterator;
+  public:
+    record_type get_type() const { return static_cast<record_type>(_header->type); }
     
-protected:
+    inline bool is_mmap() const { return get_type() == record_type::mmap; }
+    inline bool is_lost() const { return get_type() == record_type::lost; }
+    inline bool is_comm() const { return get_type() == record_type::comm; }
+    inline bool is_exit() const { return get_type() == record_type::exit; }
+    inline bool is_throttle() const { return get_type() == record_type::throttle; }
+    inline bool is_unthrottle() const { return get_type() == record_type::unthrottle; }
+    inline bool is_fork() const { return get_type() == record_type::fork; }
+    inline bool is_read() const { return get_type() == record_type::read; }
+    inline bool is_sample() const { return get_type() == record_type::sample; }
+    inline bool is_mmap2() const { return get_type() == record_type::mmap2; }
+    
+    uint64_t get_ip() const;
+    uint64_t get_pid() const;
+    uint64_t get_tid() const;
+    uint64_t get_time() const;
+    uint32_t get_cpu() const;
+    cppgoodies::wrapped_array<uint64_t> get_callchain() const;
+    
+  private:
+    record(const perf_event& source, struct perf_event_header* header) :
+        _source(source), _header(header) {}
+    
+    template<perf_event::sample s, typename T=void*> T locate_field() const;
+    
+    const perf_event& _source;
+    struct perf_event_header* _header;
+  };
+  
+  class iterator {
+  public:
+    iterator(perf_event& source, struct perf_event_mmap_page* mapping) : 
+        _source(source), _mapping(mapping) {
+      if(mapping != nullptr) {
+        _index = mapping->data_tail;
+        _head = mapping->data_head;
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+      } else {
+        _index = 0;
+        _head = 0;
+      }
+    }
+    
+    ~iterator() {
+      if(_mapping != nullptr) {
+        _mapping->data_tail = _index;
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+      }
+    }
+    
+    void next();
+    record get();
+    bool has_data() const;
+    
+    iterator& operator++() { next(); return *this; }
+    record operator*() { return get(); }
+    bool operator!=(const iterator& other) { return has_data() != other.has_data(); }
+    
+  private:
+    perf_event& _source;
+    size_t _index;
+    size_t _head;
+    struct perf_event_mmap_page* _mapping;
+    
+    // Buffer to hold the current record. Just a hack until records play nice with the ring buffer
+    uint8_t _buf[4096];
+  };
+  
+  /// Get an iterator to the beginning of the memory mapped ring buffer
+  iterator begin() {
+    return iterator(*this, _mapping);
+  }
+  
+  // Get an iterator to the end of the memory mapped ring buffer
+  iterator end() {
+    return iterator(*this, nullptr);
+  }
+    
+private:
+  // Disallow copy and assignment
+  perf_event(const perf_event&) = delete;
+  void operator=(const perf_event&) = delete;
+  
+  // Copy data out of the mmap ring buffer
+  static void copy_from_ring_buffer(struct perf_event_mmap_page* mapping,
+                                    size_t index, void* dest, size_t bytes);
+  
   /// File descriptor for the perf event
   long _fd = -1;
   
   /// Memory mapped perf event region
-  MappedEvent _mapping;
+  struct perf_event_mmap_page* _mapping = nullptr;
+  
+  /// The sample type from this perf_event's configuration
+  uint64_t _sample_type = 0;
+  /// The read format from this perf event's configuration
+  uint64_t _read_format = 0;
 };
 
 #endif
