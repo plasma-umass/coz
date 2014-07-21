@@ -20,12 +20,17 @@ namespace real {
   
   DECLARE_WRAPPER(sigaction);
   DECLARE_WRAPPER(signal);
+  DECLARE_WRAPPER(kill);
   DECLARE_WRAPPER(sigprocmask);
+  DECLARE_WRAPPER(sigwait);
+  DECLARE_WRAPPER(sigwaitinfo);
+  DECLARE_WRAPPER(sigtimedwait);
   
   DECLARE_WRAPPER(pthread_create);
   DECLARE_WRAPPER(pthread_exit);
   DECLARE_WRAPPER(pthread_join);
   DECLARE_WRAPPER(pthread_sigmask);
+  DECLARE_WRAPPER(pthread_kill);
   
   DECLARE_WRAPPER(pthread_mutex_lock);
   DECLARE_WRAPPER(pthread_mutex_unlock);

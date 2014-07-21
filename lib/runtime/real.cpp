@@ -15,12 +15,17 @@ namespace real {
 
   DEFINE_WRAPPER(sigaction);
   DEFINE_WRAPPER(signal);
+  DEFINE_WRAPPER(kill);
   DEFINE_WRAPPER(sigprocmask);
+  DEFINE_WRAPPER(sigwait);
+  DEFINE_WRAPPER(sigwaitinfo);
+  DEFINE_WRAPPER(sigtimedwait);
 
   DEFINE_WRAPPER(pthread_create);
   DEFINE_WRAPPER(pthread_exit);
   DEFINE_WRAPPER(pthread_join);
   DEFINE_WRAPPER(pthread_sigmask);
+  DEFINE_WRAPPER(pthread_kill);
   
   DEFINE_WRAPPER(pthread_mutex_lock);
   DEFINE_WRAPPER(pthread_mutex_unlock);
@@ -43,12 +48,17 @@ namespace real {
 
     SET_WRAPPER(sigaction);
     SET_WRAPPER(signal);
+    SET_WRAPPER(kill);
     SET_WRAPPER(sigprocmask);
+    SET_WRAPPER(sigwait);
+    SET_WRAPPER(sigwaitinfo);
+    SET_WRAPPER(sigtimedwait);
 
     SET_WRAPPER(pthread_create);
     SET_WRAPPER(pthread_exit);
     SET_WRAPPER(pthread_join);
     SET_WRAPPER(pthread_sigmask);
+    SET_WRAPPER(pthread_kill);
     
     SET_WRAPPER(pthread_mutex_lock);
     SET_WRAPPER(pthread_mutex_unlock);

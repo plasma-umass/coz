@@ -115,115 +115,8 @@ extern "C" int __libc_start_main(main_fn_t main_fn, int argc, char** argv,
   return result;
 }
 
-/** Intercept pthread functions and pass them on to the profiler **/
-extern "C" {
-  int pthread_create(pthread_t* thread,
-                     const pthread_attr_t* attr,
-                     thread_fn_t fn,
-                     void* arg) {
-    return profiler::get_instance().handle_pthread_create(thread, attr, fn, arg);                   
-  }
-  
-  void pthread_exit(void* result) {
-	  profiler::get_instance().handle_pthread_exit(result);
-  }
-  
-  int pthread_join(pthread_t t, void** retval) {
-    profiler::get_instance().snapshot_delays();
-    int result = real::pthread_join(t, retval);
-    profiler::get_instance().skip_delays();
-    
-    return result;
-  }
-  
-  int pthread_mutex_lock(pthread_mutex_t* mutex) {
-    profiler::get_instance().snapshot_delays();
-    int result = real::pthread_mutex_lock(mutex);            
-    profiler::get_instance().skip_delays();
-    
-    return result;   
-  }
-  
-  int pthread_mutex_unlock(pthread_mutex_t* mutex) {
-    profiler::get_instance().catch_up();
-    return real::pthread_mutex_unlock(mutex);
-  }
-  
-  int pthread_cond_init(pthread_cond_t* cond, const pthread_condattr_t* attr) {
-    return real::pthread_cond_init(cond, attr);
-  }
-  
-  int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
-    profiler::get_instance().snapshot_delays();
-    int result = real::pthread_cond_wait(cond, mutex);            
-    profiler::get_instance().skip_delays();
-    
-    return result;  
-  }
-  
-  int pthread_cond_timedwait(pthread_cond_t* cond,
-                             pthread_mutex_t* mutex,
-                             const struct timespec* time) {
-                               profiler::get_instance().snapshot_delays();
-    int result = real::pthread_cond_timedwait(cond, mutex, time);
-    if(result == 0) {
-      profiler::get_instance().skip_delays();
-    }
-    
-    return result;
-  }
-  
-  int pthread_cond_signal(pthread_cond_t* cond) {
-    profiler::get_instance().catch_up();
-    return real::pthread_cond_signal(cond);
-  }
-  
-  int pthread_cond_broadcast(pthread_cond_t* cond) {
-    profiler::get_instance().catch_up();
-    return real::pthread_cond_broadcast(cond);
-  }
-  
-  int pthread_cond_destroy(pthread_cond_t* cond) {
-    return real::pthread_cond_destroy(cond);
-  }
-}
-
-/**
- * Intercept calls to exit() to ensure shutdown() is run first
- */
-extern "C" void exit(int status) {
-  profiler::get_instance().shutdown();
-  real::exit(status);
-}
-
-/**
- * Intercept calls to _exit() to ensure shutdown() is run first
- */
-extern "C" void _exit(int status) {
-  profiler::get_instance().shutdown();
-	real::_exit(status);
-}
-
-/**
- * Intercept calls to _Exit() to ensure shutdown() is run first
- */
-extern "C" void _Exit(int status) {
-  profiler::get_instance().shutdown();
-  real::_Exit(status);
-}
-
-/**
- * Prevent profiled applications from registering a handler for the profiler's sampling signal 
- */
-extern "C" sighandler_t signal(int signum, sighandler_t handler) {
-  if(signum == SampleSignal || signum == SIGSEGV || signum == SIGABRT) {
-    return NULL;
-  } else {
-    return real::signal(signum, handler);
-  }
-}
-
-void clean_mask(sigset_t* set) {
+/// Remove causal's required signals from a signal mask
+void remove_causal_signals(sigset_t* set) {
   if(sigismember(set, SampleSignal)) {
     sigdelset(set, SampleSignal);
   }
@@ -235,48 +128,255 @@ void clean_mask(sigset_t* set) {
   }
 }
 
-/**
- * Prevent profiled applications from registering a handler for the profiler's sampling signal
- */
-extern "C" int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact) {
-  if(signum == SampleSignal || signum == SIGSEGV || signum == SIGABRT) {
-    return 0;
-  } else if(act != NULL) {
-    struct sigaction my_act = *act;
-    clean_mask(&my_act.sa_mask);
-    return real::sigaction(signum, &my_act, oldact);
-  } else {
-    return real::sigaction(signum, act, oldact);
-  }
+/// Check if a signal is required by causal
+bool is_causal_signal(int signum) {
+  return signum == SampleSignal || signum == SIGSEGV || signum == SIGABRT;
 }
 
-/**
- * Intercept calls to sigprocmask to ensure the sampling signal is left unmasked
- */
-extern "C" int sigprocmask(int how, const sigset_t* set, sigset_t* oldset) {
-  if(how == SIG_BLOCK || how == SIG_SETMASK) {
-    if(set != NULL) {
-      sigset_t myset = *set;
-      clean_mask(&myset);
-      return real::sigprocmask(how, &myset, oldset);
-    }
+extern "C" {
+  /// Pass pthread_create calls to causal so child threads can inherit the parent's delay count
+  int pthread_create(pthread_t* thread,
+                     const pthread_attr_t* attr,
+                     thread_fn_t fn,
+                     void* arg) {
+    return profiler::get_instance().handle_pthread_create(thread, attr, fn, arg);                   
   }
   
-  return real::sigprocmask(how, set, oldset);
-}
+  /// Catch up on delays before exiting, possibly unblocking a thread joining this one
+  void pthread_exit(void* result) {
+    profiler::get_instance().catch_up();
+	  profiler::get_instance().handle_pthread_exit(result);
+  }
+  
+  /// Skip any delays added while waiting to join a thread
+  int pthread_join(pthread_t t, void** retval) {
+    profiler::get_instance().snapshot_delays();
+    int result = real::pthread_join(t, retval);
+    profiler::get_instance().skip_delays();
+    
+    return result;
+  }
+  
+  /// Skip any global delays added while blocked on a mutex
+  int pthread_mutex_lock(pthread_mutex_t* mutex) {
+    profiler::get_instance().snapshot_delays();
+    int result = real::pthread_mutex_lock(mutex);            
+    profiler::get_instance().skip_delays();
+    
+    return result;   
+  }
+  
+  /// Catch up on delays before unblocking any threads waiting on a mutex
+  int pthread_mutex_unlock(pthread_mutex_t* mutex) {
+    profiler::get_instance().catch_up();
+    return real::pthread_mutex_unlock(mutex);
+  }
+  
+  /// Pass condvar init calls to RTLD_NEXT (default call appears to target a different library?)
+  int pthread_cond_init(pthread_cond_t* cond, const pthread_condattr_t* attr) {
+    return real::pthread_cond_init(cond, attr);
+  }
+  
+  /// Skip any delays added while waiting on a condition variable
+  int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
+    profiler::get_instance().snapshot_delays();
+    int result = real::pthread_cond_wait(cond, mutex);            
+    profiler::get_instance().skip_delays();
+    
+    return result;  
+  }
+  
+  /**
+   * Wait on a condvar for a fixed timeout. If the wait does *not* time out, skip any global
+   * delays added during the waiting period.
+   */
+  int pthread_cond_timedwait(pthread_cond_t* cond,
+                             pthread_mutex_t* mutex,
+                             const struct timespec* time) {
+    profiler::get_instance().snapshot_delays();
+    int result = real::pthread_cond_timedwait(cond, mutex, time);
+    if(result == 0) {
+      // Skip delays only if the wait didn't time out
+      profiler::get_instance().skip_delays();
+    }
+    
+    return result;
+  }
+  
+  /// Catchup on delays before waking a thread waiting on a condition variable
+  int pthread_cond_signal(pthread_cond_t* cond) {
+    profiler::get_instance().catch_up();
+    return real::pthread_cond_signal(cond);
+  }
+  
+  /// Catch up on delays before waking any threads waiting on a condition variable
+  int pthread_cond_broadcast(pthread_cond_t* cond) {
+    profiler::get_instance().catch_up();
+    return real::pthread_cond_broadcast(cond);
+  }
+  
+  /// Pass condvar destroy calls to RTLD_NEXT (default call appears to target a different library?)
+  int pthread_cond_destroy(pthread_cond_t* cond) {
+    return real::pthread_cond_destroy(cond);
+  }
 
-/**
- * Intercept calls to pthread_sigmask to ensure the pause signal is unmasked
- */
-extern "C" int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset) {
-  if(how == SIG_BLOCK || how == SIG_SETMASK) {
-    if(set != NULL) {
-      sigset_t myset = *set;
-      clean_mask(&myset);
+  /// Run shutdown before exiting
+  void exit(int status) {
+    profiler::get_instance().shutdown();
+    real::exit(status);
+  }
+
+  /// Run shutdown before exiting
+  void _exit(int status) {
+    profiler::get_instance().shutdown();
+  	real::_exit(status);
+  }
+
+  /// Run shutdown before exiting
+  void _Exit(int status) {
+    profiler::get_instance().shutdown();
+    real::_Exit(status);
+  }
+
+  /// Don't allow programs to set signal handlers for causal's required signals
+  sighandler_t signal(int signum, sighandler_t handler) {
+    if(is_causal_signal(signum)) {
+      return NULL;
+    } else {
+      return real::signal(signum, handler);
+    }
+  }
+
+  /// Don't allow programs to set handlers or mask signals required for causal
+  int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact) {
+    if(is_causal_signal(signum)) {
+      return 0;
+    } else if(act != NULL) {
+      struct sigaction my_act = *act;
+      remove_causal_signals(&my_act.sa_mask);
+      return real::sigaction(signum, &my_act, oldact);
+    } else {
+      return real::sigaction(signum, act, oldact);
+    }
+  }
+
+  /// Ensure causal's signals remain unmasked
+  int sigprocmask(int how, const sigset_t* set, sigset_t* oldset) {
+    if(how == SIG_BLOCK || how == SIG_SETMASK) {
+      if(set != NULL) {
+        sigset_t myset = *set;
+        remove_causal_signals(&myset);
+        return real::sigprocmask(how, &myset, oldset);
+      }
+    }
+  
+    return real::sigprocmask(how, set, oldset);
+  }
+
+  /// Ensure causal's signals remain unmasked
+  int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset) {
+    if(how == SIG_BLOCK || how == SIG_SETMASK) {
+      if(set != NULL) {
+        sigset_t myset = *set;
+        remove_causal_signals(&myset);
       
-      return real::pthread_sigmask(how, &myset, oldset);
+        return real::pthread_sigmask(how, &myset, oldset);
+      }
+    }
+  
+    return real::pthread_sigmask(how, set, oldset);
+  }
+  
+  /// Catch up on delays before sending a signal to the current process
+  int kill(pid_t pid, int sig) {
+    if(pid == getpid())
+      profiler::get_instance().catch_up();
+    return real::kill(pid, sig);
+  }
+  
+  /// Catch up on delays before sending a signal to another thread
+  int pthread_kill(pthread_t thread, int sig) {
+    // TODO: Don't allow threads to send causal's signals
+    profiler::get_instance().catch_up();
+    return real::pthread_kill(thread, sig);
+  }
+  
+  /**
+   * Ensure a thread cannot wait for causal's signals.
+   * If the waking signal is delivered from the same process, skip any global delays added
+   * while blocked.
+   */
+  int sigwait(const sigset_t* set, int* sig) {
+    sigset_t myset = *set;
+    remove_causal_signals(&myset);
+    siginfo_t info;
+    profiler::get_instance().snapshot_delays();
+    int result = real::sigwaitinfo(&myset, &info);
+    if(result == -1) {
+      // If there was an error, return the error code
+      return errno;
+    } else {
+      // If the sig pointer is not null, pass the received signal to the caller
+      if(sig) *sig = result;
+      // Skip delays if the signal was delivered from the same process
+      if(info.si_pid == getpid())
+        profiler::get_instance().skip_delays();
+      return 0;
     }
   }
   
-  return real::pthread_sigmask(how, set, oldset);
+  /**
+   * Ensure a thread cannot wait for causal's signals.
+   * If the waking signal is delivered from the same process, skip any added global delays.
+   */
+  int sigwaitinfo(const sigset_t* set, siginfo_t* info) {
+    sigset_t myset = *set;
+    siginfo_t myinfo;
+    remove_causal_signals(&myset);
+    profiler::get_instance().snapshot_delays();
+    
+    int result = real::sigwaitinfo(&myset, &myinfo);
+    
+    if(result > 0) {
+      if(info) *info = myinfo;
+      if(myinfo.si_pid == getpid())
+        profiler::get_instance().skip_delays();
+    }
+    
+    return result;
+  }
+  
+  /**
+   * Ensure a thread cannot wait for causal's signals.
+   * If the waking signal is delivered from the same process, skip any global delays.
+   */
+  int sigtimedwait(const sigset_t* set, siginfo_t* info, const struct timespec* timeout) {
+    sigset_t myset = *set;
+    siginfo_t myinfo;
+    remove_causal_signals(&myset);
+    profiler::get_instance().snapshot_delays();
+    
+    int result = real::sigtimedwait(&myset, &myinfo, timeout);
+    
+    if(result > 0) {
+      if(info) *info = myinfo;
+      if(myinfo.si_pid == getpid())
+        profiler::get_instance().skip_delays();
+    }
+    
+    return result;
+  }
+  
+  /**
+   * Set the process signal mask, suspend, then wake and restore the signal mask.
+   * If the waking signal is delivered from within the process, skip any added global delays
+   */
+  int sigsuspend(const sigset_t* set) {
+    sigset_t oldset;
+    int sig;
+    real::sigprocmask(SIG_SETMASK, set, &oldset);
+    int rc = sigwait(set, &sig);
+    real::sigprocmask(SIG_SETMASK, &oldset, nullptr);
+    return rc;
+  }
 }
