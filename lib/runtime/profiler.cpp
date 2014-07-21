@@ -23,6 +23,7 @@
 #include "perf.h"
 #include "spinlock.h"
 #include "support.h"
+#include "timer.h"
 #include "util.h"
 
 using namespace causal_support;
@@ -121,7 +122,7 @@ void* profiler::start_thread(void* p) {
   
   // Set up thread state. Be sure to release the state lock before running the real thread function
   {
-    auto state = profiler::get_thread_state(siglock::thread_context);
+    auto state = thread_state::get(siglock::thread_context);
     REQUIRE(state) << "Failed to acquire exclusive access to thread state on thread startup";
   
     // Copy over the delay count and excess delay time from the parent thread
@@ -153,7 +154,7 @@ int profiler::handle_pthread_create(pthread_t* thread,
   
   // Get exclusive access to the thread-local state and set up the wrapped thread argument
   {
-    auto state = profiler::get_thread_state(siglock::thread_context);
+    auto state = thread_state::get(siglock::thread_context);
     REQUIRE(state) << "Unable to acquire exclusive access to thread state in pthread_create";
   
     // Allocate a struct to pass as an argument to the new thread
@@ -172,13 +173,13 @@ void profiler::handle_pthread_exit(void* result) {
 }
 
 void profiler::snapshot_delays() {
-  auto state = profiler::get_thread_state(siglock::thread_context);
+  auto state = thread_state::get(siglock::thread_context);
   REQUIRE(state) << "Unable to acquire exclusive access to thread state in snapshot_delays()";
   state->snapshot = _global_delays.load();
 }
 
 void profiler::skip_delays() {
-  auto state = profiler::get_thread_state(siglock::thread_context);
+  auto state = thread_state::get(siglock::thread_context);
   REQUIRE(state) << "Unable to acquire exclusive access to thread state in skip_delays()";
   
   size_t current_global_delays = _global_delays.load();
@@ -189,7 +190,7 @@ void profiler::skip_delays() {
 }
 
 void profiler::catch_up() {
-  auto state = profiler::get_thread_state(siglock::thread_context);
+  auto state = thread_state::get(siglock::thread_context);
   REQUIRE(state) << "Unable to acquire exclusive access to thread state in catch_up()";
   
   // Catch up on delays before unblocking any threads
@@ -204,7 +205,7 @@ void profiler::catch_up() {
 }
 
 void profiler::begin_sampling() {
-  auto state = profiler::get_thread_state(siglock::thread_context);
+  auto state = thread_state::get(siglock::thread_context);
   REQUIRE(state) << "Unable to acquire exclusive access to thread state in begin_sampling()";
   
   // Set the perf_event sampler configuration
@@ -221,13 +222,13 @@ void profiler::begin_sampling() {
   
   // Create this thread's perf_event sampler and start sampling
   state->sampler = perf_event(pe);
-  //state->sampler.set_ready_signal(SampleSignal);
+  state->process_timer = timer(SampleSignal);
   state->process_timer.start_interval(SamplePeriod * SampleWakeupCount);
   state->sampler.start();
 }
 
 void profiler::end_sampling() {
-  auto state = profiler::get_thread_state(siglock::thread_context);
+  auto state = thread_state::get(siglock::thread_context);
   REQUIRE(state) << "Unable to acquire exclusive access to thread state in end_sampling()";
   
   process_samples(state);
@@ -352,7 +353,7 @@ void profiler::add_delays(thread_state::ref& state) {
 }
 
 void profiler::samples_ready(int signum, siginfo_t* info, void* p) {
-  auto state = profiler::get_thread_state(siglock::signal_context);
+  auto state = thread_state::get(siglock::signal_context);
   if(state) {
     // Process all available samples
     profiler::get_instance().process_samples(state);

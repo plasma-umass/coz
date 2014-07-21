@@ -8,6 +8,8 @@
 
 class timer {
 public:
+  timer() : _initialized(false) {}
+  
   timer(int sig) {
     struct sigevent ev = {
       .sigev_notify = SIGEV_THREAD_ID,
@@ -19,13 +21,31 @@ public:
     
     REQUIRE(timer_create(CLOCK_THREAD_CPUTIME_ID, &ev, &_timer) == 0)
         << "Failed to create timer!";
+    
+    _initialized = true;
+  }
+  
+  timer(timer&& other) {
+    _timer = other._timer;
+    _initialized = other._initialized;
+    other._initialized = false;
   }
   
   ~timer() {
-    REQUIRE(timer_delete(_timer) == 0) << "Failed to delete tiemr!";
+    if(_initialized) {
+      REQUIRE(timer_delete(_timer) == 0) << "Failed to delete timer!";
+    }
+  }
+  
+  void operator=(timer&& other) {
+    _timer = other._timer;
+    _initialized = other._initialized;
+    other._initialized = false;
   }
   
   void start_interval(size_t time_ns) {
+    ASSERT(_initialized) << "Can't start an uninitialized timer";
+    
     long ns = time_ns % 1000000000;
     time_t s = (time_ns - ns) / 1000000000;
     
@@ -41,9 +61,13 @@ public:
     };
     
     REQUIRE(timer_settime(_timer, 0, &ts, NULL) == 0) << "Failed to start interval timer";
+    
+    _initialized = true;
   }
   
   void start_oneshot(size_t time_ns) {
+    ASSERT(_initialized) << "Can't start an uninitialized timer";
+    
     long ns = time_ns % 1000000000;
     time_t s = (time_ns - ns) / 1000000000;
     
@@ -62,6 +86,7 @@ private:
   void operator=(const timer&) = delete;
   
   timer_t _timer;
+  bool _initialized;
 };
 
 #endif
