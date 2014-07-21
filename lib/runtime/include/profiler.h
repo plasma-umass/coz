@@ -14,6 +14,7 @@
 #include "perf.h"
 #include "siglock.h"
 #include "support.h"
+#include "timer.h"
 
 /// Type of a thread entry function
 typedef void* (*thread_fn_t)(void*);
@@ -21,7 +22,7 @@ typedef void* (*thread_fn_t)(void*);
 enum {
   SampleSignal = SIGPROF,
   SamplePeriod = 1000000, // 1ms
-  SampleWakeupCount = 50,
+  SampleWakeupCount = 10,
   MinRoundSamples = 200,
   SpeedupDivisions = 20
 };
@@ -60,8 +61,8 @@ private:
   
   class thread_state {
   public:
-    /// The number of samples processed since global delays were updated
-    size_t processed = 0;
+    thread_state() : process_timer(SampleSignal) {}
+    
     /// The count of delays (or selected line visits) in the thread
     size_t delay_count = 0;
     /// Any excess delay time added when nanosleep() returns late
@@ -70,6 +71,8 @@ private:
     size_t snapshot = 0;
     /// The sampler object for this thread
     perf_event sampler;
+    /// The timer that triggers sample processing for this thread
+    timer process_timer;
     
     class ref {
     public:

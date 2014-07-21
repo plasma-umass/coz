@@ -221,7 +221,8 @@ void profiler::begin_sampling() {
   
   // Create this thread's perf_event sampler and start sampling
   state->sampler = perf_event(pe);
-  state->sampler.set_ready_signal(SampleSignal);
+  //state->sampler.set_ready_signal(SampleSignal);
+  state->process_timer.start_interval(SamplePeriod * SampleWakeupCount);
   state->sampler.start();
 }
 
@@ -241,8 +242,6 @@ void profiler::process_samples(thread_state::ref& state) {
   
   for(perf_event::record r : state->sampler) {
     if(r.is_sample()) {
-      state->processed++;
-      
       // Find the line that contains this sample
       shared_ptr<line> l = _map.find_line(r.get_ip());
     
@@ -303,10 +302,7 @@ void profiler::process_samples(thread_state::ref& state) {
     }
   }
   
-  if(state->processed >= SampleWakeupCount) {
-    state->processed = 0;
-    add_delays(state);
-  }
+  add_delays(state);
   
   // Resume sampling
   state->sampler.start();
