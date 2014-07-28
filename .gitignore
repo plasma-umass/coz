@@ -17,6 +17,14 @@ tests/loopy/debug
 tests/loopy/release
 tests/loopy/profile.log
 
+tests/toy/toy_clean
+tests/toy/toy_gprof
+tests/toy/gprof_output
+tests/toy/perf_output
+tests/toy/perf.data
+tests/toy/gmon.out
+tests/toy/perf.data.old
+
 benchmarks/*/profile.log
 benchmarks/*/results.csv
 benchmarks/*/Rplots.pdf

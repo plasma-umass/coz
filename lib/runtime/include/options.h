@@ -18,10 +18,12 @@ namespace causal {
         boost::program_options::value<std::vector<std::string>>()
           ->default_value(std::vector<std::string>(), ""),
         "profile libraries with matching names")
-      ("fixed,f", 
-        boost::program_options::value<std::string>()
-          ->default_value(""),
+      ("fixed-line,l", 
+        boost::program_options::value<std::string>()->default_value(""),
         "profile with a fixed source line as the optimization candidate (<file>:<line>)")
+      ("fixed-speedup,s",
+        boost::program_options::value<int>()->default_value(-1),
+        "profile with a fixed speedup percent (0-100)")
       ("progress,p", 
         boost::program_options::value<std::vector<std::string>>()
           ->default_value(std::vector<std::string>(), ""),

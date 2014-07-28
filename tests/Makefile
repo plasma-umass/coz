@@ -1,5 +1,5 @@
 ROOT = ..
-DIRS = loopy
+DIRS = loopy toy
 RECURSIVE_TARGETS = debug test
 
 include $(ROOT)/common.mk

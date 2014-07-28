@@ -31,7 +31,8 @@ public:
   void register_counter(Counter* c);
   void startup(const std::string& output_filename,
                const std::vector<std::string>& source_progress_names,
-               const std::string& fixed_line_name);
+               const std::string& fixed_line_name,
+               int fixed_speedup);
   void shutdown();
   
   int handle_pthread_create(pthread_t*, const pthread_attr_t*, thread_fn_t, void*);
@@ -84,6 +85,9 @@ private:
   /// If specified, the fixed line that should be "sped up" for the whole execution
   std::shared_ptr<causal_support::line> _fixed_line;
   
+  /// If specified, selected lines will always run with the following delay size
+  size_t _fixed_delay_size = -1;
+  
   /// Flag is set when shutdown has been run
   std::atomic_flag _shutdown_run = ATOMIC_FLAG_INIT;
   
@@ -98,12 +102,6 @@ private:
   
   /// The number of samples collected
   std::atomic<size_t> _round_samples = ATOMIC_VAR_INIT(0);
-  
-  /**
-   * The currently selected line for "speedup". This should never actually be read.
-   * Only exists to ensure keep an accurate reference count. Use _selected_line instead.
-   */
-  std::shared_ptr<causal_support::line> _sentinel_selected_line;
   
   /**
    * The currently selected line for "speedup". Any thread that clears this line must

@@ -89,7 +89,8 @@ int wrapped_main(int argc, char** argv, char** env) {
   // Start the profiler
   profiler::get_instance().startup(args["output"].as<string>(),
                                    args["progress"].as<vector<string>>(),
-                                   args["fixed"].as<string>());
+                                   args["fixed-line"].as<string>(),
+                                   args["fixed-speedup"].as<int>());
   
   // Run the real main function
   int result = real_main(argc - causal_argc - 1, &argv[causal_argc + 1], env);

@@ -47,7 +47,8 @@ void profiler::register_counter(Counter* c) {
  */
 void profiler::startup(const string& output_filename,
              const vector<string>& source_progress_names,
-             const string& fixed_line_name) {
+             const string& fixed_line_name,
+             int fixed_speedup) {
   
   // Set up the sampling signal handler
   struct sigaction sa = {
@@ -68,6 +69,11 @@ void profiler::startup(const string& output_filename,
   if(fixed_line_name != "") {
     _fixed_line = _map.find_line(fixed_line_name);
     PREFER(_fixed_line) << "Fixed line \"" << fixed_line_name << "\" was not found.";
+  }
+  
+  // If the speedup amount is in bounds, set a fixed delay size
+  if(fixed_speedup >= 0 && fixed_speedup <= 100) {
+    _fixed_delay_size = SamplePeriod * fixed_speedup / 100;
   }
 
   // Create the profiler output object
@@ -251,20 +257,30 @@ void profiler::process_samples(thread_state::ref& state) {
     
       // If there isn't a currently selected line, try to start a new round
       if(!current_line) {
+        // If a fixed line has been specified, use that instead
+        if(_fixed_line) {
+          l = _fixed_line;
+        }
+        
         // Is this sample in a known line?
         if(l) {
           line* expected = nullptr;
           // Try to set the selected line and start a new round
           if(_selected_line.compare_exchange_strong(expected, l.get())) {
             // The swap succeeded! Also update the sentinel to keep reference counts accurate
-            //_sentinel_selected_line = l;
             current_line = l.get();
           
             // Re-initialize all counters for the next round
             _round_samples.store(0);
             _round_start_delays.store(_global_delays.load());
             
-            _delay_size.store(_delay_dist(_generator) * SamplePeriod / SpeedupDivisions);
+            // Set the delay size to a new random value, or the fixed delay size if specified
+            if(_fixed_delay_size != -1) {
+              _delay_size.store(_fixed_delay_size);
+            } else {
+              size_t new_delay = _delay_dist(_generator) * SamplePeriod / SpeedupDivisions;
+              _delay_size.store(new_delay);
+            }
           
             // Log the start of a new speedup round
             _out->start_round(current_line);
