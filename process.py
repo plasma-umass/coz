@@ -81,6 +81,9 @@ def main(filename):
     if line.startswith(os.getcwd()):
       print_line = line[(len(os.getcwd())+1):]
     
+    if len(print_line) > 20:
+      print_line = '...'+print_line[len(print_line)-17:]
+    
     delay_sizes = speedup_rates[line].keys()
     delay_sizes.sort()
     

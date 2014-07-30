@@ -21,7 +21,7 @@ enum {
   SampleSignal = SIGPROF,
   SamplePeriod = 1000000, // 1ms
   SampleWakeupCount = 10,
-  MinRoundSamples = 200,
+  MinRoundSamples = 1000,
   SpeedupDivisions = 20
 };
 
@@ -81,6 +81,9 @@ private:
   
   /// Handle to the profiler's output
   output* _out;
+  
+  /// Record the time that profiling started
+  size_t _start_time;
   
   /// If specified, the fixed line that should be "sped up" for the whole execution
   std::shared_ptr<causal_support::line> _fixed_line;

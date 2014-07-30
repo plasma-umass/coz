@@ -92,6 +92,8 @@ void profiler::startup(const string& output_filename,
     }
   }
   
+  _start_time = get_time();
+  
   // Log the start of this execution
   _out->startup(SamplePeriod);
   
@@ -110,6 +112,16 @@ void profiler::shutdown() {
     // Log the end of this execution
     _out->shutdown();
     delete _out;
+    
+    // Check if we're in end-to-end mode
+    if(_fixed_line && _fixed_delay_size != -1) {
+      size_t runtime = get_time() - _start_time;
+      size_t delay_count = _global_delays.load();
+      size_t effective_time = runtime - delay_count * _fixed_delay_size;
+      fprintf(stderr, "%f\t%lu\n",
+        static_cast<float>(_fixed_delay_size) / SamplePeriod,
+        effective_time);
+    }
   }
 }
 
@@ -238,6 +250,7 @@ void profiler::end_sampling() {
   REQUIRE(state) << "Unable to acquire exclusive access to thread state in end_sampling()";
   
   process_samples(state);
+  add_delays(state);
   
   state->sampler.stop();
   state->sampler.close();
@@ -251,7 +264,7 @@ void profiler::process_samples(thread_state::ref& state) {
     if(r.is_sample()) {
       // Find the line that contains this sample
       shared_ptr<line> l = _map.find_line(r.get_ip());
-    
+      
       // Load the selected line
       line* current_line = _selected_line.load();
     
@@ -333,17 +346,6 @@ void profiler::add_delays(thread_state::ref& state) {
   // If this thread has more delays + visits than the global delay count, update the global count
   if(state->delay_count > global_delay_count) {
     size_t to_add = state->delay_count - global_delay_count;
-    if(to_add * delay_size > 1000000000) {
-      fprintf(stderr, "Adding %fs of delay\n"
-                      "\tdelay size is: %lu\n"
-                      "\tlocal delay count is: %lu\n"
-                      "\tglobal delay count is: %lu\n\n", 
-          (double)to_add * delay_size / 1000000000,
-          delay_size,
-          state->delay_count,
-          global_delay_count);
-      real::exit(2);
-    }
     _global_delays += (state->delay_count - global_delay_count);
     
   } else if(state->delay_count < global_delay_count) {
@@ -357,9 +359,6 @@ void profiler::add_delays(thread_state::ref& state) {
     } else {
       // Use all the local excess delay time to reduce the pause time
       time_to_wait -= state->excess_delay;
-      if(time_to_wait > 1000000000) {
-        INFO << "Waiting for " << ((double)time_to_wait / 1000000000) << "s";
-      }
       // Pause, and record any new excess delay
       state->excess_delay = wait(time_to_wait) - time_to_wait;
       // Update the delay count

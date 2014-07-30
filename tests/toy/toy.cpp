@@ -1,13 +1,16 @@
 #include <thread>
 
-volatile size_t x, y;
+  volatile size_t x;
+  char padding[128];
+  volatile size_t y;
+
 
 void a() {
-  for(x=0; x<3000000000; x++) {}
+  for(x=0; x<2000000000; x++) {}
 }
 
 void b() {
-  for(y=0; y<2990000000; y++) {}
+  for(y=0; y<1900000000; y++) {}
 }
 
 int main() {

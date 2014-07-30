@@ -72,13 +72,19 @@ int wrapped_main(int argc, char** argv, char** env) {
     // Exclude libcausal
     if(filename.find("libcausal") == string::npos) {
       // Check if the loaded file matches any of the specified patterns
+      bool matched = false;
       for(const string& pat : file_patterns) {
         if(filename.find(pat) != string::npos) {
-          INFO << "Processing file " << filename;
-          // When a match is found, tell the profiler to include the file
-          profiler::get_instance().include_file(filename, load_address);
+          matched = true;
           break;
         }
+      }
+      
+      if(matched) {
+        INFO << "Processing file " << filename;
+        profiler::get_instance().include_file(filename, load_address);
+      } else {
+        WARNING << "Omitting file " << filename;
       }
     }
   }

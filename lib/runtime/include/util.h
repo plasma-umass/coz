@@ -30,6 +30,8 @@ static size_t get_time() {
 }
 
 static inline size_t wait(size_t ns) {
+  if(ns == 0) return 0;
+  
   struct timespec ts;
   ts.tv_nsec = ns % (1000 * 1000 * 1000);
   ts.tv_sec = (ns - ts.tv_nsec) / (1000 * 1000 * 1000);
