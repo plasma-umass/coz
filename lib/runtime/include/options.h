@@ -3,8 +3,8 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <set>
 #include <string>
-#include <vector>
 #include <boost/program_options.hpp>
 
 namespace causal {
@@ -13,11 +13,10 @@ namespace causal {
     boost::program_options::options_description desc("Causal options");
     desc.add_options()
       ("help,h", "show this help message")
-      ("exclude-main,e", "do not profile the main executable")
       ("include,i", 
         boost::program_options::value<std::vector<std::string>>()
           ->default_value(std::vector<std::string>(), ""),
-        "profile libraries with matching names")
+        "evaluate optimizations to files in the specified file/directory")
       ("fixed-line,l", 
         boost::program_options::value<std::string>()->default_value(""),
         "profile with a fixed source line as the optimization candidate (<file>:<line>)")

@@ -56,45 +56,13 @@ int wrapped_main(int argc, char** argv, char** env) {
     return 1;
   }
   
-  // Get the specified file patterns
-  vector<string> file_patterns = args["include"].as<vector<string>>();
-  
-  // If the main executable should NOT be excluded, add the program name to the file patterns set
-  if(!args.count("exclude-main")) {
-    file_patterns.push_back(argv[causal_argc + 1]);
-  }
-
-  // Walk through all the loaded executable images
-  for(const auto& file : causal_support::get_loaded_files()) {
-    const string& filename = file.first;
-    uintptr_t load_address = file.second;
-    
-    // Exclude libcausal
-    if(filename.find("libcausal") == string::npos) {
-      // Check if the loaded file matches any of the specified patterns
-      bool matched = false;
-      for(const string& pat : file_patterns) {
-        if(filename.find(pat) != string::npos) {
-          matched = true;
-          break;
-        }
-      }
-      
-      if(matched) {
-        INFO << "Processing file " << filename;
-        profiler::get_instance().include_file(filename, load_address);
-      } else {
-        WARNING << "Omitting file " << filename;
-      }
-    }
-  }
-  
   // Collect all the real function pointers for interposed functions
   real::init();
   
   // Start the profiler
   profiler::get_instance().startup(args["output"].as<string>(),
                                    args["progress"].as<vector<string>>(),
+                                   args["include"].as<vector<string>>(),
                                    args["fixed-line"].as<string>(),
                                    args["fixed-speedup"].as<int>());
   

@@ -4,10 +4,12 @@
 #include <pthread.h>
 #include <cassert>
 
+#include <queue>
+
 #include <causal.h>
 
 enum {
-	Items = 100000,
+	Items = 1000000,
 	QueueSize = 10,
 	ProducerCount = 5,
 	ConsumerCount = 3
@@ -15,8 +17,7 @@ enum {
 
 int produced = 0;
 int consumed = 0;
-int queue_size;
-int queue[QueueSize];
+std::queue<int> queue;
 
 pthread_mutex_t queue_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t producer_condvar = PTHREAD_COND_INITIALIZER;
@@ -26,11 +27,10 @@ pthread_cond_t main_condvar = PTHREAD_COND_INITIALIZER;
 void* producer(void* arg) {
 	for(size_t n = 0; n < Items / ProducerCount; n++) {
 		pthread_mutex_lock(&queue_lock);
-		while(queue_size == QueueSize) {
+		while(queue.size() == QueueSize) {
 			pthread_cond_wait(&producer_condvar, &queue_lock);
 		}
-		queue[queue_size] = 123;
-		queue_size++;
+    queue.push(123);
 		produced++;
 		pthread_mutex_unlock(&queue_lock);
 		pthread_cond_signal(&consumer_condvar);
@@ -44,16 +44,16 @@ void* producer(void* arg) {
 void* consumer(void* arg) {
 	while(true) {
 		pthread_mutex_lock(&queue_lock);
-		while(queue_size == 0) {
+		while(queue.size() == 0) {
 			pthread_cond_wait(&consumer_condvar, &queue_lock);
 		}
-		queue_size--;
-		assert(queue[queue_size] == 123);
-		queue[queue_size] = 321;
+    int front = queue.front();
+    queue.pop();
+		assert(front == 123);
 		consumed++;
 		pthread_mutex_unlock(&queue_lock);
 		pthread_cond_signal(&producer_condvar);
-		//CAUSAL_PROGRESS;
+		CAUSAL_PROGRESS;
 	}
 }
 

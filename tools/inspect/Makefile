@@ -9,5 +9,9 @@ include $(ROOT)/common.mk
 
 CXXFLAGS += --std=c++11 -fPIC
 
+debug:: $(ROOT)/lib/support/debug/lib/libcausal_support.a
+
+release:: $(ROOT)/lib/support/release/lib/libcausal_support.a
+
 test: debug
-	./inspect $(ROOT)/tests/kmeans/kmeans
+	./debug/bin/inspect $(ROOT)/benchmarks/producer_consumer/debug/bin/producer_consumer

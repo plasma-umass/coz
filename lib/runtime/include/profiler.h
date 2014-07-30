@@ -27,10 +27,10 @@ enum {
 
 class profiler {
 public:
-  void include_file(const std::string& filename, uintptr_t load_address);
   void register_counter(Counter* c);
   void startup(const std::string& output_filename,
                const std::vector<std::string>& source_progress_names,
+               std::vector<std::string> scope,
                const std::string& fixed_line_name,
                int fixed_speedup);
   void shutdown();
@@ -69,6 +69,9 @@ private:
   
   /// Process all available samples and insert delays.
   void process_samples(thread_state::ref& state);
+  
+  /// Find the source line that contains a given sample, walking the callchain if necessary
+  std::shared_ptr<causal_support::line> find_containing_line(perf_event::record& sample);
   
   /// Just insert delays
   void add_delays(thread_state::ref& state);

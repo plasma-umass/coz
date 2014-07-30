@@ -9,8 +9,8 @@ CFLAGS =
 
 include $(ROOT)/common.mk
 
-debug:: $(ROOT)/debug/lib/libcausal_support.a
+debug/lib/libcausal.so:: $(ROOT)/debug/lib/libcausal_support.a
 
-release:: $(ROOT)/release/lib/libcausal_support.a
+release/lib/libcausal.so:: $(ROOT)/release/lib/libcausal_support.a
 
 CXXFLAGS += --std=c++11 -fPIC

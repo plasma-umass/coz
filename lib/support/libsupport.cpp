@@ -29,6 +29,7 @@
 using boost::is_any_of;
 using boost::split;
 
+using boost::filesystem::absolute;
 using boost::filesystem::canonical;
 using boost::filesystem::exists;
 using boost::filesystem::path;
@@ -182,7 +183,7 @@ namespace causal_support {
   
     return f;
   }
-
+  
   map<string, uintptr_t> get_loaded_files() {
     map<string, uintptr_t> result;
   
@@ -202,8 +203,135 @@ namespace causal_support {
   
     return result;
   }
+  
+  void memory_map::build(const vector<string>& scope) {
+    for(const auto& f : get_loaded_files()) {
+      INFO << "Processing " << f.first;
+      if(!process_file(f.first, f.second, scope)) {
+        INFO << "  Couldn't locate debug version of " << f.first;
+      }
+    }
+  }
+  
+  bool in_scope(string file, const vector<string>& scope) {
+    for(const string& s : scope) {
+      if(path(file).normalize().string().find(s) == 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+  
+  dwarf::value find_attribute(const dwarf::die& d, dwarf::DW_AT attr) {
+    if(!d.valid())
+      return dwarf::value();
+    
+    if(d.has(attr))
+      return d[attr];
+    
+    if(d.has(dwarf::DW_AT::abstract_origin)) {
+      const dwarf::die child = d.resolve(dwarf::DW_AT::abstract_origin).as_reference();
+      dwarf::value v = find_attribute(child, attr);
+      if(v.valid())
+        return v;
+    }
+    
+    if(d.has(dwarf::DW_AT::specification)) {
+      const dwarf::die child = d.resolve(dwarf::DW_AT::specification).as_reference();
+      dwarf::value v = find_attribute(child, attr);
+      if(v.valid())
+        return v;
+    }
+    
+    return dwarf::value();
+  }
+  
+  void memory_map::add_range(std::string filename, size_t line_no, interval range) {
+    shared_ptr<file> f = get_file(filename);
+    shared_ptr<line> l = f->get_line(line_no);
+    
+    auto iter = _ranges.find(range);
+    if(iter != _ranges.end() && iter->second != l) {
+      WARNING << "Overlapping entries for lines " 
+        << f->get_name() << ":" << l->get_line() << " and " 
+        << iter->second->get_file()->get_name() << ":" << iter->second->get_line();
+    } 
 
-  bool memory_map::process_file(const string& name, uintptr_t load_address) {
+    // Add the entry
+    _ranges.emplace(range, l);
+  }
+  
+  void memory_map::process_inlines(const dwarf::die& d,
+                                   const dwarf::line_table& table,
+                                   const vector<string>& scope,
+                                   uintptr_t load_address) {
+    
+    if(!d.valid())
+      return;
+    
+    if(d.tag == dwarf::DW_TAG::inlined_subroutine) {
+      string name;
+      dwarf::value name_val = find_attribute(d, dwarf::DW_AT::name);
+      if(name_val.valid()) {
+        name = name_val.as_string();
+      }
+      
+      string decl_file;
+      dwarf::value decl_file_val = find_attribute(d, dwarf::DW_AT::decl_file);
+      if(decl_file_val.valid()) {
+        decl_file = table.get_file(decl_file_val.as_uconstant())->path;
+      }
+      
+      size_t decl_line = 0;
+      dwarf::value decl_line_val = find_attribute(d, dwarf::DW_AT::decl_line);
+      if(decl_line_val.valid())
+        decl_line = decl_line_val.as_uconstant();
+      
+      string call_file;
+      if(d.has(dwarf::DW_AT::call_file)) {
+        call_file = table.get_file(d[dwarf::DW_AT::call_file].as_uconstant())->path;
+      }
+      
+      size_t call_line = 0;
+      if(d.has(dwarf::DW_AT::call_line)) {
+        call_line = d[dwarf::DW_AT::call_line].as_uconstant();
+      }
+      
+      // If the call location is in scope but the function is not, add an entry 
+      if(decl_file.size() > 0 && call_file.size() > 0) {
+        if(!in_scope(decl_file, scope) && in_scope(call_file, scope)) {
+          // Does this inline have separate ranges?
+          dwarf::value ranges_val = find_attribute(d, dwarf::DW_AT::ranges);
+          if(ranges_val.valid()) {
+            // Add each range
+            for(auto r : ranges_val.as_rangelist()) {
+              add_range(call_file,
+                        call_line,
+                        interval(r.low, r.high) + load_address);
+            }
+          } else {
+            // Must just be one range. Add it
+            dwarf::value low_pc_val = find_attribute(d, dwarf::DW_AT::low_pc);
+            dwarf::value high_pc_val = find_attribute(d, dwarf::DW_AT::high_pc);
+
+            if(low_pc_val.valid() && high_pc_val.valid()) {
+              add_range(call_file,
+                        call_line,
+                        interval(low_pc_val.as_address(),
+                                 high_pc_val.as_address()) + load_address);
+            }
+          }
+        }
+      }
+    }
+    
+    for(const auto& child : d) {
+      process_inlines(child, table, scope, load_address);
+    }
+  }
+
+  bool memory_map::process_file(const string& name, uintptr_t load_address,
+                                const vector<string>& scope) {
     elf::elf f = locate_debug_executable(name);
     
     // If a debug version of the file could not be located, return false
@@ -222,22 +350,10 @@ namespace causal_support {
       // Walk through the line instructions in the DWARF line table
       for(auto& line_info : unit.get_line_table()) {
         // Insert an entry if this isn't the first line command in the sequence
-        if(prev_address != 0) {
-          // Get or create the file handle for this entry
-          shared_ptr<file> f = get_file(prev_filename);
-          // Get or create the line handle for this entry
-          shared_ptr<line> l = f->get_line(prev_line);
-          // Make the memory range that holds this line
-          interval range = interval(prev_address, line_info.address) + load_address;
-          
-          auto iter = _ranges.find(range);
-          if(iter != _ranges.end() && iter->second != l) {
-            WARNING << "Overlapping entries for lines " << f->get_name() << ":" << l->get_line()
-              << " and " << iter->second->get_file()->get_name() << ":" << iter->second->get_line();
-          }
-          
-          // Add the entry
-          _ranges.emplace(range, l);
+        if(prev_address != 0 && in_scope(prev_filename, scope)) {
+          add_range(prev_filename,
+                    prev_line, 
+                    interval(prev_address, line_info.address) + load_address);
         }
       
         if(line_info.end_sequence) {
@@ -248,6 +364,8 @@ namespace causal_support {
           prev_address = line_info.address;
         }
       }
+      
+      process_inlines(unit.root(), unit.get_line_table(), scope, load_address);
     }
     
     return true;

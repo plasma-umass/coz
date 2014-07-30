@@ -8,6 +8,12 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
+
+namespace dwarf {
+  class die;
+  class line_table;
+}
 
 namespace causal_support {
   class file;
@@ -120,11 +126,8 @@ namespace causal_support {
     inline const std::map<std::string, std::shared_ptr<file>>& files() const { return _files; }
     inline const std::map<interval, std::shared_ptr<line>>& ranges() const { return _ranges; }
     
-    /**
-     * Locate a debug version of the specified file and add its line number information
-     * to the memory map.
-     */
-    bool process_file(const std::string& name, uintptr_t load_address = 0);
+    /// Build a map from addresses to source lines with the provided source file scope
+    void build(const std::vector<std::string>& scope);
     
     std::shared_ptr<line> find_line(const std::string& name);
     std::shared_ptr<line> find_line(uintptr_t addr);
@@ -141,14 +144,21 @@ namespace causal_support {
       }
     }
     
+    void add_range(std::string filename, size_t line_no, interval range);
+    
+    /// Find a debug version of provided file and add all of its in-scope lines to the map
+    bool process_file(const std::string& name, uintptr_t load_address,
+                      const std::vector<std::string>& scope);
+    
+    /// Add entries for all inlined calls
+    void process_inlines(const dwarf::die& d,
+                         const dwarf::line_table& table,
+                         const std::vector<std::string>& scope,
+                         uintptr_t load_address);
+    
     std::map<std::string, std::shared_ptr<file>> _files;
     std::map<interval, std::shared_ptr<line>> _ranges;
   };
-  
-  /**
-   * Build a map of all loaded executables and libraries in the current process
-   */
-  std::map<std::string, uintptr_t> get_loaded_files();
   
   static std::ostream& operator<<(std::ostream& os, const interval& i) {
     os << std::hex << "0x" << i.get_base() << "-0x" << i.get_limit() << std::dec;

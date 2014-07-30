@@ -2,6 +2,7 @@
 
 #include <asm/unistd.h>
 #include <execinfo.h>
+#include <limits.h>
 #include <poll.h>
 #include <pthread.h>
 
@@ -32,14 +33,9 @@ using namespace std;
 void on_error(int, siginfo_t*, void*);
 void samples_ready(int, siginfo_t*, void*);
 
-void profiler::include_file(const string& filename, uintptr_t load_address) {
-  PREFER(_map.process_file(filename, load_address))
-    << "Failed to locate debug version of " << filename;
-}
-
 void profiler::register_counter(Counter* c) {
   _out->add_counter(c);
-}
+};
   
 /**
  * Set up the profiling environment and start the main profiler thread
@@ -47,6 +43,7 @@ void profiler::register_counter(Counter* c) {
  */
 void profiler::startup(const string& output_filename,
              const vector<string>& source_progress_names,
+             vector<string> scope,
              const string& fixed_line_name,
              int fixed_speedup) {
   
@@ -64,6 +61,20 @@ void profiler::startup(const string& output_filename,
   };
   real::sigaction(SIGSEGV, &sa, nullptr);
   real::sigaction(SIGABRT, &sa, nullptr);
+  
+  // If the file scope is empty, add the current working directory
+  if(scope.size() == 0) {
+    char cwd[PATH_MAX];
+    getcwd(cwd, PATH_MAX);
+    scope.push_back(string(cwd));
+  }
+  
+  // Build the address -> source map
+  _map.build(scope);
+  
+  for(const auto& f : _map.files()) {
+    INFO << "Including source file " << f.first;
+  }
   
   // If a non-empty fixed line was provided, attempt to locate it
   if(fixed_line_name != "") {
@@ -256,6 +267,27 @@ void profiler::end_sampling() {
   state->sampler.close();
 }
 
+shared_ptr<line> profiler::find_containing_line(perf_event::record& sample) {
+  if(!sample.is_sample())
+    return shared_ptr<line>();
+  
+  // Check if the sample occurred in known code
+  shared_ptr<line> l = _map.find_line(sample.get_ip());
+  if(l)
+    return l;
+  
+  // Walk the callchain
+  for(uint64_t pc : sample.get_callchain()) {
+    l = _map.find_line(pc);
+    if(l) {
+      return l;
+    }
+  }
+  
+  // No hits. Return null
+  return shared_ptr<line>();
+}
+
 void profiler::process_samples(thread_state::ref& state) {
   // Stop sampling
   state->sampler.stop();
@@ -263,7 +295,7 @@ void profiler::process_samples(thread_state::ref& state) {
   for(perf_event::record r : state->sampler) {
     if(r.is_sample()) {
       // Find the line that contains this sample
-      shared_ptr<line> l = _map.find_line(r.get_ip());
+      shared_ptr<line> l = find_containing_line(r);
       
       // Load the selected line
       line* current_line = _selected_line.load();
