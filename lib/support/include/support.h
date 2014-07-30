@@ -1,6 +1,7 @@
 #if !defined(CAUSAL_SUPPORT_SUPPORT_H)
 #define CAUSAL_SUPPORT_SUPPORT_H
 
+#include <atomic>
 #include <cstdint>
 #include <ios>
 #include <iostream>
@@ -32,10 +33,13 @@ namespace causal_support {
     
     inline std::shared_ptr<file> get_file() const { return _file.lock(); }
     inline size_t get_line() const { return _line; }
+    inline void add_sample() { _samples++; }
+    inline size_t get_samples() const { return _samples.load(); }
    
   private:
     std::weak_ptr<file> _file;
     size_t _line;
+    std::atomic<size_t> _samples = ATOMIC_VAR_INIT(0);
   };
    
   class interval {
@@ -107,6 +111,10 @@ namespace causal_support {
         _lines.emplace(index, l);
         return l;
       }
+    }
+    
+    inline bool has_line(size_t index) {
+      return _lines.find(index) != _lines.end();
     }
     
     std::string _name;

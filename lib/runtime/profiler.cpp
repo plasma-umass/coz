@@ -72,10 +72,6 @@ void profiler::startup(const string& output_filename,
   // Build the address -> source map
   _map.build(scope);
   
-  for(const auto& f : _map.files()) {
-    INFO << "Including source file " << f.first;
-  }
-  
   // If a non-empty fixed line was provided, attempt to locate it
   if(fixed_line_name != "") {
     _fixed_line = _map.find_line(fixed_line_name);
@@ -90,14 +86,11 @@ void profiler::startup(const string& output_filename,
   // Create the profiler output object
   _out = new output(output_filename);
 
-  // Create breakpoint-based progress counters for all the lines specified via command-line
+  // Create sampling progress counters for all the lines specified via command-line
   for(const string& line_name : source_progress_names) {
     shared_ptr<line> l = _map.find_line(line_name);
     if(l) {
-      WARNING << "Found line \"" << line_name << "\" but breakpoint placement hasn't been implemented for lines.";
-      // TODO: Place breakpoint-based counter
-      // Old code was:
-      // registerCounter(new PerfCounter(ProgressCounter, b->getInterval().getBase(), name.c_str()));
+      register_counter(new sampling_counter(line_name, l));
     } else {
       WARNING << "Progress line \"" << line_name << "\" was not found.";
     }
@@ -296,6 +289,10 @@ void profiler::process_samples(thread_state::ref& state) {
     if(r.is_sample()) {
       // Find the line that contains this sample
       shared_ptr<line> l = find_containing_line(r);
+      
+      if(l) {
+        l->add_sample();
+      }
       
       // Load the selected line
       line* current_line = _selected_line.load();

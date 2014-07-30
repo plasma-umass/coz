@@ -1,11 +1,13 @@
 #if !defined(CAUSAL_RUNTIME_COUNTER_H)
 #define CAUSAL_RUNTIME_COUNTER_H
 
+#include <memory>
 #include <string>
 
 #include "causal.h"
 #include "log.h"
 #include "perf.h"
+#include "support.h"
 #include "util.h"
 
 enum CounterType {
@@ -91,6 +93,22 @@ public:
     
     return (perturbed_time - clean_time) / CalibrationCount;
   }
+};
+
+class sampling_counter : public Counter {
+public:
+  sampling_counter(std::string name, std::shared_ptr<causal_support::line> l) : 
+    Counter(ProgressCounter, name, "sampling"), _line(l) {}
+  
+  virtual ~sampling_counter() {}
+  
+  virtual size_t getCount() const {
+    fprintf(stderr, "%lu\n", _line->get_samples());
+    return _line->get_samples();
+  }
+  
+private:
+  std::shared_ptr<causal_support::line> _line;
 };
 
 class PerfCounter : public Counter {

@@ -206,9 +206,9 @@ namespace causal_support {
   
   void memory_map::build(const vector<string>& scope) {
     for(const auto& f : get_loaded_files()) {
-      INFO << "Processing " << f.first;
-      if(!process_file(f.first, f.second, scope)) {
-        INFO << "  Couldn't locate debug version of " << f.first;
+      
+      if(process_file(f.first, f.second, scope)) {
+        INFO << "Including lines from " << f.first;
       }
     }
   }
@@ -384,7 +384,16 @@ namespace causal_support {
     size_t line_no;
     stringstream(line_no_str) >> line_no;
     
-    return memory_map::get_file(filename)->get_line(line_no);
+    for(const auto& f : files()) {
+      string::size_type last_pos = f.first.rfind(filename);
+      if(last_pos != string::npos && last_pos + filename.size() == f.first.size()) {
+        if(f.second->has_line(line_no)) {
+          return f.second->get_line(line_no);
+        }
+      }
+    }
+    
+    return shared_ptr<line>();
   }
   
   shared_ptr<line> memory_map::find_line(uintptr_t addr) {

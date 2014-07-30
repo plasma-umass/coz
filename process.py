@@ -89,8 +89,8 @@ def main(filename):
     
     for delay_size in delay_sizes:
       for counter in speedup_rates[line][delay_size]:
-        if counter in baseline_rates:
-          baseline_period = avgPeriod(baseline_rates[counter])
+        if 0 in speedup_rates[line] and counter in speedup_rates[line][0]:
+          baseline_period = avgPeriod(speedup_rates[line][0][counter])
           speedup_period = avgPeriod(speedup_rates[line][delay_size][counter])
           
           line_speedup = float(delay_size) / period
