@@ -11,7 +11,9 @@ public:
   /// Any excess delay time added when nanosleep() returns late
   size_t excess_delay = 0;
   /// A snapshot of the global delay count, taken before blocking on a pthread_* function
-  size_t snapshot = 0;
+  size_t global_delay_snapshot = 0;
+  /// A snapshot of the local delay count, taken before blocking on a pthread_* function
+  size_t local_delay_snapshot = 0;
   /// The sampler object for this thread
   perf_event sampler;
   /// The timer that triggers sample processing for this thread
@@ -19,8 +21,8 @@ public:
   
   class ref {
   public:
-    ref(thread_state* s, siglock::context c, bool force = false) {
-      if(s->_l.lock(c) || force) {
+    ref(thread_state* s, siglock::context c) {
+      if(s->_l.lock(c)) {
         _s = s;
       } else {
         _s = nullptr;
@@ -63,9 +65,9 @@ public:
   * true when in error-handling mode. This makes it possible to collect a backtrace, which
   * calls pthread_mutex_lock.
   */
-  static ref get(siglock::context c, bool force = false) {
+  static ref get(siglock::context c) {
     static thread_local thread_state s;
-    return thread_state::ref(&s, c, force);
+    return thread_state::ref(&s, c);
   }
   
 private:

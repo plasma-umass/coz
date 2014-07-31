@@ -197,18 +197,19 @@ void profiler::handle_pthread_exit(void* result) {
 void profiler::snapshot_delays() {
   auto state = thread_state::get(siglock::thread_context);
   REQUIRE(state) << "Unable to acquire exclusive access to thread state in snapshot_delays()";
-  state->snapshot = _global_delays.load();
+  state->global_delay_snapshot = _global_delays.load();
+  state->local_delay_snapshot = state->delay_count;
 }
 
 void profiler::skip_delays() {
   auto state = thread_state::get(siglock::thread_context);
   REQUIRE(state) << "Unable to acquire exclusive access to thread state in skip_delays()";
   
-  size_t current_global_delays = _global_delays.load();
+  // Count the number of delays that occurred since the snapshot
+  size_t missed_delays = _global_delays.load() - state->global_delay_snapshot;
   
-  REQUIRE(current_global_delays >= state->snapshot) << "Global delay count should never decrease!";
-  
-  state->delay_count += current_global_delays - state->snapshot;
+  // Skip over the missed delays. Add to the saved local count to prevent double-counting
+  state->delay_count = state->local_delay_snapshot + missed_delays;
 }
 
 void profiler::catch_up() {
@@ -217,13 +218,6 @@ void profiler::catch_up() {
   
   // Catch up on delays before unblocking any threads
   add_delays(state);
-  
-  /*size_t global_delay_count = _global_delays.load();
-  if(state->delay_count < global_delay_count) {
-    size_t wait_time = (global_delay_count - state->delay_count) * _delay_size;
-    INFO << "Waiting for " << wait_time << "ns";
-    state->excess_delay += wait(wait_time) - wait_time;
-  }*/
 }
 
 void profiler::begin_sampling() {
