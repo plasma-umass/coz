@@ -20,7 +20,6 @@
 
 #include "counter.h"
 #include "log.h"
-#include "output.h"
 #include "perf.h"
 #include "spinlock.h"
 #include "support.h"
@@ -34,7 +33,7 @@ void on_error(int, siginfo_t*, void*);
 void samples_ready(int, siginfo_t*, void*);
 
 void profiler::register_counter(counter* c) {
-  _out->add_counter(c);
+  _counters.insert(c);
 };
   
 /**
@@ -84,7 +83,7 @@ void profiler::startup(const string& output_filename,
   }
 
   // Create the profiler output object
-  _out = new output(output_filename);
+  _output.open(output_filename, ios_base::app);
 
   // Create sampling progress counters for all the lines specified via command-line
   for(const string& line_name : source_progress_names) {
@@ -96,10 +95,9 @@ void profiler::startup(const string& output_filename,
     }
   }
   
-  _start_time = get_time();
-  
   // Log the start of this execution
-  _out->startup(SamplePeriod);
+  _output << "startup\ttime=" << get_time() << "\n";
+  _output << "info\tsample-period=" << SamplePeriod << "\n";
   
   // Begin sampling in the main thread
   begin_sampling();
@@ -114,18 +112,8 @@ void profiler::shutdown() {
     end_sampling();
     
     // Log the end of this execution
-    _out->shutdown();
-    delete _out;
-    
-    // Check if we're in end-to-end mode
-    if(_fixed_line && _fixed_delay_size != -1) {
-      size_t runtime = get_time() - _start_time;
-      size_t delay_count = _global_delays.load();
-      size_t effective_time = runtime - delay_count * _fixed_delay_size;
-      fprintf(stderr, "%f\t%lu\n",
-        static_cast<float>(_fixed_delay_size) / SamplePeriod,
-        effective_time);
-    }
+    _output << "shutdown\ttime=" << get_time() << "\n";
+    _output.close();
   }
 }
 
@@ -319,7 +307,13 @@ void profiler::process_samples(thread_state::ref& state) {
             }
           
             // Log the start of a new speedup round
-            _out->start_round(current_line);
+            _output << "start-round\t"
+                    << "line=" << l << "\t"
+                    << "time=" << get_time() << "\n";
+            
+            for(const counter* c : _counters) {
+              _output << *c;
+            }
           
           } else {
             // Another thread must have changed the selected line. Reload it and continue
@@ -344,7 +338,14 @@ void profiler::process_samples(thread_state::ref& state) {
         // Is this the final sample in the round?
         if(++_round_samples == MinRoundSamples) {
           // Log the end of the speedup round
-          _out->end_round(_global_delays.load() - _round_start_delays.load(), _delay_size.load());
+          _output << "end-round\t"
+                  << "delays=" << (_global_delays - _round_start_delays) << "\t"
+                  << "delay-size=" << _delay_size << "\t"
+                  << "time=" << get_time() << "\n";
+        
+          for(const counter* c : _counters) {
+            _output << *c;
+          }
         
           // Clear the selected line
           _selected_line.store(nullptr);

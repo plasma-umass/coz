@@ -3,14 +3,15 @@
 
 #include <atomic>
 #include <cstdint>
+#include <fstream>
 #include <memory>
 #include <random>
+#include <set>
 #include <string>
 #include <vector>
 
 #include "causal.h"
 #include "counter.h"
-#include "output.h"
 #include "support.h"
 #include "thread_state.h"
 
@@ -82,8 +83,11 @@ private:
   /// Handle an error condition signal
   static void on_error(int signum, siginfo_t* info, void* p);
   
-  /// Handle to the profiler's output
-  output* _out;
+  /// Profiler output file
+  std::ofstream _output;
+  
+  /// Set of progress point counters
+  std::set<counter*> _counters;
   
   /// Record the time that profiling started
   size_t _start_time;
@@ -109,10 +113,7 @@ private:
   /// The number of samples collected
   std::atomic<size_t> _round_samples = ATOMIC_VAR_INIT(0);
   
-  /**
-   * The currently selected line for "speedup". Any thread that clears this line must
-   * also clear the _sentinel_selected_line to decrement the reference count.
-   */
+  /// The currently selected line for "speedup"
   std::atomic<causal_support::line*> _selected_line = ATOMIC_VAR_INIT(nullptr);
   
   /// The current delay size
