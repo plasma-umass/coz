@@ -315,10 +315,26 @@ namespace causal_support {
             dwarf::value high_pc_val = find_attribute(d, dwarf::DW_AT::high_pc);
 
             if(low_pc_val.valid() && high_pc_val.valid()) {
+              uint64_t low_pc;
+              uint64_t high_pc;
+              
+              if(low_pc_val.get_type() == dwarf::value::type::address)
+                low_pc = low_pc_val.as_address();
+              else if(low_pc_val.get_type() == dwarf::value::type::uconstant)
+                low_pc = low_pc_val.as_uconstant();
+              else if(low_pc_val.get_type() == dwarf::value::type::sconstant)
+                low_pc = low_pc_val.as_sconstant();
+              
+              if(high_pc_val.get_type() == dwarf::value::type::address)
+                high_pc = high_pc_val.as_address();
+              else if(high_pc_val.get_type() == dwarf::value::type::uconstant)
+                high_pc = high_pc_val.as_uconstant();
+              else if(high_pc_val.get_type() == dwarf::value::type::sconstant)
+                high_pc = high_pc_val.as_sconstant();
+              
               add_range(call_file,
                         call_line,
-                        interval(low_pc_val.as_address(),
-                                 high_pc_val.as_address()) + load_address);
+                        interval(low_pc, high_pc) + load_address);
             }
           }
         }

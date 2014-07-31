@@ -21,7 +21,7 @@ enum {
   SampleSignal = SIGPROF,
   SamplePeriod = 1000000, // 1ms
   SampleWakeupCount = 10,
-  MinRoundSamples = 1000,
+  MinRoundSamples = 3000,
   SpeedupDivisions = 20
 };
 
