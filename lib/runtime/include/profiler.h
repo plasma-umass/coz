@@ -27,7 +27,7 @@ enum {
 
 class profiler {
 public:
-  void register_counter(Counter* c);
+  void register_counter(counter* c);
   void startup(const std::string& output_filename,
                const std::vector<std::string>& source_progress_names,
                std::vector<std::string> scope,

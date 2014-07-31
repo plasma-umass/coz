@@ -33,7 +33,7 @@ using namespace std;
 void on_error(int, siginfo_t*, void*);
 void samples_ready(int, siginfo_t*, void*);
 
-void profiler::register_counter(Counter* c) {
+void profiler::register_counter(counter* c) {
   _out->add_counter(c);
 };
   

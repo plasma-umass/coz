@@ -24,11 +24,11 @@ main_fn_t real_main;
 /**
  * Called by the application to register a progress counter
  */
-extern "C" void __causal_register_counter(CounterType kind,
+extern "C" void __causal_register_counter(counter::type kind,
                                           size_t* counter,
                                           size_t* backoff,
                                           const char* name) {
-  profiler::get_instance().register_counter(new SourceCounter(kind, counter, name));
+  profiler::get_instance().register_counter(new source_counter(kind, counter, name));
 }
 
 /**

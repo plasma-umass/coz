@@ -22,7 +22,7 @@ output::~output() {
   fclose(_f);
 }
 
-void output::add_counter(Counter* c) {
+void output::add_counter(counter* c) {
   _counters_lock.lock();
   _counters.insert(c);
   _counters_lock.unlock();
@@ -35,8 +35,8 @@ void output::startup(size_t sample_period) {
   _output_lock.lock();
   fprintf(_f, "startup\ttime=%lu\n", get_time());
   fprintf(_f, "info\tsample-period=%lu\n", sample_period);
-  //fprintf(_f, "info\tsource-counter-overhead=%lu\n", SourceCounter::calibrate());
-  fprintf(_f, "info\tperf-counter-overhead=%lu\n", PerfCounter::calibrate());
+  //fprintf(_f, "info\tsource-counter-overhead=%lu\n", Sourcecounter::calibrate());
+  fprintf(_f, "info\tperf-counter-overhead=%lu\n", perf_counter::calibrate());
   _output_lock.unlock();
 
   // Drop all counters, so we don't use any calibration counters during the real execution
@@ -56,9 +56,9 @@ void output::shutdown() {
  * Log the values for all known counters
  */
 void output::write_counters() {
-  for(Counter* c : _counters) {
+  for(counter* c : _counters) {
     fprintf(_f, "counter\tname=%s\tkind=%s\timpl=%s\tvalue=%lu\n",
-        c->getName().c_str(), c->getKindName(), c->getImplName(), c->getCount());
+        c->get_name().c_str(), c->get_kind_name(), c->get_impl_name(), c->get_count());
   }
 }
 

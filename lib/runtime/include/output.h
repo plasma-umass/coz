@@ -14,7 +14,7 @@ public:
   output(std::string filename);
   ~output();
   
-  void add_counter(Counter* c);
+  void add_counter(counter* c);
   
   void startup(size_t sample_period);
   void shutdown();
@@ -29,7 +29,7 @@ private:
   void operator=(const output&) = delete;
   
   FILE* _f = nullptr;
-  std::unordered_set<Counter*> _counters;
+  std::unordered_set<counter*> _counters;
   spinlock _counters_lock;
   spinlock _output_lock;
 };

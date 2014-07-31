@@ -10,67 +10,67 @@
 #include "support.h"
 #include "util.h"
 
-enum CounterType {
-  ProgressCounter = PROGRESS_COUNTER,
-  BeginCounter = BEGIN_COUNTER,
-  EndCounter = END_COUNTER
-};
-
-class Counter {
+class counter {
 public:
-  Counter(CounterType kind, std::string name, const char* impl_name) : 
+  enum class type {
+    progress = PROGRESS_COUNTER,
+    begin = BEGIN_COUNTER,
+    end = END_COUNTER
+  };
+  
+  counter(type kind, std::string name, const char* impl_name) : 
       _kind(kind), _name(name), _impl_name(impl_name) {
-    if(_kind == ProgressCounter) {
+    if(_kind == type::progress) {
       _kind_name = "progress";
-    } else if(_kind == BeginCounter) {
+    } else if(_kind == type::begin) {
       _kind_name = "begin";
-    } else if(_kind == EndCounter) {
+    } else if(_kind == type::end) {
       _kind_name = "end";
     } else {
       _kind_name = "unknown";
     }
   }
   
-  virtual ~Counter() {}
+  virtual ~counter() {}
   
-  CounterType getKind() const {
+  type get_kind() const {
     return _kind;
   }
   
-  const char* getKindName() const {
+  const char* get_kind_name() const {
     return _kind_name;
   }
   
-  const char* getImplName() const {
+  const char* get_impl_name() const {
     return _impl_name;
   }
   
-  const std::string& getName() const {
+  const std::string& get_name() const {
     return _name;
   }
   
-  virtual size_t getCount() const = 0;
+  virtual size_t get_count() const = 0;
   
 private:
-  CounterType _kind;
+  counter::type _kind;
   std::string _name;
   const char* _kind_name;
   const char* _impl_name;
 };
 
-class SourceCounter : public Counter {
+class source_counter : public counter {
 public:
-  SourceCounter(CounterType kind, size_t* counter, std::string name) : 
-      Counter(kind, name, "source"), _counter(counter) {}
+  source_counter(counter::type kind, size_t* var, std::string name) : 
+      counter(kind, name, "source"), _var(var) {}
   
-  virtual ~SourceCounter() {}
+  virtual ~source_counter() {}
   
-  virtual size_t getCount() const {
-    return __atomic_load_n(_counter, __ATOMIC_SEQ_CST);
+  virtual size_t get_count() const {
+    return __atomic_load_n(_var, __ATOMIC_SEQ_CST);
   }
   
 private:
-  size_t* _counter;
+  size_t* _var;
   
   enum { CalibrationCount = 1000 };
   
@@ -95,14 +95,14 @@ public:
   }
 };
 
-class sampling_counter : public Counter {
+class sampling_counter : public counter {
 public:
   sampling_counter(std::string name, std::shared_ptr<causal_support::line> l) : 
-    Counter(ProgressCounter, name, "sampling"), _line(l) {}
+    counter(counter::type::progress, name, "sampling"), _line(l) {}
   
   virtual ~sampling_counter() {}
   
-  virtual size_t getCount() const {
+  virtual size_t get_count() const {
     fprintf(stderr, "%lu\n", _line->get_samples());
     return _line->get_samples();
   }
@@ -111,10 +111,10 @@ private:
   std::shared_ptr<causal_support::line> _line;
 };
 
-class PerfCounter : public Counter {
+class perf_counter : public counter {
 public:
-  PerfCounter(CounterType kind, uintptr_t address, std::string name) :
-      Counter(kind, name, "perf"),
+  perf_counter(counter::type kind, uintptr_t address, std::string name) :
+      counter(kind, name, "perf"),
       _pe({
         .type = PERF_TYPE_BREAKPOINT,
         .bp_type = HW_BREAKPOINT_X,
@@ -127,11 +127,11 @@ public:
     _event.start();
   }
   
-  virtual ~PerfCounter() {
+  virtual ~perf_counter() {
     _event.stop();
   }
   
-  virtual size_t getCount() const {
+  virtual size_t get_count() const {
     return _event.get_count();
   }
   
@@ -152,7 +152,7 @@ public:
     size_t clean_time = get_time() - clean_start_time;
     
     // Create a breakpoint-based trip counter
-    PerfCounter ctr(ProgressCounter, (uintptr_t)looper, "calibration");
+    perf_counter ctr(counter::type::progress, (uintptr_t)looper, "calibration");
     
     // Time the same execution with instrumentation in place
     size_t perturbed_start_time = get_time();
@@ -160,7 +160,7 @@ public:
     size_t perturbed_time = get_time() - perturbed_start_time;
   
     // Ensure that trips were counted properly
-    REQUIRE(ctr.getCount() == CalibrationCount)
+    REQUIRE(ctr.get_count() == CalibrationCount)
       << "Something bad happened in breakpoint calibration. Maybe the test method was optimized away?";
     
     // Return the computed overhead
