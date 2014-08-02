@@ -1,0 +1,180 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import math
+
+class rate:
+  def __init__(self, delta=0, time=0):
+    self.delta = delta
+    self.time = time
+  
+  def period(self):
+    return float(self.time) / float(self.delta)
+  
+  def rate(self):
+    return float(self.delta) / float(self.time)
+  
+  def __add__(self, other):
+    return rate(self.delta + other.delta, self.time + other.time)
+  
+  def __iadd__(self, other):
+    self.delta += other.delta
+    self.time += other.time
+    return self
+  
+  def __div__(self, other):
+    return 1 - self.period() * other.rate()
+
+def main(filename):
+  runs = 0
+  period = 0
+  counter_values = {}
+  # Map from line name -> line speedup -> counter name -> rate
+  speedup_rates = {}
+  
+  f = open(filename)
+  lines = [line for line in f]
+  f.close()
+  
+  try:
+    i = 0
+    while i < len(lines):
+      (command, data) = getCommand(lines[i])
+      i += 1
+    
+      if command == 'startup':
+        counter_values = {}
+      
+      elif command == 'shutdown':
+        runs += 1
+      
+      elif command == 'info':
+        if 'sample-period' in data:
+          period = int(data['sample-period'])
+        
+      elif command == 'start-round':
+        round_start_time = int(data['time'])
+        speedup_line = data['line']
+        (i, counter_start_values) = readCounters(lines, i)
+      
+      elif command == 'end-round':
+        round_time = int(data['time']) - round_start_time
+        delay_count = int(data['delays'])
+        delay_size = int(data['delay-size'])
+        speedup = float(delay_size) / float(period)
+        
+        # Adjust to effective time
+        round_time -= delay_count * delay_size
+      
+        # Add the line to the map if necessary
+        if speedup_line not in speedup_rates:
+          speedup_rates[speedup_line] = {}
+      
+        # Add the speedup to the map if necessary
+        if speedup not in speedup_rates[speedup_line]:
+          speedup_rates[speedup_line][speedup] = {}
+      
+        # Read the counter values
+        (i, counter_end_values) = readCounters(lines, i)
+      
+        # Add each counter to the map
+        for counter in counter_start_values:
+          delta = counter_end_values[counter] - counter_start_values[counter]
+          
+          if counter not in speedup_rates[speedup_line][speedup]:
+            speedup_rates[speedup_line][speedup][counter] = rate(delta, round_time)
+          else:
+            speedup_rates[speedup_line][speedup][counter] += rate(delta, round_time)
+        
+        # If no delays were added, use this as a baseline as well (helpful for smoothing out infrequently called lines)
+        if delay_count == 0:
+          for counter in counter_start_values:
+            delta = counter_end_values[counter] - counter_start_values[counter]
+            
+            if 0.0 not in speedup_rates[speedup_line]:
+              speedup_rates[speedup_line][0.0] = {}
+            
+            if counter not in speedup_rates[speedup_line][0.0]:
+              speedup_rates[speedup_line][0.0][counter] = rate(delta, round_time)
+            else:
+              speedup_rates[speedup_line][0.0][counter] += rate(delta, round_time)
+  
+  except:
+    pass
+  
+  # Build a map of baseline rates for each counter
+  baseline_rates = {}
+  
+  for speedup_line in speedup_rates:
+    if 0 in speedup_rates[speedup_line]:
+      for counter in speedup_rates[speedup_line][0.0]:
+        if counter not in baseline_rates:
+          baseline_rates[counter] = speedup_rates[speedup_line][0.0][counter]
+        else:
+          baseline_rates[counter] += speedup_rates[speedup_line][0.0][counter]
+  
+  # Write tab-separated output
+  print "line\tline_speedup\tcounter\tcounter_speedup"
+  
+  for line in speedup_rates:
+    # Try to shorten the line
+    print_line = line
+    try:
+      (s, print_line) = line.rsplit('/', 1)
+    except:
+      pass
+    
+    speedups = speedup_rates[line].keys()
+    speedups.sort()
+    
+    for speedup in speedups:
+      for counter in speedup_rates[line][speedup]:
+        if counter in baseline_rates and 0.0 in speedup_rates[line]:
+          baseline_rate = baseline_rates[counter]
+          speedup_rate = speedup_rates[line][speedup][counter]
+          zero_speedup = speedup_rates[line][0.0][counter] / baseline_rate
+          
+          # Calculate the speedup in the counter rate
+          counter_speedup = speedup_rate / baseline_rate
+          # Adjust the counter speedup to account for per-line overhead
+          counter_speedup -= zero_speedup
+          
+          print "\t".join([print_line, str(speedup), counter, str(counter_speedup)])
+
+def totalDelta(rates):
+  total_delta = 0
+  for (delta, time) in rates:
+    total_delta += delta
+  return float(total_delta)
+
+def totalTime(rates):
+  total_time = 0
+  for (delta, time) in rates:
+    total_time += time
+  return float(total_time)
+
+def avgPeriod(rates):
+  return totalTime(rates) / totalDelta(rates)
+
+def readCounters(lines, i):
+  counter_values = {}
+  (command, data) = getCommand(lines[i])
+  while command == 'counter':
+    i += 1
+    counter_values[data['name']] = int(data['value'])
+    (command, data) = getCommand(lines[i])
+  return (i, counter_values)
+
+def getCommand(line):
+  (command, data_str) = line.strip().split("\t", 1)
+  return (command, getData(data_str))
+
+def getData(data_str):
+  obj = {}
+  for element in data_str.split("\t"):
+    (key, value) = element.split("=", 1)
+    obj[key] = value
+  return obj
+
+main(sys.argv[1])

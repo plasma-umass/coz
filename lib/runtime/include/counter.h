@@ -111,6 +111,25 @@ private:
   std::shared_ptr<causal_support::line> _line;
 };
 
+class end_to_end_counter : public counter {
+public:
+  end_to_end_counter() : counter(counter::type::progress, "end-to-end", "end-to-end"),
+                         _count(0) {}
+  
+  virtual ~end_to_end_counter() {}
+  
+  virtual size_t get_count() const {
+    return _count;
+  }
+  
+  void done() {
+    _count = 1;
+  }
+  
+private:
+  size_t _count;
+};
+
 class perf_counter : public counter {
 public:
   perf_counter(counter::type kind, uintptr_t address, std::string name) :

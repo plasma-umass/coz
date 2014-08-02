@@ -7,6 +7,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <new>
 #include <string>
 #include <utility>
 #include <vector>
@@ -127,10 +128,6 @@ namespace causal_support {
    */
   class memory_map {
   public:
-    memory_map() = default;
-    memory_map(const memory_map&) = default;
-    memory_map& operator=(const memory_map&) = default;
-    
     inline const std::map<std::string, std::shared_ptr<file>>& files() const { return _files; }
     inline const std::map<interval, std::shared_ptr<line>>& ranges() const { return _ranges; }
     
@@ -140,7 +137,14 @@ namespace causal_support {
     std::shared_ptr<line> find_line(const std::string& name);
     std::shared_ptr<line> find_line(uintptr_t addr);
     
+    static memory_map& get_instance();
+    
   private:
+    memory_map() : _files(std::map<std::string, std::shared_ptr<file>>()),
+                   _ranges(std::map<interval, std::shared_ptr<line>>()) {}
+    memory_map(const memory_map&) = delete;
+    memory_map& operator=(const memory_map&) = delete;
+    
     inline std::shared_ptr<file> get_file(const std::string& filename) {
       auto iter = _files.find(filename);
       if(iter != _files.end()) {

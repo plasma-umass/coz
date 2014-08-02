@@ -18,14 +18,9 @@ tests/*/Rplots.pdf
 tools/*/debug
 tools/*/release
 
+tests/toy/results
 tests/toy/toy_clean
 tests/toy/toy_gprof
-tests/toy/gprof_output
-tests/toy/perf_output
-tests/toy/perf.data
-tests/toy/gmon.out
-tests/toy/perf.data.old
-tests/toy/*.csv
 
 benchmarks/histogram/histogram_datafiles
 benchmarks/linear_regression/linear_regression_datafiles

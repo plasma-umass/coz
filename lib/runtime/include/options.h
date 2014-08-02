@@ -23,6 +23,7 @@ namespace causal {
       ("fixed-speedup,s",
         boost::program_options::value<int>()->default_value(-1),
         "profile with a fixed speedup percent (0-100)")
+      ("end-to-end,e", "run a single performance experiment for the whole program execution")
       ("progress,p", 
         boost::program_options::value<std::vector<std::string>>()
           ->default_value(std::vector<std::string>(), ""),

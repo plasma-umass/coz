@@ -261,8 +261,9 @@ wrapped_array<uint64_t> perf_event::record::get_callchain() const {
   uint64_t size = *base;
   // Advance the callchain array pointer past the size
   // The first entry in the callchain seems to be invalid (always 0xfffffffffffffe00)
-  base += 2;
-  size -= 1;
+  // The next entry is always the IP where the sample occurred so skip that too
+  base += 3;
+  size -= 2;
   return wrapped_array<uint64_t>(base, size);
 }
 

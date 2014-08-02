@@ -6,12 +6,14 @@
 #include <fstream>
 #include <memory>
 #include <random>
-#include <set>
 #include <string>
 #include <vector>
 
+#include <boost/program_options.hpp>
+
 #include "causal.h"
 #include "counter.h"
+#include "spinlock.h"
 #include "support.h"
 #include "thread_state.h"
 
@@ -22,17 +24,29 @@ enum {
   SampleSignal = SIGPROF,
   SamplePeriod = 1000000, // 1ms
   SampleWakeupCount = 10,
-  MinRoundSamples = 3000,
-  SpeedupDivisions = 20
+  SpeedupDivisions = 20,
+  
+  // Minimum number of samples before the experiment can end
+  ExperimentMinSamples = 100,
+  
+  // Minimum change in every performance counter before the experiment can end
+  ExperimentMinCounterChange = 5,
+  
+  // Minimum number of delays to insert before the experiment can end
+  ExperimentMinDelays = 5,
+  
+  // The experiment will give up on the minimum delay count after this number of samples
+  ExperimentAbortThreshold = 10000,
+  
+  // Reserve space for counters at startup
+  InitCountersSize = 64
 };
 
 class profiler {
 public:
   void register_counter(counter* c);
   void startup(const std::string& output_filename,
-               const std::vector<std::string>& source_progress_names,
-               std::vector<std::string> scope,
-               const std::string& fixed_line_name,
+               std::shared_ptr<causal_support::line> fixed_line,
                int fixed_speedup);
   void shutdown();
   
@@ -55,7 +69,11 @@ public:
   }
 
 private:
-  profiler() : _generator(get_time()), _delay_dist(0, SpeedupDivisions) {}
+  profiler() : _generator(get_time()),
+               _delay_dist(0, SpeedupDivisions) {
+    _counters.reserve(InitCountersSize);
+  }
+  
   profiler(const profiler&) = delete;
   void operator=(const profiler&) = delete;
   
@@ -77,6 +95,21 @@ private:
   /// Just insert delays
   void add_delays(thread_state::ref& state);
   
+  /// Is the program ready to start an experiment?
+  bool experiment_ready();
+  
+  /// Is there currently an experiment running?
+  bool experiment_running();
+  
+  /// Is the current experiment ready to end?
+  bool experiment_finished();
+  
+  /// Start a new performance experiment
+  void start_experiment(std::shared_ptr<causal_support::line> line, size_t delay_size);
+  
+  /// End the current performance experiment
+  void end_experiment();
+  
   /// Signal handler called when samples are ready to be processed
   static void samples_ready(int signum, siginfo_t* info, void* p);
   
@@ -87,10 +120,13 @@ private:
   std::ofstream _output;
   
   /// Set of progress point counters
-  std::set<counter*> _counters;
+  std::vector<counter*> _counters;
   
-  /// Record the time that profiling started
-  size_t _start_time;
+  /// Set of values last seen in counters
+  std::vector<size_t> _prev_counter_values;
+  
+  /// Lock to protect the profile log and counters lists
+  spinlock _output_lock;
   
   /// If specified, the fixed line that should be "sped up" for the whole execution
   std::shared_ptr<causal_support::line> _fixed_line;
@@ -101,9 +137,6 @@ private:
   /// Flag is set when shutdown has been run
   std::atomic_flag _shutdown_run = ATOMIC_FLAG_INIT;
   
-  /// The map of memory constructed by the causal_support library
-  causal_support::memory_map _map;
-  
   /// The total number of delays inserted
   std::atomic<size_t> _global_delays = ATOMIC_VAR_INIT(0);
   
@@ -111,7 +144,7 @@ private:
   std::atomic<size_t> _round_start_delays = ATOMIC_VAR_INIT(0);
   
   /// The number of samples collected
-  std::atomic<size_t> _round_samples = ATOMIC_VAR_INIT(0);
+  std::atomic<size_t> _experiment_samples = ATOMIC_VAR_INIT(0);
   
   /// The currently selected line for "speedup"
   std::atomic<causal_support::line*> _selected_line = ATOMIC_VAR_INIT(nullptr);

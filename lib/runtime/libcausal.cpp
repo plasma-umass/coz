@@ -14,6 +14,7 @@
 #include "util.h"
 
 using namespace std;
+using namespace causal_support;
 
 /// The type of a main function
 typedef int (*main_fn_t)(int, char**, char**);
@@ -59,15 +60,52 @@ int wrapped_main(int argc, char** argv, char** env) {
   // Collect all the real function pointers for interposed functions
   real::init();
   
+  // Get the profiler scope
+  vector<string> scope = args["include"].as<vector<string>>();
+  // If no scope was specified, use the current directory
+  if(scope.size() == 0) {
+    char cwd[PATH_MAX];
+    getcwd(cwd, PATH_MAX);
+    scope.push_back(string(cwd));
+  }
+  
+  // Build a map of addresses to source lines
+  memory_map::get_instance().build(scope);
+  
+  // Register any sampling progress points
+  vector<string> progress_names = args["progress"].as<vector<string>>();
+  
+  for(const string& line_name : progress_names) {
+    shared_ptr<line> l = memory_map::get_instance().find_line(line_name);
+    if(l) {
+      profiler::get_instance().register_counter(new sampling_counter(line_name, l));
+    } else {
+      WARNING << "Progress line \"" << line_name << "\" was not found.";
+    }
+  }
+
+  string fixed_line_name = args["fixed-line"].as<string>();
+  shared_ptr<line> fixed_line;
+  if(fixed_line_name != "") {
+    fixed_line = memory_map::get_instance().find_line(fixed_line_name);
+    PREFER(fixed_line) << "Fixed line \"" << fixed_line_name << "\" was not found.";
+  }
+  
+  // Create a phony end-to-end counter and register it if running in end-to-end mode
+  end_to_end_counter c;
+  if(args.count("end-to-end"))
+    profiler::get_instance().register_counter(&c);
+  
   // Start the profiler
   profiler::get_instance().startup(args["output"].as<string>(),
-                                   args["progress"].as<vector<string>>(),
-                                   args["include"].as<vector<string>>(),
-                                   args["fixed-line"].as<string>(),
+                                   fixed_line,
                                    args["fixed-speedup"].as<int>());
   
   // Run the real main function
   int result = real_main(argc - causal_argc - 1, &argv[causal_argc + 1], env);
+  
+  // Increment the end-to-end counter just before shutdown
+  c.done();
   
   // Shut down the profiler
   profiler::get_instance().shutdown();

@@ -206,7 +206,6 @@ namespace causal_support {
   
   void memory_map::build(const vector<string>& scope) {
     for(const auto& f : get_loaded_files()) {
-      
       if(process_file(f.first, f.second, scope)) {
         INFO << "Including lines from " << f.first;
       }
@@ -349,7 +348,6 @@ namespace causal_support {
   bool memory_map::process_file(const string& name, uintptr_t load_address,
                                 const vector<string>& scope) {
     elf::elf f = locate_debug_executable(name);
-    
     // If a debug version of the file could not be located, return false
     if(!f.valid()) {
       return false;
@@ -360,6 +358,7 @@ namespace causal_support {
     
     // Walk through the compilation units (source files) in the executable
     for(auto unit : d.compilation_units()) {
+      
       string prev_filename;
       size_t prev_line;
       uintptr_t prev_address = 0;
@@ -380,7 +379,6 @@ namespace causal_support {
           prev_address = line_info.address;
         }
       }
-      
       process_inlines(unit.root(), unit.get_line_table(), scope, load_address);
     }
     
@@ -419,5 +417,11 @@ namespace causal_support {
     } else {
       return shared_ptr<line>();
     }
+  }
+  
+  memory_map& memory_map::get_instance() {
+    static char buf[sizeof(memory_map)];
+    static memory_map* the_instance = new(buf) memory_map();
+    return *the_instance;
   }
 }

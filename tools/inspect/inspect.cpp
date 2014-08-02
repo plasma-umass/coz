@@ -11,25 +11,25 @@ using std::cerr;
 using std::string;
 using std::vector;
 
+using causal_support::memory_map;
+
 int main(int argc, char** argv) {
   if(argc != 2) {
     cerr << "Usage: " << argv[0] << " <path to ELF file>\n";
     return 2;
   }
-  
-  causal_support::memory_map m;
-  
+
   vector<string> scope;
   // If the file scope is empty, add the current working directory
   char cwd[PATH_MAX];
   getcwd(cwd, PATH_MAX);
   scope.push_back(string(cwd));
   
-  m.build(scope);
+  memory_map::get_instance().build(scope);
   
   size_t file_count = 0;
   size_t line_count = 0;
-  for(const auto& f_info : m.files()) {
+  for(const auto& f_info : memory_map::get_instance().files()) {
     const string& filename = f_info.first;
     file_count++;
     for(const auto& l_info : f_info.second->lines()) {

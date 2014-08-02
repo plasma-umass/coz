@@ -33,7 +33,9 @@ void on_error(int, siginfo_t*, void*);
 void samples_ready(int, siginfo_t*, void*);
 
 void profiler::register_counter(counter* c) {
-  _counters.insert(c);
+  _output_lock.lock();
+  _counters.push_back(c);
+  _output_lock.unlock();
 };
   
 /**
@@ -41,10 +43,8 @@ void profiler::register_counter(counter* c) {
  * argv, then initialize the profiler.
  */
 void profiler::startup(const string& output_filename,
-             const vector<string>& source_progress_names,
-             vector<string> scope,
-             const string& fixed_line_name,
-             int fixed_speedup) {
+                       shared_ptr<line> fixed_line,
+                       int fixed_speedup) {
   
   // Set up the sampling signal handler
   struct sigaction sa = {
@@ -61,20 +61,9 @@ void profiler::startup(const string& output_filename,
   real::sigaction(SIGSEGV, &sa, nullptr);
   real::sigaction(SIGABRT, &sa, nullptr);
   
-  // If the file scope is empty, add the current working directory
-  if(scope.size() == 0) {
-    char cwd[PATH_MAX];
-    getcwd(cwd, PATH_MAX);
-    scope.push_back(string(cwd));
-  }
-  
-  // Build the address -> source map
-  _map.build(scope);
-  
-  // If a non-empty fixed line was provided, attempt to locate it
-  if(fixed_line_name != "") {
-    _fixed_line = _map.find_line(fixed_line_name);
-    PREFER(_fixed_line) << "Fixed line \"" << fixed_line_name << "\" was not found.";
+  // If a non-empty fixed line was provided, set it
+  if(fixed_line) {
+    _fixed_line = fixed_line;
   }
   
   // If the speedup amount is in bounds, set a fixed delay size
@@ -84,20 +73,14 @@ void profiler::startup(const string& output_filename,
 
   // Create the profiler output object
   _output.open(output_filename, ios_base::app);
-
-  // Create sampling progress counters for all the lines specified via command-line
-  for(const string& line_name : source_progress_names) {
-    shared_ptr<line> l = _map.find_line(line_name);
-    if(l) {
-      register_counter(new sampling_counter(line_name, l));
-    } else {
-      WARNING << "Progress line \"" << line_name << "\" was not found.";
-    }
-  }
   
   // Log the start of this execution
-  _output << "startup\ttime=" << get_time() << "\n";
-  _output << "info\tsample-period=" << SamplePeriod << "\n";
+  _output << "startup\t"
+          << "time=" << get_time() << "\n";
+  
+  // Report the sampling period
+  _output << "info\t"
+          << "sample-period=" << SamplePeriod << "\n";
   
   // Begin sampling in the main thread
   begin_sampling();
@@ -111,9 +94,14 @@ void profiler::shutdown() {
     // Stop sampling in the main thread
     end_sampling();
     
+    // Force the end of the current experiment, if one is running
+    end_experiment();
+    
     // Log the end of this execution
+    _output_lock.lock();
     _output << "shutdown\ttime=" << get_time() << "\n";
     _output.close();
+    _output_lock.unlock();
   }
 }
 
@@ -242,18 +230,97 @@ void profiler::end_sampling() {
   state->sampler.close();
 }
 
+/// Is the program ready to start an experiment? There may already be one running...
+bool profiler::experiment_ready() {
+  // Only start an experiment if there is at least one performance counter
+  return _counters.size() > 0;
+}
+
+/// Is there currently an experiment running?
+bool profiler::experiment_running() {
+  // If there is a selected line, the experiment is running
+  return _selected_line.load() != nullptr;
+}
+
+/// Is the current experiment ready to end?
+bool profiler::experiment_finished() {
+  // Increment the count of samples this experiment
+  size_t num = ++_experiment_samples;
+  
+  // Every so often, check if counters have changed
+  if(num % ExperimentMinSamples == 0) {
+    // If there haven't been enough delays, we're not finished
+    if(_global_delays - _round_start_delays < ExperimentMinDelays && num < ExperimentAbortThreshold)
+      return false;
+    
+    for(size_t i=0; i<_prev_counter_values.size(); i++) {
+      if(_counters[i]->get_count() - _prev_counter_values[i] < ExperimentMinCounterChange)
+        return false;
+    }
+    
+    return true;
+    
+  } else {
+    return false;
+  }
+}
+
+/// Start a new performance experiment
+void profiler::start_experiment(shared_ptr<line> next_line, size_t delay_size) {
+  ASSERT(experiment_ready()) << "Not ready to start an experiment!";
+
+  line* expected = nullptr;
+  if(_selected_line.compare_exchange_strong(expected, next_line.get())) {
+    _delay_size.store(delay_size);
+    _experiment_samples.store(0);
+    _round_start_delays.store(_global_delays.load());
+    
+    // Log the start of a new speedup round
+    _output_lock.lock();
+    _output << "start-round\t"
+            << "line=" << next_line << "\t"
+            << "time=" << get_time() << "\n";
+    
+    _prev_counter_values.clear();
+    
+    for(const counter* c : _counters) {
+      _output << *c;
+      _prev_counter_values.push_back(c->get_count());
+    }
+    _output_lock.unlock();
+  }
+}
+
+/// End the current performance experiment
+void profiler::end_experiment() {
+  if(_selected_line.exchange(nullptr) != nullptr) {
+    // Log the end of the speedup round
+    _output_lock.lock();
+    _output << "end-round\t"
+            << "delays=" << (_global_delays - _round_start_delays) << "\t"
+            << "delay-size=" << _delay_size << "\t"
+            << "time=" << get_time() << "\n";
+
+    for(const counter* c : _counters) {
+      _output << *c;
+    }
+    _output_lock.unlock();
+  }
+}
+
 shared_ptr<line> profiler::find_containing_line(perf_event::record& sample) {
   if(!sample.is_sample())
     return shared_ptr<line>();
   
   // Check if the sample occurred in known code
-  shared_ptr<line> l = _map.find_line(sample.get_ip());
+  shared_ptr<line> l = memory_map::get_instance().find_line(sample.get_ip());
   if(l)
     return l;
   
   // Walk the callchain
   for(uint64_t pc : sample.get_callchain()) {
-    l = _map.find_line(pc);
+    // Need to subtract one. PC is the return address, but we're looking for the callsite.
+    l = memory_map::get_instance().find_line(pc-1);
     if(l) {
       return l;
     }
@@ -270,88 +337,35 @@ void profiler::process_samples(thread_state::ref& state) {
   for(perf_event::record r : state->sampler) {
     if(r.is_sample()) {
       // Find the line that contains this sample
-      shared_ptr<line> l = find_containing_line(r);
+      shared_ptr<line> sampled_line = find_containing_line(r);
       
-      if(l) {
-        l->add_sample();
+      if(sampled_line) {
+        sampled_line->add_sample();
       }
       
-      // Load the selected line
-      line* current_line = _selected_line.load();
-    
-      // If there isn't a currently selected line, try to start a new round
-      if(!current_line) {
-        // If a fixed line has been specified, use that instead
-        if(_fixed_line) {
-          l = _fixed_line;
-        }
+      if(!experiment_running() && experiment_ready()) {
+        shared_ptr<line> next_selected_line = sampled_line;
+        if(_fixed_line)
+          next_selected_line = _fixed_line;
         
-        // Is this sample in a known line?
-        if(l) {
-          line* expected = nullptr;
-          // Try to set the selected line and start a new round
-          if(_selected_line.compare_exchange_strong(expected, l.get())) {
-            // The swap succeeded! Also update the sentinel to keep reference counts accurate
-            current_line = l.get();
+        if(next_selected_line) {
+          size_t next_delay_size;
+          if(_fixed_delay_size != -1)
+            next_delay_size = _fixed_delay_size;
+          else
+            next_delay_size = _delay_dist(_generator) * SamplePeriod / SpeedupDivisions;
           
-            // Re-initialize all counters for the next round
-            _round_samples.store(0);
-            _round_start_delays.store(_global_delays.load());
-            
-            // Set the delay size to a new random value, or the fixed delay size if specified
-            if(_fixed_delay_size != -1) {
-              _delay_size.store(_fixed_delay_size);
-            } else {
-              size_t new_delay = _delay_dist(_generator) * SamplePeriod / SpeedupDivisions;
-              _delay_size.store(new_delay);
-            }
-          
-            // Log the start of a new speedup round
-            _output << "start-round\t"
-                    << "line=" << l << "\t"
-                    << "time=" << get_time() << "\n";
-            
-            for(const counter* c : _counters) {
-              _output << *c;
-            }
-          
-          } else {
-            // Another thread must have changed the selected line. Reload it and continue
-            current_line = _selected_line.load();
-          }
-        } else {
-          // Sample is in some out-of-scope code. Nothing can be done.
-          return;
+          // Start a new experiment with the new line and delay size
+          start_experiment(next_selected_line, next_delay_size);
         }
-      }
-      
-      // Is there a currently selected line?
-      if(current_line) {
-        // Yes. There is an active speedup round
-      
-        // Is this sample in the selected line?
-        if(l.get() == current_line) {
-          // This thread can skip a delay (possibly one it adds to global_delays below)
+      } else if(sampled_line) {
+        // If the sampled line is the selected line, add a delay
+        if(sampled_line.get() == _selected_line.load())
           state->delay_count++;
-        }
-      
-        // Is this the final sample in the round?
-        if(++_round_samples == MinRoundSamples) {
-          // Log the end of the speedup round
-          _output << "end-round\t"
-                  << "delays=" << (_global_delays - _round_start_delays) << "\t"
-                  << "delay-size=" << _delay_size << "\t"
-                  << "time=" << get_time() << "\n";
         
-          for(const counter* c : _counters) {
-            _output << *c;
-          }
-        
-          // Clear the selected line
-          _selected_line.store(nullptr);
-          // Also clear the sentinel to keep an accurate reference count
-          //_sentinel_selected_line.reset();
-        }
+        // Have all conditions for the end of the experiment been met? If so, finish the experiment.
+        if(experiment_finished())
+          end_experiment();
       }
     }
   }

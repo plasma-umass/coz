@@ -1,4 +1,4 @@
 ROOT = ..
-DIRS = causal inspect
+DIRS = causal inspect coz-plot coz-process
 
 include $(ROOT)/common.mk

@@ -1,12 +1,17 @@
-# Run with r --no-save --args [results filename here] < process.r
+#!/usr/bin/env Rscript
 
 require(ggplot2)
 require(plyr)
 
 args <- commandArgs(trailingOnly = TRUE)
 
+filename <- 'stdin'
+if(length(args) == 1) {
+  filename <- args[1]
+}
+
 # Read the CSV file
-dat <- read.csv(args[1], sep='\t')
+dat <- read.csv(filename, sep='\t')
 
 # Compute the number of points for each line
 dat$points <- tabulate(dat$line)[dat$line]
@@ -24,17 +29,17 @@ slopes <- daply(dat, .(line), function(x) {
   return(coef(model)[2])
 })
 
-maxes <- daply(dat, .(line), function(x) {
-  q <- quantile(x$counter_speedup, probs = c(0.9))
-  return(q[1])
-})
+#maxes <- daply(dat, .(line), function(x) {
+#  q <- quantile(x$counter_speedup, probs = c(0.9))
+#  return(q[1])
+#})
 
-mins <- daply(dat, .(line), function(x) {
-  q <- quantile(x$counter_speedup, probs = c(0.1))
-  return(q[1])
-})
+#mins <- daply(dat, .(line), function(x) {
+#  q <- quantile(x$counter_speedup, probs = c(0.1))
+#  return(q[1])
+#})
 
-dat <- subset(dat, maxes[line] > 0.3 || mins[line] < 0.3)
+#dat <- subset(dat, maxes[line] > 0.3 || mins[line] < 0.3)
 
 # Save the initial line factor order
 l <- levels(dat$line)
@@ -43,7 +48,7 @@ l <- levels(dat$line)
 dat$line <- factor(dat$line, levels=l[rev(order(slopes))], ordered=TRUE)
 
 # Graph it
-ggplot(dat, aes(x=line_speedup, y=counter_speedup, color=line, weight=(1-line_speedup)^2)) +
+ggplot(dat, aes(x=line_speedup, y=counter_speedup, color=counter, weight=(1-line_speedup)^2)) +
   geom_point(size=1.5) +
   facet_wrap(~line) +
   geom_smooth(method='lm', se=FALSE) +
