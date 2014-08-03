@@ -25,7 +25,7 @@ dat <- subset(dat, counter_speedup > -1.0)
 
 # Compute the slope of each line's regression line
 slopes <- daply(dat, .(line), function(x) {
-  model <- lm(counter_speedup~line_speedup, data=x, weights=(1-line_speedup)^2)
+  model <- lm(counter_speedup~line_speedup, data=x)
   return(coef(model)[2])
 })
 
@@ -48,7 +48,7 @@ l <- levels(dat$line)
 dat$line <- factor(dat$line, levels=l[rev(order(slopes))], ordered=TRUE)
 
 # Graph it
-ggplot(dat, aes(x=line_speedup, y=counter_speedup, color=counter, weight=(1-line_speedup)^2)) +
+ggplot(dat, aes(x=line_speedup, y=counter_speedup, color=counter)) +
   geom_point(size=1.5) +
   facet_wrap(~line) +
   geom_smooth(method='lm', se=FALSE) +

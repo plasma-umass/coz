@@ -76,10 +76,7 @@ void profiler::startup(const string& output_filename,
   
   // Log the start of this execution
   _output << "startup\t"
-          << "time=" << get_time() << "\n";
-  
-  // Report the sampling period
-  _output << "info\t"
+          << "time=" << get_time() << "\t"
           << "sample-period=" << SamplePeriod << "\n";
   
   // Begin sampling in the main thread
@@ -100,6 +97,18 @@ void profiler::shutdown() {
     // Log the end of this execution
     _output_lock.lock();
     _output << "shutdown\ttime=" << get_time() << "\n";
+    
+    for(const auto& file_entry : memory_map::get_instance().files()) {
+      for(const auto& line_entry : file_entry.second->lines()) {
+        shared_ptr<line> l = line_entry.second;
+        if(l->get_samples() > 0) {
+          _output << "samples\t"
+                  << "line=" << l << "\t"
+                  << "count=" << l->get_samples() << "\n";
+        }
+      }
+    }
+    
     _output.close();
     _output_lock.unlock();
   }
@@ -277,9 +286,11 @@ void profiler::start_experiment(shared_ptr<line> next_line, size_t delay_size) {
     
     // Log the start of a new speedup round
     _output_lock.lock();
-    _output << "start-round\t"
+    _output << "start-experiment\t"
             << "line=" << next_line << "\t"
-            << "time=" << get_time() << "\n";
+            << "time=" << get_time() << "\t"
+            << "selected-line-samples=" << next_line->get_samples() << "\t"
+            << "global-delays=" << _global_delays.load() << "\n";
     
     _prev_counter_values.clear();
     
@@ -293,13 +304,15 @@ void profiler::start_experiment(shared_ptr<line> next_line, size_t delay_size) {
 
 /// End the current performance experiment
 void profiler::end_experiment() {
-  if(_selected_line.exchange(nullptr) != nullptr) {
+  line* old_selected_line = _selected_line.exchange(nullptr);
+  if(old_selected_line != nullptr) {
     // Log the end of the speedup round
     _output_lock.lock();
-    _output << "end-round\t"
-            << "delays=" << (_global_delays - _round_start_delays) << "\t"
-            << "delay-size=" << _delay_size << "\t"
-            << "time=" << get_time() << "\n";
+    _output << "end-experiment\t"
+            << "time=" << get_time() << "\t"
+            << "delay-size=" << _delay_size.load() << "\t"
+            << "global-delays=" << _global_delays.load() << "\t"
+            << "selected-line-samples=" << old_selected_line->get_samples() << "\n";
 
     for(const counter* c : _counters) {
       _output << *c;
@@ -348,7 +361,7 @@ void profiler::process_samples(thread_state::ref& state) {
         if(_fixed_line)
           next_selected_line = _fixed_line;
         
-        if(next_selected_line) {
+        if(next_selected_line && next_selected_line->get_line() != 358) {
           size_t next_delay_size;
           if(_fixed_delay_size != -1)
             next_delay_size = _fixed_delay_size;
