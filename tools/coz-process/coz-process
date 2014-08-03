@@ -34,7 +34,7 @@ class experiment:
     self.duration = float(duration)
     self.speedup = float(speedup)
     self.total_delay = float(total_delay)
-    self.samples = float(samples)
+    self.samples = samples
     
     self.counter = None
     self.counter_delta = 0
@@ -80,7 +80,7 @@ class experiment:
     counter_speedup = 1.0 - self.period() / baseline_period
     
     # Apply the phase correction to the progress counter speedup
-    correction = self.duration / float(self.samples) * float(samples) / float(total_time)
+    correction = self.duration / float(self.samples) * samples / float(total_time)
     counter_speedup *= correction
     
     return '\t'.join([shortenLine(self.line), str(self.speedup), shortenLine(self.counter), str(counter_speedup)])
