@@ -66,7 +66,7 @@ public:
   virtual ~source_counter() {}
   
   virtual size_t get_count() const {
-    return __atomic_load_n(_var, __ATOMIC_SEQ_CST);
+    return __atomic_load_n(_var, __ATOMIC_RELAXED);
   }
   
 private:

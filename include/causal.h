@@ -35,7 +35,7 @@ static void _causal_init_counter(int kind,
     } \
     \
     ++_local_counter; \
-    if(__builtin_ctz(_local_counter) >= __atomic_load_n(&_backoff, __ATOMIC_ACQUIRE)) { \
+    if(__builtin_ctz(_local_counter) >= __atomic_load_n(&_backoff, __ATOMIC_RELAXED)) { \
       __atomic_add_fetch(&_global_counter, 1, __ATOMIC_RELAXED); \
     } \
   }

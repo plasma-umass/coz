@@ -31,7 +31,9 @@ enum {
 class profiler {
 public:
   /// Start the profiler
-  void startup(const std::string& outfile, causal_support::line* fixed_line, int fixed_speedup);
+  void startup(const std::string& outfile,
+               causal_support::line* fixed_line,
+               int fixed_speedup);
   
   /// Shut down the profiler
   void shutdown();
