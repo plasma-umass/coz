@@ -10,10 +10,6 @@ public:
   size_t delay_count = 0;
   /// Any excess delay time added when nanosleep() returns late
   size_t excess_delay = 0;
-  /// A snapshot of the global delay count, taken before blocking on a pthread_* function
-  size_t global_delay_snapshot = 0;
-  /// A snapshot of the local delay count, taken before blocking on a pthread_* function
-  size_t local_delay_snapshot = 0;
   /// The sampler object for this thread
   perf_event sampler;
   /// The timer that triggers sample processing for this thread

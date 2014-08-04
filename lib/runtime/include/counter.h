@@ -201,4 +201,8 @@ static std::ostream& operator<<(std::ostream& os, const counter& c) {
             << "value=" << c.get_count() << "\n";
 }
 
+static std::ostream& operator<<(std::ostream& os, const counter* c) {
+  return os << *c;
+}
+
 #endif

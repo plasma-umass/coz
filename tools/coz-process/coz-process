@@ -6,28 +6,6 @@ import math
 import copy
 import traceback
 
-class rate:
-  def __init__(self, delta=0, time=0):
-    self.delta = delta
-    self.time = time
-  
-  def period(self):
-    return float(self.time) / float(self.delta)
-  
-  def rate(self):
-    return float(self.delta) / float(self.time)
-  
-  def __add__(self, other):
-    return rate(self.delta + other.delta, self.time + other.time)
-  
-  def __iadd__(self, other):
-    self.delta += other.delta
-    self.time += other.time
-    return self
-  
-  def __div__(self, other):
-    return 1 - self.period() * other.rate()
-
 class experiment:
   def __init__(self, line, duration, speedup, total_delay, samples):
     self.line = line
@@ -97,6 +75,8 @@ def main(filename):
   
   f = open(filename)
   
+  lines = 0
+  
   # Read until done or an error occurs, then print all processed data
   try:
     run_start_time = 0          # The time the current run was started
@@ -115,6 +95,8 @@ def main(filename):
     while True:
       # Read the next command line and get key-value pairs for all the command properties
       (command, data) = getCommand(f.next())
+      
+      lines += 1
       
       if command == 'startup':
         run_start_time = int(data['time'])
@@ -149,10 +131,10 @@ def main(filename):
         global_delays = int(data['global-delays'])
         
       elif command == 'end-experiment':
-        duration = float(data['time']) - experiment_start_time
-        speedup = float(data['delay-size']) / float(sample_period)
+        duration = int(data['time']) - experiment_start_time
+        speedup = float(data['delay-size']) / sample_period
         delay_count = int(data['global-delays']) - global_delays
-        total_delay = float(data['delay-size']) * delay_count
+        total_delay = int(data['delay-size']) * delay_count
         samples = int(data['selected-line-samples']) - selected_line_samples
         
         exp = experiment(selected_line, duration, speedup, total_delay, samples)
@@ -180,9 +162,11 @@ def main(filename):
   except StopIteration:
     pass
   except Exception, e:
+    print >> sys.stderr, "Successfully read", lines, "lines"
+    
     # Print the error, if it wasn't just end-of-file
-    print >> sys.stderr, e
-    print >> sys.stderr, traceback.format_exc()
+    #print >> sys.stderr, e
+    #print >> sys.stderr, traceback.format_exc()
   
   # Close the file!
   f.close()

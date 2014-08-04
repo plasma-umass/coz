@@ -98,7 +98,7 @@ int wrapped_main(int argc, char** argv, char** env) {
   
   // Start the profiler
   profiler::get_instance().startup(args["output"].as<string>(),
-                                   fixed_line,
+                                   fixed_line.get(),
                                    args["fixed-speedup"].as<int>());
   
   // Run the real main function
@@ -157,13 +157,11 @@ extern "C" {
   
   /// Catch up on delays before exiting, possibly unblocking a thread joining this one
   void pthread_exit(void* result) {
-    profiler::get_instance().catch_up();
 	  profiler::get_instance().handle_pthread_exit(result);
   }
   
   /// Skip any delays added while waiting to join a thread
   int pthread_join(pthread_t t, void** retval) {
-    profiler::get_instance().snapshot_delays();
     int result = real::pthread_join(t, retval);
     profiler::get_instance().skip_delays();
     
@@ -172,7 +170,6 @@ extern "C" {
   
   /// Skip any global delays added while blocked on a mutex
   int pthread_mutex_lock(pthread_mutex_t* mutex) {
-    profiler::get_instance().snapshot_delays();
     int result = real::pthread_mutex_lock(mutex);            
     profiler::get_instance().skip_delays();
     
@@ -192,7 +189,6 @@ extern "C" {
   
   /// Skip any delays added while waiting on a condition variable
   int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
-    profiler::get_instance().snapshot_delays();
     int result = real::pthread_cond_wait(cond, mutex);            
     profiler::get_instance().skip_delays();
     
@@ -206,7 +202,6 @@ extern "C" {
   int pthread_cond_timedwait(pthread_cond_t* cond,
                              pthread_mutex_t* mutex,
                              const struct timespec* time) {
-    profiler::get_instance().snapshot_delays();
     int result = real::pthread_cond_timedwait(cond, mutex, time);
     if(result == 0) {
       // Skip delays only if the wait didn't time out
@@ -323,7 +318,6 @@ extern "C" {
     sigset_t myset = *set;
     remove_causal_signals(&myset);
     siginfo_t info;
-    profiler::get_instance().snapshot_delays();
     int result = real::sigwaitinfo(&myset, &info);
     if(result == -1) {
       // If there was an error, return the error code
@@ -346,7 +340,6 @@ extern "C" {
     sigset_t myset = *set;
     siginfo_t myinfo;
     remove_causal_signals(&myset);
-    profiler::get_instance().snapshot_delays();
     
     int result = real::sigwaitinfo(&myset, &myinfo);
     
@@ -367,7 +360,6 @@ extern "C" {
     sigset_t myset = *set;
     siginfo_t myinfo;
     remove_causal_signals(&myset);
-    profiler::get_instance().snapshot_delays();
     
     int result = real::sigtimedwait(&myset, &myinfo, timeout);
     
