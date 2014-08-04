@@ -93,34 +93,38 @@ void profiler::profiler_thread(spinlock& l) {
   vector<size_t> saved_counters;
   
   while(_running) {
+    line* selected;
     // If this run has a fixed line, use it
     if(_fixed_line) {
-      _selected_line.store(_fixed_line);
+      selected = _fixed_line;
     } else {
       // Otherwise, wait for the next line to be selected
-      line* selected = _next_line.load();
+      selected = _next_line.load(memory_order_relaxed);
       while(_running && selected == nullptr) {
         wait(SamplePeriod * SampleBatchSize);
-        selected = _next_line.load();
+        selected = _next_line.load(memory_order_relaxed);
       }
       if(!_running) break;
-      _selected_line.store(selected);
+      _selected_line.store(selected, memory_order_relaxed);
     }
     
+    size_t delay_size;
     // Choose a delay size
     if(_fixed_delay_size >= 0)
-      _delay_size.store(_fixed_delay_size);
+      delay_size = _fixed_delay_size;
     else
-      _delay_size.store(delay_dist(generator) * SamplePeriod / SpeedupDivisions);
+      delay_size = delay_dist(generator) * SamplePeriod / SpeedupDivisions;
+    
+    _delay_size.store(delay_size, memory_order_relaxed);
     
     size_t start_time = get_time();
-    size_t starting_delays = _delays.load();
+    size_t starting_delays = _delays.load(memory_order_relaxed);
     
     // Log the start of the experiment
     output << "start-experiment\t"
-           << "line=" << _selected_line.load() << "\t"
+           << "line=" << selected << "\t"
            << "time=" << start_time << "\t"
-           << "selected-line-samples=" << _selected_line.load()->get_samples() << "\t"
+           << "selected-line-samples=" << selected->get_samples() << "\t"
            << "global-delays=" << starting_delays << "\n";
   
     // Save and log all counters
@@ -133,7 +137,7 @@ void profiler::profiler_thread(spinlock& l) {
     _counters_lock.unlock();
     
     // Tell threads to start the experiment
-    _experiment_active.store(true);
+    _experiment_active.store(true, memory_order_relaxed);
     
     bool experiment_finished = false;
     size_t wait_time = ExperimentMinTime;
@@ -143,7 +147,7 @@ void profiler::profiler_thread(spinlock& l) {
       wait(wait_time);
       
       // Have enough delays been inserted?
-      if(_delays.load() - starting_delays >= ExperimentMinDelays
+      if(_delays.load(memory_order_relaxed) - starting_delays >= ExperimentMinDelays
           || get_time() - start_time > ExperimentAbortThreshold) {
         experiment_finished = true;
         
@@ -161,9 +165,9 @@ void profiler::profiler_thread(spinlock& l) {
     // Log the end of the experiment, whether it finished or the profiler is shutting down
     output << "end-experiment\t"
            << "time=" << get_time() << "\t"
-           << "delay-size=" << _delay_size.load() << "\t"
-           << "global-delays=" << _delays.load() << "\t"
-           << "selected-line-samples=" << _selected_line.load()->get_samples() << "\n";
+           << "delay-size=" << delay_size << "\t"
+           << "global-delays=" << _delays.load(memory_order_relaxed) << "\t"
+           << "selected-line-samples=" << selected->get_samples() << "\n";
     
     // Log counter values
     _counters_lock.lock();
@@ -173,16 +177,18 @@ void profiler::profiler_thread(spinlock& l) {
     _counters_lock.unlock();
     
     // Clear the next line, so threads will select one
-    _next_line.store(nullptr);
+    _next_line.store(nullptr, memory_order_relaxed);
     
     // End the experiment
-    _experiment_active.store(false);
+    _experiment_active.store(false, memory_order_relaxed);
     
     if(_running)
       wait(ExperimentCoolOffTime);
   }
   
-  output << "shutdown\ttime=" << _end_time << "\n";
+  output << "shutdown\t"
+         << "time=" << _end_time << "\t"
+         << "samples=" << _samples << "\n";
   
   // Log sample counts for all observed lines
   for(const auto& file_entry : memory_map::get_instance().files()) {
@@ -210,7 +216,7 @@ void profiler::shutdown() {
     
     // Save the true end time and signal the profiler thread to stop
     _end_time = get_time();
-    _running.store(false);
+    _running.store(false, memory_order_relaxed);
     
     // Join with the profiler thread
     real::pthread_join(_profiler_thread, nullptr);
@@ -312,7 +318,7 @@ void profiler::skip_delays() {
   REQUIRE(state) << "Unable to acquire exclusive access to thread state in skip_delays()";
   
   // Skip all missing delays
-  state->delay_count = _delays.load();
+  state->delay_count = _delays.load(memory_order_relaxed);
   state->excess_delay = 0;
 }
 
@@ -387,11 +393,13 @@ void profiler::process_samples(thread_state::ref& state) {
   
   for(perf_event::record r : state->sampler) {
     if(r.is_sample()) {
+      _samples.fetch_add(1, memory_order_relaxed);
+      
       // Find the line that contains this sample
       line* sampled_line = find_line(r);
       if(sampled_line) {
         sampled_line->add_sample();
-        _next_line.store(sampled_line);
+        _next_line.store(sampled_line, memory_order_relaxed);
       }
       
       if(_experiment_active) {
@@ -399,8 +407,8 @@ void profiler::process_samples(thread_state::ref& state) {
         if(sampled_line == _selected_line)
           state->delay_count++;
         
-      } else if(sampled_line != nullptr && _next_line.load() == nullptr) {
-        _next_line.store(sampled_line);
+      } else if(sampled_line != nullptr && _next_line.load(memory_order_relaxed) == nullptr) {
+        _next_line.store(sampled_line, memory_order_relaxed);
       }
     }
   }
@@ -414,7 +422,7 @@ void profiler::process_samples(thread_state::ref& state) {
     // Is this thread ahead or behind on delays?
     if(state->delay_count > delays) {
       // Thread is ahead: increase the global delay count
-      _delays += state->delay_count - delays;
+      _delays.fetch_add(state->delay_count - delays, memory_order_relaxed);
       
     } else if(state->delay_count < delays) {
       // Behind: Pause this thread to catch up

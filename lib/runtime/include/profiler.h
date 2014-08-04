@@ -65,6 +65,7 @@ private:
     _delay_size.store(0);
     _selected_line.store(nullptr);
     _next_line.store(nullptr);
+    _samples.store(0);
     _running.store(true);
   }
   
@@ -98,6 +99,7 @@ private:
   
   pthread_t _profiler_thread;         //< Handle for the profiler thread
   size_t _end_time;                   //< Time that shutdown was called
+  std::atomic<size_t> _samples;       //< Total number of samples collected
   std::atomic<bool> _running;         //< Clear to signal the profiler thread to quit
   std::atomic_flag _shutdown_run = ATOMIC_FLAG_INIT;  //< Used to ensure shutdown only runs once
 };

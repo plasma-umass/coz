@@ -64,14 +64,10 @@ class experiment:
     return '\t'.join([shortenLine(self.line), str(self.speedup), shortenLine(self.counter), str(counter_speedup)])
 
 def main(filename):
-  # Total elapsed time
-  total_time = 0.0
-  
-  # Map from line name -> line speedup -> experiment
-  experiments = {}
-  
-  # Number of samples in each line
-  sample_counts = {}
+  total_time = 0.0    # Total elapsed time
+  experiments = {}    # Map from counter -> line -> speedup -> experiment
+  sample_counts = {}  # Number of samples in each line
+  total_samples = 0   # Total number of samples from all runs
   
   f = open(filename)
   
@@ -106,6 +102,7 @@ def main(filename):
       if command == 'shutdown':
         # Add the runtime to total tiem
         total_time += int(data['time']) - run_start_time
+        total_samples += int(data['samples'])
       
         # Flush all buffered experiments
         for e in buffered:
