@@ -23,9 +23,7 @@ enum {
   SpeedupDivisions = 20,  //< How many different speedups to try (20 = 5% increments)
   ExperimentMinTime = SamplePeriod * SampleBatchSize * 10,  //< Minimum experiment length
   ExperimentCoolOffTime = SamplePeriod * SampleBatchSize,   //< Time to wait after an experiment
-  ExperimentMinCounterChange = 5, //< Minimum change in counters before experiment can end 
-  ExperimentMinDelays = 1,        //< Minimum delays to insert before experiment can end
-  ExperimentAbortThreshold = 1000000000  //< Time to give up on inserting enough delays (1s)
+  ExperimentMinCounterChange = 5  //< Minimum change in counters before experiment can end 
 };
 
 class profiler {
@@ -52,6 +50,11 @@ public:
   
   /// Catch up on delays
   void catch_up();
+  
+  void before_blocking();   //< Call before a thread executes a potentially blocking call
+  
+  /// Call after unblocking. If by_thread is true, delays will be skipped
+  void after_unblocking(bool by_thread);
   
   /// Only allow one instance of the profiler, and never run the destructor
   static profiler& get_instance() {

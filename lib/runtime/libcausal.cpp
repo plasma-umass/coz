@@ -165,23 +165,27 @@ extern "C" {
   
   /// Skip any delays added while waiting to join a thread
   int pthread_join(pthread_t t, void** retval) {
+    profiler::get_instance().before_blocking();
     int result = real::pthread_join(t, retval);
-    profiler::get_instance().skip_delays();
+    profiler::get_instance().after_unblocking(true);
+    //profiler::get_instance().skip_delays();
     
     return result;
   }
   
   /// Skip any global delays added while blocked on a mutex
   int pthread_mutex_lock(pthread_mutex_t* mutex) {
-    int result = real::pthread_mutex_lock(mutex);            
-    profiler::get_instance().skip_delays();
+    profiler::get_instance().before_blocking();
+    int result = real::pthread_mutex_lock(mutex);  
+    profiler::get_instance().after_unblocking(true);          
+    //profiler::get_instance().skip_delays();
     
     return result;   
   }
   
   /// Catch up on delays before unblocking any threads waiting on a mutex
   int pthread_mutex_unlock(pthread_mutex_t* mutex) {
-    profiler::get_instance().catch_up();
+    //profiler::get_instance().catch_up();
     return real::pthread_mutex_unlock(mutex);
   }
   
@@ -192,8 +196,10 @@ extern "C" {
   
   /// Skip any delays added while waiting on a condition variable
   int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
-    int result = real::pthread_cond_wait(cond, mutex);            
-    profiler::get_instance().skip_delays();
+    profiler::get_instance().before_blocking();
+    int result = real::pthread_cond_wait(cond, mutex);       
+    profiler::get_instance().after_unblocking(true);     
+    //profiler::get_instance().skip_delays();
     
     return result;  
   }
@@ -205,24 +211,24 @@ extern "C" {
   int pthread_cond_timedwait(pthread_cond_t* cond,
                              pthread_mutex_t* mutex,
                              const struct timespec* time) {
+    profiler::get_instance().before_blocking();
     int result = real::pthread_cond_timedwait(cond, mutex, time);
-    if(result == 0) {
-      // Skip delays only if the wait didn't time out
-      profiler::get_instance().skip_delays();
-    }
+
+    // Skip delays only if the wait didn't time out
+    profiler::get_instance().after_unblocking(result == 0);
     
     return result;
   }
   
   /// Catchup on delays before waking a thread waiting on a condition variable
   int pthread_cond_signal(pthread_cond_t* cond) {
-    profiler::get_instance().catch_up();
+    //profiler::get_instance().catch_up();
     return real::pthread_cond_signal(cond);
   }
   
   /// Catch up on delays before waking any threads waiting on a condition variable
   int pthread_cond_broadcast(pthread_cond_t* cond) {
-    profiler::get_instance().catch_up();
+    //profiler::get_instance().catch_up();
     return real::pthread_cond_broadcast(cond);
   }
   
@@ -300,15 +306,15 @@ extern "C" {
   
   /// Catch up on delays before sending a signal to the current process
   int kill(pid_t pid, int sig) {
-    if(pid == getpid())
-      profiler::get_instance().catch_up();
+    //if(pid == getpid())
+    //  profiler::get_instance().catch_up();
     return real::kill(pid, sig);
   }
   
   /// Catch up on delays before sending a signal to another thread
   int pthread_kill(pthread_t thread, int sig) {
     // TODO: Don't allow threads to send causal's signals
-    profiler::get_instance().catch_up();
+    //profiler::get_instance().catch_up();
     return real::pthread_kill(thread, sig);
   }
   
@@ -321,16 +327,20 @@ extern "C" {
     sigset_t myset = *set;
     remove_causal_signals(&myset);
     siginfo_t info;
+    
+    profiler::get_instance().before_blocking();
+    
     int result = real::sigwaitinfo(&myset, &info);
+    
+    // Woken up by another thread if the call did not fail, and the waking process is this one
+    profiler::get_instance().after_unblocking(result != -1 && info.si_pid == getpid());
+    
     if(result == -1) {
       // If there was an error, return the error code
       return errno;
     } else {
       // If the sig pointer is not null, pass the received signal to the caller
       if(sig) *sig = result;
-      // Skip delays if the signal was delivered from the same process
-      if(info.si_pid == getpid())
-        profiler::get_instance().skip_delays();
       return 0;
     }
   }
@@ -344,13 +354,15 @@ extern "C" {
     siginfo_t myinfo;
     remove_causal_signals(&myset);
     
+    profiler::get_instance().before_blocking();
+    
     int result = real::sigwaitinfo(&myset, &myinfo);
     
-    if(result > 0) {
-      if(info) *info = myinfo;
-      if(myinfo.si_pid == getpid())
-        profiler::get_instance().skip_delays();
-    }
+    // Woken up by another thread if the call did not fail, and the waking process is this one
+    profiler::get_instance().after_unblocking(result > 0 && myinfo.si_pid == getpid());
+    
+    if(result > 0 && info)
+      *info = myinfo;
     
     return result;
   }
@@ -364,13 +376,15 @@ extern "C" {
     siginfo_t myinfo;
     remove_causal_signals(&myset);
     
+    profiler::get_instance().before_blocking();
+    
     int result = real::sigtimedwait(&myset, &myinfo, timeout);
     
-    if(result > 0) {
-      if(info) *info = myinfo;
-      if(myinfo.si_pid == getpid())
-        profiler::get_instance().skip_delays();
-    }
+    // Woken up by another thread if the call did not fail, and the waking process is this one
+    profiler::get_instance().after_unblocking(result > 0 && myinfo.si_pid == getpid());
+    
+    if(result > 0 && info)
+      *info = myinfo;
     
     return result;
   }

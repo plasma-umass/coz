@@ -6,14 +6,11 @@
 
 class thread_state {
 public:
-  /// The count of delays (or selected line visits) in the thread
-  size_t delay_count = 0;
-  /// Any excess delay time added when nanosleep() returns late
-  size_t excess_delay = 0;
-  /// The sampler object for this thread
-  perf_event sampler;
-  /// The timer that triggers sample processing for this thread
-  timer process_timer;
+  size_t delay_count = 0;   //< The count of delays (or selected line visits) in the thread
+  size_t excess_delay = 0;  //< Any excess delay time added when nanosleep() returns late
+  perf_event sampler;       //< The sampler object for this thread
+  timer process_timer;      //< The timer that triggers sample processing for this thread
+  size_t pre_block_time;    //< The time saved before (possibly) blocking
   
   class ref {
   public:
