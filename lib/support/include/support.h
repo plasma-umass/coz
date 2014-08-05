@@ -132,7 +132,7 @@ namespace causal_support {
     inline const std::map<interval, std::shared_ptr<line>>& ranges() const { return _ranges; }
     
     /// Build a map from addresses to source lines with the provided source file scope
-    void build(const std::vector<std::string>& scope);
+    void build(const std::vector<std::string>& scope, bool include_libes = false);
     
     std::shared_ptr<line> find_line(const std::string& name);
     std::shared_ptr<line> find_line(uintptr_t addr);

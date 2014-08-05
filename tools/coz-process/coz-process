@@ -168,16 +168,29 @@ def main(filename):
   # Close the file!
   f.close()
   
-  # Print csv headings
-  print 'line\tline_speedup\tcounter\tcounter_speedup'
+  # Print csv output
+  csvfile = open(filename.replace('.log', '')+'.csv', 'w')
+  print >> csvfile, 'line\tline_speedup\tcounter\tcounter_speedup'
   
   for (counter, lines) in experiments.items():
     for (line, speedups) in lines.items():
       for (speedup, exp) in speedups.items():
         if exp.valid() and 0 in speedups and speedups[0].valid():
           baseline_period = speedups[0].period()
-          total_samples = sample_counts[line]
-          print exp.to_csv(total_samples, total_time, baseline_period)
+          samples = sample_counts[line]
+          print >> csvfile, exp.to_csv(samples, total_time, baseline_period)
+  
+  csvfile.close()
+  
+  # Print line data
+  linefile = open(filename.replace('.log', '')+'.lines', 'w')
+  
+  for (line, count) in sample_counts.items():
+    fraction = float(count) / total_samples
+    if fraction > 0.01:
+      print >> linefile, shortenLine(line) + "\t" + str(fraction)
+  
+  linefile.close()
 
 def getCommand(line):
   (command, data_str) = line.strip().split("\t", 1)

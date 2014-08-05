@@ -37,6 +37,9 @@ extern "C" void __causal_register_counter(counter::type kind,
  * function. This allows Causal to shut down when the real main function returns.
  */
 int wrapped_main(int argc, char** argv, char** env) {
+  // Remove causal from LD_PRELOAD. Just clearing LD_PRELOAD for now FIXME!
+  unsetenv("LD_PRELOAD");
+  
   // Find the "---" separator between causal arguments and the program name
   size_t causal_argc;
   for(causal_argc = 1; causal_argc < argc && argv[causal_argc] != string("---"); causal_argc++) {
@@ -70,7 +73,7 @@ int wrapped_main(int argc, char** argv, char** env) {
   }
   
   // Build a map of addresses to source lines
-  memory_map::get_instance().build(scope);
+  memory_map::get_instance().build(scope, args.count("search-libs"));
   
   // Register any sampling progress points
   vector<string> progress_names = args["progress"].as<vector<string>>();

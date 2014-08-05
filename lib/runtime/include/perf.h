@@ -131,7 +131,7 @@ public:
       if(mapping != nullptr) {
         _index = mapping->data_tail;
         _head = mapping->data_head;
-        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+        //__atomic_thread_fence(__ATOMIC_SEQ_CST); // Not required for thread-local perf events
       } else {
         _index = 0;
         _head = 0;
@@ -141,7 +141,6 @@ public:
     ~iterator() {
       if(_mapping != nullptr) {
         _mapping->data_tail = _index;
-        __atomic_thread_fence(__ATOMIC_SEQ_CST);
       }
     }
     

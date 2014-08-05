@@ -23,38 +23,27 @@ public:
     thread_context = 2
   };
   
-  siglock() {
-    REQUIRE(_lock.is_lock_free()) << "Siglock is not lock free!";
-  }
+  siglock() = default;
   
   /// Attempt to acquire the lock in a given context
   inline bool lock(context c) {
-    // Attempt to acquire the lock. If locking succeeds, use acquire ordering
-    int expected = 0;
-    while(!_lock.compare_exchange_strong(expected, c, 
-                                         std::memory_order_acquire,
-                                         std::memory_order_relaxed)) {
-      // Return failure if acquisition failed in signal context, or if the lock is thread-owned
-      if(true /*c == signal_context || expected == thread_context*/) {
-        return false;
-      }
-      // Reset `expected` to try acquisition again
-      expected = 0;
-      // Relax.
-      __asm__("pause");
+    if(c == thread_context) {
+      _current = thread_context;
+      std::atomic_signal_fence(std::memory_order_acq_rel);
+      return true;
+    } else {
+      return _current == 0;
     }
-    // Success!
-    return true;
   }
   
   /// Release the lock
   inline void unlock() {
-    // Use release memory ordering to ensure earlier writes are ordered before the lock release
-    _lock.store(0, std::memory_order_release);
+    _current = 0;
+    std::atomic_signal_fence(std::memory_order_acq_rel);
   }
   
 private:
-  std::atomic<int> _lock = ATOMIC_VAR_INIT(0);
+  int _current = 0;
 };
 
 #endif

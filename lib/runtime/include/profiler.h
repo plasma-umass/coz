@@ -24,8 +24,8 @@ enum {
   ExperimentMinTime = SamplePeriod * SampleBatchSize * 10,  //< Minimum experiment length
   ExperimentCoolOffTime = SamplePeriod * SampleBatchSize,   //< Time to wait after an experiment
   ExperimentMinCounterChange = 5, //< Minimum change in counters before experiment can end 
-  ExperimentMinDelays = 5,        //< Minimum delays to insert before experiment can end
-  ExperimentAbortThreshold = 100000000  //< Time to give up on inserting enough delays (100ms)
+  ExperimentMinDelays = 20,       //< Minimum delays to insert before experiment can end
+  ExperimentAbortThreshold = 1000000000  //< Time to give up on inserting enough delays (100ms)
 };
 
 class profiler {
@@ -78,7 +78,8 @@ private:
   void profiler_thread(spinlock& l);  //< Body of the main profiler thread
   void begin_sampling();  //< Start sampling in the current thread
   void end_sampling();    //< Stop sampling in the current thread
-  void process_samples(thread_state::ref&); //< Process all available samples and insert delays
+  void add_delays(thread_state::ref&);      //< Insert any required delays
+  void process_samples(thread_state::ref&); //< Process all available samples
   causal_support::line* find_line(perf_event::record&); //< Map a sample to its source line
   
   static void* start_profiler_thread(void*);          //< Entry point for the profiler thread
@@ -91,6 +92,7 @@ private:
   
   std::atomic<bool> _experiment_active;   //< Is an experiment running?
   std::atomic<size_t> _delays;            //< The total number of delays inserted
+  std::atomic<size_t> _completed_delays;  //< The max number of delays completed in any thread
   std::atomic<size_t> _delay_size;        //< The current delay size
   std::atomic<causal_support::line*> _selected_line;  //< The line to speed up
   std::atomic<causal_support::line*> _next_line;      //< The next line to speed up

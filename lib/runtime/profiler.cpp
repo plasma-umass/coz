@@ -31,8 +31,9 @@ void profiler::startup(const string& outfile, line* fixed_line, int fixed_speedu
   // Set up the sampling signal handler
   struct sigaction sa = {
     .sa_sigaction = profiler::samples_ready,
-    .sa_flags = SA_SIGINFO | SA_ONSTACK
+    .sa_flags = SA_SIGINFO | SA_NODEFER | SA_RESTART
   };
+  sigemptyset(&sa.sa_mask);
   real::sigaction(SampleSignal, &sa, nullptr);
   
   // Set up handlers for errors
@@ -118,7 +119,8 @@ void profiler::profiler_thread(spinlock& l) {
     _delay_size.store(delay_size, memory_order_relaxed);
     
     size_t start_time = get_time();
-    size_t starting_delays = _delays.load(memory_order_relaxed);
+    //size_t starting_delays = _delays.load(memory_order_relaxed);
+    size_t starting_delays = _completed_delays.load();
     
     // Log the start of the experiment
     output << "start-experiment\t"
@@ -166,7 +168,8 @@ void profiler::profiler_thread(spinlock& l) {
     output << "end-experiment\t"
            << "time=" << get_time() << "\t"
            << "delay-size=" << delay_size << "\t"
-           << "global-delays=" << _delays.load(memory_order_relaxed) << "\t"
+           //<< "global-delays=" << _delays.load(memory_order_relaxed) << "\t"
+           << "global-delays=" << _completed_delays.load() << "\t"
            << "selected-line-samples=" << selected->get_samples() << "\n";
     
     // Log counter values
@@ -306,7 +309,6 @@ int profiler::handle_pthread_create(pthread_t* thread,
  */
 void profiler::handle_pthread_exit(void* result) {
   end_sampling();
-  catch_up();
   real::pthread_exit(result);
 }
 
@@ -330,7 +332,7 @@ void profiler::catch_up() {
   REQUIRE(state) << "Unable to acquire exclusive access to thread state in catch_up()";
   
   // Catch up on delays before unblocking any threads
-  process_samples(state);
+  add_delays(state);
 }
 
 void profiler::begin_sampling() {
@@ -387,44 +389,15 @@ line* profiler::find_line(perf_event::record& sample) {
   return nullptr;
 }
 
-void profiler::process_samples(thread_state::ref& state) {
-  // Stop sampling
-  state->sampler.stop();
-  
-  for(perf_event::record r : state->sampler) {
-    if(r.is_sample()) {
-      _samples.fetch_add(1, memory_order_relaxed);
-      
-      // Find the line that contains this sample
-      line* sampled_line = find_line(r);
-      if(sampled_line) {
-        sampled_line->add_sample();
-        _next_line.store(sampled_line, memory_order_relaxed);
-      }
-      
-      if(_experiment_active) {
-        // Add a delay if the sample is in the selected line
-        if(sampled_line == _selected_line)
-          state->delay_count++;
-        
-      } else if(sampled_line != nullptr && _next_line.load(memory_order_relaxed) == nullptr) {
-        _next_line.store(sampled_line, memory_order_relaxed);
-      }
-    }
-  }
-  
+void profiler::add_delays(thread_state::ref& state) {
   // Add delays if there is an experiment running
   if(_experiment_active) {
     // Take a snapshot of the global and local delays
     size_t delays = _delays;
     size_t delay_size = _delay_size;
     
-    // Is this thread ahead or behind on delays?
-    if(state->delay_count > delays) {
-      // Thread is ahead: increase the global delay count
-      _delays.fetch_add(state->delay_count - delays, memory_order_relaxed);
-      
-    } else if(state->delay_count < delays) {
+    // Is this thread behind on delays?
+    if(state->delay_count < delays) {
       // Behind: Pause this thread to catch up
       size_t time_to_wait = (delays - state->delay_count) * delay_size;
       
@@ -443,13 +416,61 @@ void profiler::process_samples(thread_state::ref& state) {
         // Update the local delay count
         state->delay_count = delays;
       }
-    }
-    
+      
+      size_t completed = _completed_delays;
+      while(completed < state->delay_count && 
+            !_completed_delays.compare_exchange_weak(completed, state->delay_count)) {
+        __asm__("pause");
+      }
+    }  
   } else {
     // Just skip ahead on delays if there isn't an experiment running
     state->delay_count = _delays;
     state->excess_delay = 0;
+    _completed_delays.store(_delays);
   }
+}
+
+void profiler::process_samples(thread_state::ref& state) {
+  // Stop sampling
+  state->sampler.stop();
+  
+  size_t processed = 0;
+  
+  for(perf_event::record r : state->sampler) {
+    if(r.is_sample()) {
+      processed++;
+      
+      // Find the line that contains this sample
+      line* sampled_line = find_line(r);
+      if(sampled_line) {
+        sampled_line->add_sample();
+      }
+      
+      if(_experiment_active) {
+        // Add a delay if the sample is in the selected line
+        if(sampled_line == _selected_line)
+          state->delay_count++;
+        
+      } else if(sampled_line != nullptr && _next_line.load(memory_order_relaxed) == nullptr) {
+        _next_line.store(sampled_line, memory_order_relaxed);
+      }
+    }
+  }
+  
+  _samples.fetch_add(processed, memory_order_relaxed);
+  
+  // Take a snapshot of the global and local delays
+  size_t delays = _delays;
+  size_t delay_size = _delay_size;
+  
+  // Is this thread ahead on delays?
+  if(state->delay_count > delays) {
+    // Increase the global delay count
+    _delays.fetch_add(state->delay_count - delays, memory_order_relaxed);
+  }
+  
+  add_delays(state);
   
   // Resume sampling
   state->sampler.start();

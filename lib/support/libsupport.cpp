@@ -184,7 +184,7 @@ namespace causal_support {
     return f;
   }
   
-  map<string, uintptr_t> get_loaded_files() {
+  map<string, uintptr_t> get_loaded_files(bool include_libs) {
     map<string, uintptr_t> result;
   
     // Walk through the loaded libraries
@@ -201,11 +201,17 @@ namespace causal_support {
       return 0;
     }, (void*)&result);
   
+    if(!include_libs) {
+      map<string, uintptr_t> main_exe_only;
+      main_exe_only[string(__progname_full)] = result[string(__progname_full)];
+      return main_exe_only;
+    }
+  
     return result;
   }
   
-  void memory_map::build(const vector<string>& scope) {
-    for(const auto& f : get_loaded_files()) {
+  void memory_map::build(const vector<string>& scope, bool include_libs) {
+    for(const auto& f : get_loaded_files(include_libs)) {
       if(process_file(f.first, f.second, scope)) {
         INFO << "Including lines from " << f.first;
       }
@@ -249,12 +255,12 @@ namespace causal_support {
     shared_ptr<file> f = get_file(filename);
     shared_ptr<line> l = f->get_line(line_no);
     
-    auto iter = _ranges.find(range);
+    /*auto iter = _ranges.find(range);
     if(iter != _ranges.end() && iter->second != l) {
       WARNING << "Overlapping entries for lines " 
         << f->get_name() << ":" << l->get_line() << " and " 
         << iter->second->get_file()->get_name() << ":" << iter->second->get_line();
-    } 
+    }*/
 
     // Add the entry
     _ranges.emplace(range, l);
@@ -264,7 +270,6 @@ namespace causal_support {
                                    const dwarf::line_table& table,
                                    const vector<string>& scope,
                                    uintptr_t load_address) {
-    
     if(!d.valid())
       return;
     
@@ -277,7 +282,7 @@ namespace causal_support {
       
       string decl_file;
       dwarf::value decl_file_val = find_attribute(d, dwarf::DW_AT::decl_file);
-      if(decl_file_val.valid()) {
+      if(decl_file_val.valid() && table.valid()) {
         decl_file = table.get_file(decl_file_val.as_uconstant())->path;
       }
       
@@ -287,7 +292,7 @@ namespace causal_support {
         decl_line = decl_line_val.as_uconstant();
       
       string call_file;
-      if(d.has(dwarf::DW_AT::call_file)) {
+      if(d.has(dwarf::DW_AT::call_file) && table.valid()) {
         call_file = table.get_file(d[dwarf::DW_AT::call_file].as_uconstant())->path;
       }
       
@@ -374,7 +379,7 @@ namespace causal_support {
         if(line_info.end_sequence) {
           prev_address = 0;
         } else {
-          prev_filename = line_info.file->path;
+          prev_filename = path(line_info.file->path).normalize().string();
           prev_line = line_info.line;
           prev_address = line_info.address;
         }

@@ -17,6 +17,7 @@ namespace causal {
         boost::program_options::value<std::vector<std::string>>()
           ->default_value(std::vector<std::string>(), ""),
         "evaluate optimizations to files in the specified file/directory")
+      ("search-libs", "search shared libraries for in-scope source files")
       ("fixed-line,l", 
         boost::program_options::value<std::string>()->default_value(""),
         "profile with a fixed source line as the optimization candidate (<file>:<line>)")
