@@ -415,7 +415,9 @@ void profiler::add_delays(thread_state::ref& state) {
         // Use any available excess delay
         time_to_wait -= state->excess_delay;
         // Pause and record any *new* excess delay
+        state->sampler.stop();
         state->excess_delay = wait(time_to_wait) - time_to_wait;
+        state->sampler.start();
         // Update the local delay count
         state->delay_count = delays;
       }
@@ -430,7 +432,7 @@ void profiler::add_delays(thread_state::ref& state) {
 
 void profiler::process_samples(thread_state::ref& state) {
   // Stop sampling
-  state->sampler.stop();
+  //state->sampler.stop();
   
   for(perf_event::record r : state->sampler) {
     if(r.is_sample()) {
@@ -457,7 +459,7 @@ void profiler::process_samples(thread_state::ref& state) {
   add_delays(state);
   
   // Resume sampling
-  state->sampler.start();
+  //state->sampler.start();
 }
 
 /**
