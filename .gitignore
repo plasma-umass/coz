@@ -6,7 +6,8 @@ release
 benchmarks/*/debug
 benchmarks/*/release
 benchmarks/*/profile.log
-benchmarks/*/results.csv
+benchmarks/*/profile.csv
+benchmarks/*/profile.lines
 benchmarks/*/Rplots.pdf
 lib/*/debug
 lib/*/release
@@ -17,6 +18,7 @@ tests/*/results.csv
 tests/*/Rplots.pdf
 tools/*/debug
 tools/*/release
+tools/experiment/results
 
 tests/toy/results
 tests/toy/toy_clean
