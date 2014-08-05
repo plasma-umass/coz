@@ -423,7 +423,9 @@ void profiler::add_delays(thread_state::ref& state) {
         // Use any available excess delay
         time_to_wait -= state->excess_delay;
         // Pause and record any *new* excess delay
+        state->sampler.stop();
         state->excess_delay = wait(time_to_wait) - time_to_wait;
+        state->sampler.start();
         // Update the local delay count
         state->delay_count = delays;
       }
