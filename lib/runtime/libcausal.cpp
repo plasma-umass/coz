@@ -185,7 +185,7 @@ extern "C" {
   
   /// Catch up on delays before unblocking any threads waiting on a mutex
   int pthread_mutex_unlock(pthread_mutex_t* mutex) {
-    //profiler::get_instance().catch_up();
+    profiler::get_instance().catch_up();
     return real::pthread_mutex_unlock(mutex);
   }
   
@@ -199,7 +199,6 @@ extern "C" {
     profiler::get_instance().before_blocking();
     int result = real::pthread_cond_wait(cond, mutex);       
     profiler::get_instance().after_unblocking(true);     
-    //profiler::get_instance().skip_delays();
     
     return result;  
   }
@@ -222,13 +221,13 @@ extern "C" {
   
   /// Catchup on delays before waking a thread waiting on a condition variable
   int pthread_cond_signal(pthread_cond_t* cond) {
-    //profiler::get_instance().catch_up();
+    profiler::get_instance().catch_up();
     return real::pthread_cond_signal(cond);
   }
   
   /// Catch up on delays before waking any threads waiting on a condition variable
   int pthread_cond_broadcast(pthread_cond_t* cond) {
-    //profiler::get_instance().catch_up();
+    profiler::get_instance().catch_up();
     return real::pthread_cond_broadcast(cond);
   }
   
@@ -306,15 +305,15 @@ extern "C" {
   
   /// Catch up on delays before sending a signal to the current process
   int kill(pid_t pid, int sig) {
-    //if(pid == getpid())
-    //  profiler::get_instance().catch_up();
+    if(pid == getpid())
+      profiler::get_instance().catch_up();
     return real::kill(pid, sig);
   }
   
   /// Catch up on delays before sending a signal to another thread
   int pthread_kill(pthread_t thread, int sig) {
     // TODO: Don't allow threads to send causal's signals
-    //profiler::get_instance().catch_up();
+    profiler::get_instance().catch_up();
     return real::pthread_kill(thread, sig);
   }
   

@@ -18,11 +18,14 @@ tests/*/results.csv
 tests/*/Rplots.pdf
 tools/*/debug
 tools/*/release
-tools/experiment/results
 
 tests/toy/results
 tests/toy/toy_clean
 tests/toy/toy_gprof
+
+tools/experiment/overhead_results
+tools/experiment/validation_results
+tools/experiment/*.pyc
 
 benchmarks/histogram/histogram_datafiles
 benchmarks/linear_regression/linear_regression_datafiles
