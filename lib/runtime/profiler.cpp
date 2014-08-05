@@ -338,7 +338,8 @@ void profiler::catch_up() {
   REQUIRE(state) << "Unable to acquire exclusive access to thread state";
   
   // Handle all samples and add delays as required
-  process_samples(state);
+  //process_samples(state);
+  add_delays(state);
 }
 
 void profiler::begin_sampling() {

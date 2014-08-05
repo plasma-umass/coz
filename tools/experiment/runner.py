@@ -5,20 +5,20 @@ import sys
 import time
 
 BENCHMARKS = {
-  'vips': 'native',               # 11 seconds
-  'blackscholes': 'native',       # 36 seconds
-  'canneal': 'simlarge',          # 7 seconds
-  'ferret': 'native',             # 39 seconds
-  'facesim': 'simmedium',         # 8 seconds
-  'streamcluster': 'test',        # 9 seconds
-  'raytrace': 'simlarge',         # 9 seconds
-  'swaptions': 'native',          # 13 seconds
-  'bodytrack': 'simlarge',        # 2 seconds
-  'fluidanimate': 'simmedium',    # 26 seconds
-  'dedup': 'simlarge',            # 20 seconds
-  'freqmine': 'simlarge'          # 11 seconds
+  'vips': 'native',
+  'blackscholes': 'native',
+  'canneal': 'native',
+  'ferret': 'native',
+  'facesim': 'native',
+  'streamcluster': 'simsmall',
+  'raytrace': 'native',
+  'swaptions': 'native',
+  'bodytrack': 'native',
+  'fluidanimate': 'native',
+  'dedup': 'native',
+  'freqmine': 'simlarge'
   
-  #'x264': 'native'               # 14 seconds < no debug symbols. Come back to this later
+  #'x264': 'native'               # no debug symbols---come back to this later
 }
 
 COZ = '/home/charlie/Projects/causal/release/bin/causal'
@@ -74,6 +74,7 @@ def run(benchmark, config, output_file=None, coz=True, runs=3, threads=64, size=
     start_time = time.time()
     os.system(command)
     elapsed = time.time() - start_time
+    print >> sys.stderr, elapsed
     runtimes.append(elapsed)
   
   return runtimes
