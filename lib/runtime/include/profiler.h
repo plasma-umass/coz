@@ -45,12 +45,6 @@ public:
   /// Force threads to catch up on delays, and stop sampling before the thread exits
   void handle_pthread_exit(void*) __attribute__((noreturn));
   
-  /// Skip any global delays this thread is missing
-  void skip_delays();
-  
-  /// Catch up on delays
-  void catch_up();
-  
   void before_blocking();   //< Call before a thread executes a potentially blocking call
   
   /// Call after unblocking. If by_thread is true, delays will be skipped
