@@ -7,7 +7,7 @@ import runner
 sys.path.append('/home/charlie/Projects/causal/tools/coz-process')
 import coz_profile
 
-RUNS = 3
+RUNS = 4
 OUTPUT_DIR = '/home/charlie/Projects/causal/tools/experiment/overhead_results'
 
 def to_seconds(ns):
@@ -19,8 +19,15 @@ results = open('overhead.csv', 'a')
 
 if not exists:
   print >> results, 'benchmark,configuration,runtime'
+  
+benchmarks = runner.BENCHMARKS
 
-for (benchmark, input_size) in runner.BENCHMARKS.items():
+if len(sys.argv) > 1:
+  benchmarks = {}
+  for bmk in sys.argv[1:]:
+    benchmarks[bmk] = runner.BENCHMARKS[bmk]
+
+for (benchmark, input_size) in benchmarks.items():
   print >> sys.stderr, 'Benchmark:', benchmark
   
   runner.build(benchmark, 'gcc')
@@ -42,17 +49,27 @@ for (benchmark, input_size) in runner.BENCHMARKS.items():
     print >> results, ','.join([benchmark, 'clean', str(t)])
   results.flush()
   
+  # Remove the output file
+  if os.path.isfile(output_file):
+    os.remove(output_file)
+  
   print >> sys.stderr, 'Starting zero delay runs'
   times = runner.run(benchmark=benchmark,
                      config='gcc',
                      runs=RUNS,
                      size=input_size,
                      output_file=output_file,
-                     fixed_speedup=0,
+                     sample_only=True,
                      keep_inputs=True)
   
-  for t in times:
-    print >> results, ','.join([benchmark, 'zero-delay', str(t)])
+  # Open the profile
+  p = coz_profile.profile()
+  p.process_file(output_file)
+  
+  for (full_time, main_time) in zip(times, p.run_times):
+    main_time = to_seconds(main_time)
+    print >> results, ','.join([benchmark, 'startup_time', str(full_time - main_time)])
+    print >> results, ','.join([benchmark, 'sampling_time', str(main_time)])
   results.flush()
 
   # Remove the output file
@@ -67,12 +84,12 @@ for (benchmark, input_size) in runner.BENCHMARKS.items():
                      output_file=output_file,
                      keep_inputs=True)
 
-  for t in times:
-    print >> results, ','.join([benchmark, 'full', str(t)])
-  
-  p = profile()
+  # Open the profile
+  p = coz_profile.profile()
   p.process_file(output_file)
-  for t in p.run_times:
-    print >> results, ','.join([benchmark, 'main', str(to_seconds(t))])
   
+  for (full_time, main_time) in zip(times, p.run_times):
+    main_time = to_seconds(main_time)
+    print >> results, ','.join([benchmark, 'startup_time', str(full_time - main_time)])
+    print >> results, ','.join([benchmark, 'delay_time', str(main_time)])
   results.flush()

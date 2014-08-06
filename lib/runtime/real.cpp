@@ -1,9 +1,10 @@
+#include "log.h"
 #include "real.h"
 
 #include <dlfcn.h>
 
 #define DEFINE_WRAPPER(name) decltype(::name)* name;
-#define SET_WRAPPER(name) name = (decltype(::name)*)dlsym(RTLD_NEXT, #name)
+#define SET_WRAPPER(name, handle) name = (decltype(::name)*)dlsym(handle, #name)
 
 namespace real {
   DEFINE_WRAPPER(main);
@@ -37,38 +38,45 @@ namespace real {
   DEFINE_WRAPPER(pthread_cond_signal);
   DEFINE_WRAPPER(pthread_cond_broadcast);
   DEFINE_WRAPPER(pthread_cond_destroy);
+  
+  DEFINE_WRAPPER(pthread_barrier_wait);
 
   void init() {
-    SET_WRAPPER(main);
+    SET_WRAPPER(main, RTLD_NEXT);
 
-    SET_WRAPPER(exit);
-    SET_WRAPPER(_exit);
-    SET_WRAPPER(_Exit);
-    SET_WRAPPER(fork);
+    SET_WRAPPER(exit, RTLD_NEXT);
+    SET_WRAPPER(_exit, RTLD_NEXT);
+    SET_WRAPPER(_Exit, RTLD_NEXT);
+    SET_WRAPPER(fork, RTLD_NEXT);
 
-    SET_WRAPPER(sigaction);
-    SET_WRAPPER(signal);
-    SET_WRAPPER(kill);
-    SET_WRAPPER(sigprocmask);
-    SET_WRAPPER(sigwait);
-    SET_WRAPPER(sigwaitinfo);
-    SET_WRAPPER(sigtimedwait);
+    SET_WRAPPER(sigaction, RTLD_NEXT);
+    SET_WRAPPER(signal, RTLD_NEXT);
+    SET_WRAPPER(kill, RTLD_NEXT);
+    SET_WRAPPER(sigprocmask, RTLD_NEXT);
+    SET_WRAPPER(sigwait, RTLD_NEXT);
+    SET_WRAPPER(sigwaitinfo, RTLD_NEXT);
+    SET_WRAPPER(sigtimedwait, RTLD_NEXT);
 
-    SET_WRAPPER(pthread_create);
-    SET_WRAPPER(pthread_exit);
-    SET_WRAPPER(pthread_join);
-    SET_WRAPPER(pthread_sigmask);
-    SET_WRAPPER(pthread_kill);
+    void *pthread_handle = dlopen("libpthread.so.0", RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD);
+  	REQUIRE(pthread_handle != nullptr) << "Unable to load libpthread.so.0";
+
+    SET_WRAPPER(pthread_create, pthread_handle);
+    SET_WRAPPER(pthread_exit, pthread_handle);
+    SET_WRAPPER(pthread_join, pthread_handle);
+    SET_WRAPPER(pthread_sigmask, pthread_handle);
+    SET_WRAPPER(pthread_kill, pthread_handle);
     
-    SET_WRAPPER(pthread_mutex_lock);
-    SET_WRAPPER(pthread_mutex_unlock);
-    SET_WRAPPER(pthread_mutex_trylock);
+    SET_WRAPPER(pthread_mutex_lock, pthread_handle);
+    SET_WRAPPER(pthread_mutex_unlock, pthread_handle);
+    SET_WRAPPER(pthread_mutex_trylock, pthread_handle);
     
-    SET_WRAPPER(pthread_cond_init);
-    SET_WRAPPER(pthread_cond_wait);
-    SET_WRAPPER(pthread_cond_timedwait);
-    SET_WRAPPER(pthread_cond_signal);
-    SET_WRAPPER(pthread_cond_broadcast);
-    SET_WRAPPER(pthread_cond_destroy);
+    SET_WRAPPER(pthread_cond_init, pthread_handle);
+    SET_WRAPPER(pthread_cond_wait, pthread_handle);
+    SET_WRAPPER(pthread_cond_timedwait, pthread_handle);
+    SET_WRAPPER(pthread_cond_signal, pthread_handle);
+    SET_WRAPPER(pthread_cond_broadcast, pthread_handle);
+    SET_WRAPPER(pthread_cond_destroy, pthread_handle);
+    
+    SET_WRAPPER(pthread_barrier_wait, pthread_handle);
   }
 }

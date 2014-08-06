@@ -1,0 +1,6 @@
+pkgs/kernels/canneal/obj/amd64-linux.gcc/netlist_elem.cpp:83	0.0462453754625
+pkgs/kernels/canneal/obj/amd64-linux.gcc/netlist_elem.cpp:89	0.0501366530014
+pkgs/kernels/canneal/obj/amd64-linux.gcc/netlist_elem.cpp:77	0.0523530980235
+pkgs/kernels/canneal/obj/amd64-linux.gcc/AtomicPtr.h:178	0.745467119955
+pkgs/kernels/canneal/obj/amd64-linux.gcc/netlist.cpp:227	0.0173732626737
+pkgs/kernels/canneal/obj/amd64-linux.gcc/main.cpp:140	0.0174565876746

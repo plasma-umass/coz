@@ -9,16 +9,15 @@ BENCHMARKS = {
   'blackscholes': 'native',
   'canneal': 'native',
   'ferret': 'native',
-  'facesim': 'native',
-  'streamcluster': 'simsmall',
-  'raytrace': 'native',
+  'facesim': 'simlarge',
+  'streamcluster': 'test',
+  'raytrace': 'simlarge',
   'swaptions': 'native',
   'bodytrack': 'native',
   'fluidanimate': 'native',
   'dedup': 'native',
-  'freqmine': 'simlarge'
-  
-  #'x264': 'native'               # no debug symbols---come back to this later
+  'freqmine': 'simlarge',
+  'x264': 'native'
 }
 
 COZ = '/home/charlie/Projects/causal/release/bin/causal'
@@ -31,7 +30,7 @@ def build(benchmark, config, rebuild=False):
     os.system(PARSECMGMT + ' -a uninstall -c ' + config + ' -p ' + benchmark + ' > /dev/null')
   os.system(PARSECMGMT + ' -a build -c ' + config + ' -p ' + benchmark + ' > /dev/null')
 
-def run(benchmark, config, output_file=None, coz=True, runs=3, threads=64, size='native', fixed_line=None, fixed_speedup=None, end_to_end=False, keep_inputs=False, show_output=False):
+def run(benchmark, config, output_file=None, coz=True, runs=3, threads=64, size='native', fixed_line=None, fixed_speedup=None, end_to_end=False, keep_inputs=False, show_output=False, sample_only=False):
   
   if coz:
     runner = [COZ, '--include ' + PARSEC_DIR, '--output ' + output_file]
@@ -43,6 +42,9 @@ def run(benchmark, config, output_file=None, coz=True, runs=3, threads=64, size=
   
     if end_to_end:
       runner.append('--end-to-end')
+    
+    if sample_only:
+      runner.append('--sample-only')
       
     runner.append(' --- ')
     

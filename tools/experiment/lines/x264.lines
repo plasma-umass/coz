@@ -1,0 +1,16 @@
+x264/obj/amd64-linux.gcc/encoder/macroblock.c:636	0.0127186958858
+x264/obj/amd64-linux.gcc/encoder/analyse.c:1101	0.0124798471368
+x264/obj/amd64-linux.gcc/common/cabac.h:80	0.0118827252642
+x264/obj/amd64-linux.gcc/encoder/cabac.c:1017	0.0345136442348
+x264/obj/amd64-linux.gcc/encoder/encoder.c:1014	0.0121812862005
+x264/obj/amd64-linux.gcc/encoder/analyse.c:798	0.0101510718338
+x264/obj/amd64-linux.gcc/encoder/slicetype.c:329	0.0111661790171
+x264/obj/amd64-linux.gcc/encoder/rdo.c:145	0.0164208514958
+x264/obj/amd64-linux.gcc/encoder/me.c:199	0.0346330686093
+x264/obj/amd64-linux.gcc/encoder/me.c:192	0.0110467546426
+x264/obj/amd64-linux.gcc/encoder/cabac.c:732	0.0197647339822
+x264/obj/amd64-linux.gcc/encoder/me.c:408	0.0108079058936
+x264/obj/amd64-linux.gcc/encoder/analyse.c:2320	0.0486057204275
+x264/obj/amd64-linux.gcc/encoder/me.c:636	0.167373260883
+x264/obj/amd64-linux.gcc/encoder/analyse.c:1067	0.200991222308
+x264/obj/amd64-linux.gcc/common/x86/mc-c.c:190	0.0151668955634

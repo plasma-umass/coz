@@ -18,7 +18,7 @@ typedef void* (*thread_fn_t)(void*);
 
 enum {
   SampleSignal = SIGPROF, //< Signal to generate when samples are ready
-  SamplePeriod = 1000000, //< Time between samples (1ms)
+  SamplePeriod = 10000000, //< Time between samples (10ms)
   SampleBatchSize = 10,   //< Samples to batch together for one processing run
   SpeedupDivisions = 20,  //< How many different speedups to try (20 = 5% increments)
   ExperimentMinTime = SamplePeriod * SampleBatchSize * 10,  //< Minimum experiment length
@@ -31,7 +31,8 @@ public:
   /// Start the profiler
   void startup(const std::string& outfile,
                causal_support::line* fixed_line,
-               int fixed_speedup);
+               int fixed_speedup,
+               bool sample_only);
   
   /// Shut down the profiler
   void shutdown();
@@ -79,8 +80,8 @@ private:
   void profiler_thread(spinlock& l);  //< Body of the main profiler thread
   void begin_sampling();  //< Start sampling in the current thread
   void end_sampling();    //< Stop sampling in the current thread
-  void add_delays(thread_state::ref&);      //< Add any required delays
-  void process_samples(thread_state::ref&); //< Process all available samples and insert delays
+  void add_delays(thread_state&);      //< Add any required delays
+  void process_samples(thread_state&); //< Process all available samples and insert delays
   causal_support::line* find_line(perf_event::record&); //< Map a sample to its source line
   
   static void* start_profiler_thread(void*);          //< Entry point for the profiler thread
@@ -103,9 +104,51 @@ private:
   
   pthread_t _profiler_thread;         //< Handle for the profiler thread
   size_t _end_time;                   //< Time that shutdown was called
+  bool _sample_only;                  //< Profiler should only collect samples, not insert delays
   std::atomic<size_t> _samples;       //< Total number of samples collected
   std::atomic<bool> _running;         //< Clear to signal the profiler thread to quit
   std::atomic_flag _shutdown_run = ATOMIC_FLAG_INIT;  //< Used to ensure shutdown only runs once
 };
+
+inline void profiler::catch_up() {
+  //auto state = thread_state::get(siglock::thread_context);
+  //REQUIRE(state) << "Unable to acquire exclusive access to thread state";
+  thread_state& state = thread_state::get();
+  
+  // Handle all samples and add delays as required
+  if(_experiment_active) {
+    state.set_in_use(true);
+    //process_samples(state);
+    add_delays(state);
+    state.set_in_use(false);
+  }
+}
+
+/**
+ * Called before a thread (possibly) blocks on some cross-thread dependency
+ */
+inline void profiler::before_blocking() {
+  //auto state = thread_state::get(siglock::thread_context);
+  //REQUIRE(state) << "Unable to acquire exclusive access to thread state";
+  
+  // Nothing required
+}
+
+/**
+ * Called after a thread unblocks. Skip delays if the thread was unblocked by another thread.
+ */
+inline void profiler::after_unblocking(bool by_thread) {
+  thread_state& state = thread_state::get();
+  state.set_in_use(true);
+  //auto state = thread_state::get(siglock::thread_context);
+  //REQUIRE(state) << "Unable to acquire exclusive access to thread state";
+  
+  if(by_thread && _experiment_active) {
+    // Skip ahead on delays
+    state.delay_count = _delays.load(std::memory_order_relaxed);
+  }
+  
+  state.set_in_use(false);
+}
 
 #endif

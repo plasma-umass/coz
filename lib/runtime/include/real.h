@@ -43,6 +43,8 @@ namespace real {
   DECLARE_WRAPPER(pthread_cond_broadcast);
   DECLARE_WRAPPER(pthread_cond_destroy);
   
+  DECLARE_WRAPPER(pthread_barrier_wait);
+  
   void init();
 };
 

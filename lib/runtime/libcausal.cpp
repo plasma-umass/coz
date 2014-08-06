@@ -102,7 +102,8 @@ int wrapped_main(int argc, char** argv, char** env) {
   // Start the profiler
   profiler::get_instance().startup(args["output"].as<string>(),
                                    fixed_line.get(),
-                                   args["fixed-speedup"].as<int>());
+                                   args["fixed-speedup"].as<int>(),
+                                   args.count("sample-only"));
   
   // Run the real main function
   int result = real_main(argc - causal_argc - 1, &argv[causal_argc + 1], env);
@@ -155,30 +156,28 @@ extern "C" {
                      const pthread_attr_t* attr,
                      thread_fn_t fn,
                      void* arg) {
-    return profiler::get_instance().handle_pthread_create(thread, attr, fn, arg);                   
+    return profiler::get_instance().handle_pthread_create(thread, attr, fn, arg);
   }
   
   /// Catch up on delays before exiting, possibly unblocking a thread joining this one
   void pthread_exit(void* result) {
 	  profiler::get_instance().handle_pthread_exit(result);
   }
-  
+ 
   /// Skip any delays added while waiting to join a thread
   int pthread_join(pthread_t t, void** retval) {
     profiler::get_instance().before_blocking();
     int result = real::pthread_join(t, retval);
     profiler::get_instance().after_unblocking(true);
-    //profiler::get_instance().skip_delays();
     
     return result;
   }
-  
+
   /// Skip any global delays added while blocked on a mutex
   int pthread_mutex_lock(pthread_mutex_t* mutex) {
     profiler::get_instance().before_blocking();
     int result = real::pthread_mutex_lock(mutex);  
     profiler::get_instance().after_unblocking(true);          
-    //profiler::get_instance().skip_delays();
     
     return result;   
   }
@@ -188,12 +187,7 @@ extern "C" {
     profiler::get_instance().catch_up();
     return real::pthread_mutex_unlock(mutex);
   }
-  
-  /// Pass condvar init calls to RTLD_NEXT (default call appears to target a different library?)
-  int pthread_cond_init(pthread_cond_t* cond, const pthread_condattr_t* attr) {
-    return real::pthread_cond_init(cond, attr);
-  }
-  
+
   /// Skip any delays added while waiting on a condition variable
   int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
     profiler::get_instance().before_blocking();
@@ -231,9 +225,16 @@ extern "C" {
     return real::pthread_cond_broadcast(cond);
   }
   
-  /// Pass condvar destroy calls to RTLD_NEXT (default call appears to target a different library?)
-  int pthread_cond_destroy(pthread_cond_t* cond) {
-    return real::pthread_cond_destroy(cond);
+  /// Catch up before, and skip ahead after waking from a barrier
+  int pthread_barrier_wait(pthread_barrier_t* barrier) {
+    profiler::get_instance().catch_up();
+    profiler::get_instance().before_blocking();
+    
+    int result = real::pthread_barrier_wait(barrier);
+    
+    profiler::get_instance().after_unblocking(true);
+    
+    return result;
   }
 
   /// Run shutdown before exiting

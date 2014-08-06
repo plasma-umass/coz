@@ -191,7 +191,7 @@ class profile:
     for (line, count) in self.sample_counts.items():
       fraction = float(count) / self.total_samples
       if fraction > 0.01:
-        print >> linefile, shortenLine(line) + "\t" + str(fraction)
+        print >> linefile, line + "\t" + str(fraction)
   
     linefile.close()
 
@@ -215,7 +215,7 @@ def shortenLine(name):
 
 if __name__ == "__main__":
   p = profile()
-  filename = sys.argv[1]
-  p.process_file(filename)
-  p.write_csv(filename.replace('.log', '')+'.csv')
-  p.write_lines(filename.replace('.log', '')+'.lines')
+  for filename in sys.argv[1:]:
+    p.process_file(filename)
+    p.write_csv(filename.replace('.log', '')+'.csv')
+    p.write_lines(filename.replace('.log', '')+'.lines')

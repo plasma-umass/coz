@@ -27,7 +27,7 @@ using namespace std;
 /**
  * Start the profiler
  */
-void profiler::startup(const string& outfile, line* fixed_line, int fixed_speedup) {
+void profiler::startup(const string& outfile, line* fixed_line, int fixed_speedup, bool sample_only) {
   // Set up the sampling signal handler
   struct sigaction sa = {
     .sa_sigaction = profiler::samples_ready,
@@ -53,6 +53,8 @@ void profiler::startup(const string& outfile, line* fixed_line, int fixed_speedu
   // If the speedup amount is in bounds, set a fixed delay size
   if(fixed_speedup >= 0 && fixed_speedup <= 100)
     _fixed_delay_size = SamplePeriod * fixed_speedup / 100;
+
+  _sample_only = sample_only;
 
   // Use a spinlock to wait for the profiler thread to finish intialization
   spinlock l;
@@ -93,6 +95,12 @@ void profiler::profiler_thread(spinlock& l) {
   vector<size_t> saved_counters;
   
   while(_running) {
+    // If we're only sampling, just wait for the program to exit
+    if(_sample_only) {
+      wait(SamplePeriod * SampleBatchSize);
+      continue;
+    }
+    
     line* selected;
     // If this run has a fixed line, use it
     if(_fixed_line) {
@@ -251,12 +259,13 @@ void* profiler::start_thread(void* p) {
   
   // Set up thread state. Be sure to release the state lock before running the real thread function
   {
-    auto state = thread_state::get(siglock::thread_context);
-    REQUIRE(state) << "Failed to acquire exclusive access to thread state on thread startup";
+    thread_state& state = thread_state::get();
+    //auto state = thread_state::get(siglock::thread_context);
+    //REQUIRE(state) << "Failed to acquire exclusive access to thread state on thread startup";
   
     // Copy over the delay count and excess delay time from the parent thread
-    state->delay_count = arg->_parent_delay_count;
-    state->excess_delay = arg->_parent_excess_delay;
+    state.delay_count = arg->_parent_delay_count;
+    state.excess_delay = arg->_parent_excess_delay;
   }
   
   // Make local copies of the function and argument before freeing the arg wrapper
@@ -286,13 +295,13 @@ int profiler::handle_pthread_create(pthread_t* thread,
   
   // Get exclusive access to the thread-local state and set up the wrapped thread argument
   {
-    auto state = thread_state::get(siglock::thread_context);
-    REQUIRE(state) << "Unable to acquire exclusive access to thread state in pthread_create";
-  
+    //auto state = thread_state::get(siglock::thread_context);
+    //REQUIRE(state) << "Unable to acquire exclusive access to thread state in pthread_create";
+    thread_state& state = thread_state::get();
     // Allocate a struct to pass as an argument to the new thread
     new_arg = new thread_start_arg(fn, arg,
-                                   state->delay_count,
-                                   state->excess_delay);
+                                   state.delay_count,
+                                   state.excess_delay);
   }
   
   // Create a wrapped thread and pass in the wrapped argument
@@ -307,44 +316,10 @@ void profiler::handle_pthread_exit(void* result) {
   real::pthread_exit(result);
 }
 
-/**
- * Called before a thread (possibly) blocks on some cross-thread dependency
- */
-void profiler::before_blocking() {
-  //auto state = thread_state::get(siglock::thread_context);
-  //REQUIRE(state) << "Unable to acquire exclusive access to thread state";
-  
-  // Nothing required
-}
-
-/**
- * Called after a thread unblocks. Skip delays if the thread was unblocked by another thread.
- */
-void profiler::after_unblocking(bool by_thread) {
-  auto state = thread_state::get(siglock::thread_context);
-  REQUIRE(state) << "Unable to acquire exclusive access to thread state";
-  
-  if(by_thread) {
-    // Skip ahead on delays
-    state->delay_count = _delays.load(memory_order_relaxed);
-  }
-  
-  // Resume sampling
-  //state->sampler.start();
-}
-
-void profiler::catch_up() {
-  auto state = thread_state::get(siglock::thread_context);
-  REQUIRE(state) << "Unable to acquire exclusive access to thread state";
-  
-  // Handle all samples and add delays as required
-  //process_samples(state);
-  add_delays(state);
-}
-
 void profiler::begin_sampling() {
-  auto state = thread_state::get(siglock::thread_context);
-  REQUIRE(state) << "Unable to acquire exclusive access to thread state in begin_sampling()";
+  thread_state& state = thread_state::get();
+  //auto state = thread_state::get(siglock::thread_context);
+  //REQUIRE(state) << "Unable to acquire exclusive access to thread state in begin_sampling()";
   
   // Set the perf_event sampler configuration
   struct perf_event_attr pe = {
@@ -359,21 +334,24 @@ void profiler::begin_sampling() {
   };
   
   // Create this thread's perf_event sampler and start sampling
-  state->sampler = perf_event(pe);
-  state->process_timer = timer(SampleSignal);
-  state->process_timer.start_interval(SamplePeriod * SampleBatchSize);
+  state.sampler = perf_event(pe);
+  state.process_timer = timer(SampleSignal);
+  state.process_timer.start_interval(SamplePeriod * SampleBatchSize);
   //state->sampler.set_ready_signal(SampleSignal);
-  state->sampler.start();
+  state.sampler.start();
 }
 
 void profiler::end_sampling() {
-  auto state = thread_state::get(siglock::thread_context);
-  REQUIRE(state) << "Unable to acquire exclusive access to thread state in end_sampling()";
+  thread_state& state = thread_state::get();
+  //auto state = thread_state::get(siglock::thread_context);
+  //REQUIRE(state) << "Unable to acquire exclusive access to thread state in end_sampling()";
+  
+  state.set_in_use(true);
   
   process_samples(state);
   
-  state->sampler.stop();
-  state->sampler.close();
+  state.sampler.stop();
+  state.sampler.close();
 }
 
 line* profiler::find_line(perf_event::record& sample) {
@@ -397,52 +375,52 @@ line* profiler::find_line(perf_event::record& sample) {
   return nullptr;
 }
 
-void profiler::add_delays(thread_state::ref& state) {
+void profiler::add_delays(thread_state& state) {
   // Add delays if there is an experiment running
-  if(_experiment_active) {
+  if(_experiment_active.load(memory_order_relaxed)) {
     // Take a snapshot of the global and local delays
     size_t delays = _delays;
     size_t delay_size = _delay_size;
     
     // Is this thread ahead or behind on delays?
-    if(state->delay_count > delays) {
+    if(state.delay_count > delays) {
       // Thread is ahead: increase the global delay count
-      _delays.fetch_add(state->delay_count - delays, memory_order_relaxed);
+      _delays.fetch_add(state.delay_count - delays, memory_order_relaxed);
       
-    } else if(state->delay_count < delays) {
+    } else if(state.delay_count < delays) {
       // Behind: Pause this thread to catch up
-      size_t time_to_wait = (delays - state->delay_count) * delay_size;
+      size_t time_to_wait = (delays - state.delay_count) * delay_size;
       
       // Has this thread paused too long already?
-      if(state->excess_delay > time_to_wait) {
+      if(state.excess_delay > time_to_wait) {
         // Charge the excess delay
-        state->excess_delay -= time_to_wait;
+        state.excess_delay -= time_to_wait;
         // Update the local delay count
-        state->delay_count = delays;
+        state.delay_count = delays;
         
       } else {
         // Use any available excess delay
-        time_to_wait -= state->excess_delay;
+        time_to_wait -= state.excess_delay;
         // Pause and record any *new* excess delay
-        state->sampler.stop();
-        state->excess_delay = wait(time_to_wait) - time_to_wait;
-        state->sampler.start();
+        state.sampler.stop();
+        state.excess_delay = wait(time_to_wait) - time_to_wait;
+        state.sampler.start();
         // Update the local delay count
-        state->delay_count = delays;
+        state.delay_count = delays;
       }
     }
     
   } else {
     // Just skip ahead on delays if there isn't an experiment running
-    state->delay_count = _delays;
+    state.delay_count = _delays;
   }
 }
 
-void profiler::process_samples(thread_state::ref& state) {
+void profiler::process_samples(thread_state& state) {
   // Stop sampling
   //state->sampler.stop();
   
-  for(perf_event::record r : state->sampler) {
+  for(perf_event::record r : state.sampler) {
     if(r.is_sample()) {
       _samples.fetch_add(1, memory_order_relaxed);
       
@@ -456,7 +434,7 @@ void profiler::process_samples(thread_state::ref& state) {
       if(_experiment_active) {
         // Add a delay if the sample is in the selected line
         if(sampled_line == _selected_line)
-          state->delay_count++;
+          state.delay_count++;
         
       } else if(sampled_line != nullptr && _next_line.load(memory_order_relaxed) == nullptr) {
         _next_line.store(sampled_line, memory_order_relaxed);
@@ -480,8 +458,9 @@ void* profiler::start_profiler_thread(void* arg) {
 }
 
 void profiler::samples_ready(int signum, siginfo_t* info, void* p) {
-  auto state = thread_state::get(siglock::signal_context);
-  if(state) {
+  //auto state = thread_state::get(siglock::signal_context);
+  thread_state& state = thread_state::get();
+  if(!state.check_in_use()) {
     // Process all available samples
     profiler::get_instance().process_samples(state);
   }

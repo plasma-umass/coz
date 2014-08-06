@@ -1,16 +1,29 @@
 #if !defined(CAUSAL_RUNTIME_THREAD_STATE_H)
 #define CAUSAL_RUNTIME_THREAD_STATE_H
 
+#include <atomic>
+
 #include "siglock.h"
 #include "timer.h"
 
 class thread_state {
 public:
+  bool in_use = false;      //< Set by the main thread to prevent signal handler from racing
   size_t delay_count = 0;   //< The count of delays (or selected line visits) in the thread
   size_t excess_delay = 0;  //< Any excess delay time added when nanosleep() returns late
   perf_event sampler;       //< The sampler object for this thread
   timer process_timer;      //< The timer that triggers sample processing for this thread
   size_t pre_block_time;    //< The time saved before (possibly) blocking
+  
+  inline void set_in_use(bool value) {
+    in_use = value;
+    std::atomic_signal_fence(std::memory_order_seq_cst);
+  }
+  
+  bool check_in_use() {
+    return in_use;
+  }
+    
   
   class ref {
   public:
@@ -58,9 +71,10 @@ public:
   * true when in error-handling mode. This makes it possible to collect a backtrace, which
   * calls pthread_mutex_lock.
   */
-  static ref get(siglock::context c) {
+  static thread_state& get() {
     static thread_local thread_state s;
-    return thread_state::ref(&s, c);
+    return s;
+    //return thread_state::ref(&s, c);
   }
   
 private:
