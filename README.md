@@ -11,17 +11,17 @@ optimizations. This allows the profiler to establish causality:
 developers had assumed they were getting all along.
 
 ## Requirements
-Coz, our prototype causal profiler runs with unmodified Linux executables. Building and running the causal profiler requires:
+Coz, our prototype causal profiler, runs with unmodified Linux executables. Building and running Coz requires:
 
 - [Clang 3.1 or newer](http://clang.llvm.org) or another compiler with C++11 support
 - [libudis86](http://udis86.sourceforge.net) version 1.7.2 or newer
 - [Linux](http://kernel.org) version 2.6.32 or newer, including the `perf_event` API
 
 ## Building
-To build the profiler, just clone this repository and run `make release`. This is just a prototype, so installing profiling support system-wide is not recommended.
+To build Coz, just clone this repository and run `make release`. This is just a prototype, so installing profiling support system-wide is not recommended.
 
-## Using the Profiler
-This repository includes sample applications in the `tests` directory, which you can run with the profiler by typing `make tests` at the project root. To profile arbitrary applications, just preload the causal profiler library:
+## Using Coz
+This repository includes sample applications in the `tests` directory, which you can run with Coz by typing `make tests` at the project root. To profile arbitrary applications, just preload the causal profiler library:
 
     LD_PRELOAD=/path/to/causal/libcausal.so <your command here>
 
