@@ -1,4 +1,4 @@
-# Causal Profiling
+# Coz: Causal Profiling
 Causal profiling is a novel technique to measure optimization potential.
 This measurement matches developers' assumptions about profilers: that
 optimizing highly-ranked code will have the greatest impact on 
@@ -11,7 +11,7 @@ optimizations. This allows the profiler to establish causality:
 developers had assumed they were getting all along.
 
 ## Requirements
-Our prototype causal profiler runs with unmodified Linux executables. Building and running the causal profiler requires:
+Coz, our prototype causal profiler runs with unmodified Linux executables. Building and running the causal profiler requires:
 
 - [Clang 3.1 or newer](http://clang.llvm.org) or another compiler with C++11 support
 - [libudis86](http://udis86.sourceforge.net) version 1.7.2 or newer
