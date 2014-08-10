@@ -6,6 +6,7 @@
 #endif
 
 #include <dlfcn.h>
+#include <string.h> /* for memcpy hack below */
 
 #if defined(__cplusplus)
 extern "C" {
@@ -17,7 +18,11 @@ static void _causal_init_counter(int kind,
                                  unsigned long* ctr,
                                  unsigned long* backoff,
                                  const char* name) {
-  causal_reg_ctr_t reg = (causal_reg_ctr_t)dlsym(RTLD_DEFAULT, "__causal_register_counter");
+  void * p = dlsym(RTLD_DEFAULT, "__causal_register_counter");
+  /* Hack to avoid pedantic complaint about putting function into pointer. */
+  causal_reg_ctr_t reg;
+  memcpy(&reg, &p, sizeof(p));
+  
   if(reg)
     reg(kind, ctr, backoff, name);
 }
