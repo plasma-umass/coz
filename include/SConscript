@@ -1,0 +1,6 @@
+# Inherit build environment
+Import('env')
+
+# Install causal.h in <prefix>/include
+env.Install(env['prefix'] + '/include', 'causal.h')
+env.Alias('install', env['prefix'] + '/include')
