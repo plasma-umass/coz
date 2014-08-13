@@ -11,41 +11,28 @@ optimizations. This allows the profiler to establish causality:
 developers had assumed they were getting all along.
 
 ## Requirements
-Coz, our prototype causal profiler, runs with unmodified Linux executables. Building and running Coz requires:
+Coz, our prototype causal profiler, runs with unmodified Linux executables. Coz requires:
 
+- [SCons](http://scons.org), a python-based build system
 - [Clang 3.1 or newer](http://clang.llvm.org) or another compiler with C++11 support
-- [libudis86](http://udis86.sourceforge.net) version 1.7.2 or newer
 - [Linux](http://kernel.org) version 2.6.32 or newer, including the `perf_event` API
+- [Boost](http://boost.org) filesystem, program_options, and system libraries
 
 ## Building
-To build Coz, just clone this repository and run `make release`. This is just a prototype, so installing profiling support system-wide is not recommended.
+To build Coz, just clone this repository and run `scons`. Adding `mode=release` will build an optimized version with less debug logging.
+
+You can install Coz by running `scons install`, with an optional `prefix=<install prefix>` argument if you do not want to install to `/usr/local`.
 
 ## Using Coz
-This repository includes sample applications in the `tests` directory, which you can run with Coz by typing `make tests` at the project root. To profile arbitrary applications, just preload the causal profiler library:
+Before running your program with Coz, you will need to identify one or more progress points. These are points in your program that you would like to happen more frequently. For example, in the `pbzip2` program under `benchmarks/pbzip2` we have inserted a progress point after the code that compresses a block of data.
 
-    LD_PRELOAD=/path/to/causal/libcausal.so <your command here>
+To add a progress point, add the `CAUSAL_PROGRESS` macro to the line you would like to execute more frequently. This macro is defined in `causal.h`, which is installed to `<prefix>/include` (`/usr/local/include` by default).
 
-A driver script will be available soon.
+To run a program with Coz, just type `coz --- <your program and arguments>` on the command line. You can specify profiling options befor the `---`. Run `coz --help` for a description of the available options. Profiling output is placed in the file `profile.log` by default.
 
-## Interpreting Results
-TODO: Results processing scripts
+## Processing Results
+To process results, run `coz-process profile.log`. This will generate a `profile.csv` file with predicted program speedups for all lines in the causal profile. To graph these results, run `coz-plot profile.csv`.
 
-## How it Works
+The `coz-plot` tool requires [R](http://r-project.org), along with the `ggplot2` and `plyr` packages. To install these, run R and type the command `install.packages('ggplot2', 'plyr')`.
 
-- On startup, read configuration from environment variables
-  - CAUSAL_INCLUDE: colon-separated list of file names (or name substrings). Only the main executable will be profiled by default.
-  - Coming later: CAUSAL_PROGRESS_POINTS: colon-separated list of extra progress points
-    - file-throughput
-    - file-latency
-- Read /proc/self/maps to locate all executable memory
-- Open each executable ELF file and locate each function
-- Disassemble each function to locate all basic blocks
-  - Each basic block goes into a map from address range -> block stats
-- Start sampling every N cycles in each thread. On each cycle:
-  - If in idle mode (the initial state):
-    - Locate the basic block where the sample occurred
-    - If the block is in one of the included binaries, set this as the selected block and enter "speedup" mode
-  - In speedup mode:
-    - On each visit to the selected block, a global trip count is incremented.
-    - Each thread keeps a local pause count. On every cycle sample, the thread must pause for (<global trip count> - <local pause count>) * <delay size>
-    - Trip counts are collected using watchpoint sampling
+Note that `coz-plot` may produce error messages if there are not enough samples in the profile to produce a plot. You can execute the profiled application several times to collect additional samples.
