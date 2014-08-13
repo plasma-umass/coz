@@ -1,0 +1,14 @@
+# Inherit the build evironment
+Import('env')
+env.Append(CPPPATH=['#include', '#lib/support/include'])
+env.Append(LIBPATH='#/lib/support')
+env.Append(LIBS=['boost_filesystem',
+                 'boost_program_options',
+                 'boost_system',
+                 'causal_support',
+                 'dl',
+                 'dwarf++',
+                 'elf++',
+                 'rt'])
+
+env.SharedLibrary('causal', Glob('*.cpp'))

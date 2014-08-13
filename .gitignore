@@ -1,23 +1,13 @@
+.sconsign.dblite
 deps
 
-debug
-release
-
-benchmarks/*/debug
-benchmarks/*/release
 benchmarks/*/profile.log
 benchmarks/*/profile.csv
 benchmarks/*/profile.lines
 benchmarks/*/Rplots.pdf
-lib/*/debug
-lib/*/release
-tests/*/debug
-tests/*/release
 tests/*/profile.log
 tests/*/results.csv
 tests/*/Rplots.pdf
-tools/*/debug
-tools/*/release
 
 tests/toy/results
 tests/toy/toy_clean

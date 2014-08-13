@@ -1,0 +1,5 @@
+# Inherit the default build environment
+Import('env')
+
+# Build libraries
+env.SConscript(dirs=['support', 'runtime'])
