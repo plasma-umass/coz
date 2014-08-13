@@ -1,0 +1,6 @@
+# Inherit the build evironment
+Import('env')
+
+# Install coz-plot in <prefix>/bin
+env.Install(env['prefix'] + '/bin', 'coz-plot')
+env.Alias('install', env['prefix'] + '/bin')

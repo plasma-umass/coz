@@ -1,0 +1,6 @@
+# Inherit the build evironment
+Import('env')
+
+# Install coz-process in <prefix>/bin
+env.Install(env['prefix'] + '/bin', 'coz-process')
+env.Alias('install', env['prefix'] + '/bin')

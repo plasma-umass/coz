@@ -17,7 +17,7 @@ dat <- read.csv(filename, sep='\t')
 dat$points <- tabulate(dat$line)[dat$line]
 
 # Prune out lines without a complete set of samples
-dat <- subset(dat, points >= 19)
+dat <- subset(dat, points >= 10)
 
 # Remove points above 1.0 or below -1.0
 dat <- subset(dat, counter_speedup < 1.0)
