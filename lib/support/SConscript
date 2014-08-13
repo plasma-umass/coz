@@ -2,4 +2,7 @@
 Import('env')
 env.Append(LIBS=['dwarf++', 'elf++', 'boost_filesystem', 'boost_system'])
 
-env.StaticLibrary('causal_support', Glob('*.cpp'))
+support = env.StaticLibrary('causal_support', Glob('*.cpp'))
+
+# Build libcausal_support as part of the 'all' target
+env.Alias('all', support)

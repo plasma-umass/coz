@@ -1,11 +1,17 @@
 # Inherit the build evironment
 Import('env')
 env.Append(CPPPATH=['#lib/support/include'])
-env.Append(LIBPATH='#/lib/support')
 env.Append(LIBS=['causal_support',
                  'dwarf++',
                  'elf++',
                  'boost_filesystem',
                  'boost_system'])
 
-env.Program('inspect', Glob('*.cpp'))
+inspect = env.Program('inspect', Glob('*.cpp'))
+
+# Build inspect as part of the 'all' target
+env.Alias('all', inspect)
+
+# Intall inspect in <prefix>/bin
+env.Install(env['prefix'] + '/bin', inspect)
+env.Alias('install', env['prefix'] + '/bin')

@@ -1,4 +1,8 @@
 .sconsign.dblite
+.debug
+.release
+build.conf
+
 deps
 
 benchmarks/*/profile.log

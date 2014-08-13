@@ -3,8 +3,14 @@ import os
 # Inherit the build evironment
 Import('env')
 env.Append(CPPPATH=['#lib/support/include', '#lib/runtime/include'])
-env.Append(LIBPATH='#/lib/support')
 env.Append(LIBS=['boost_program_options'])
 env.Append(CCFLAGS='-DCAUSAL_ROOT_PATH=\\\"' + os.getcwd() + '\\\"')
 
-env.Program('causal', Glob('*.cpp'))
+coz = env.Program('causal', Glob('*.cpp'))
+
+# Build coz as part of the 'all' target
+env.Alias('all', coz)
+
+# Install coz in <prefix>/bin
+env.Install(env['prefix'] + '/bin', coz)
+env.Alias('install', env['prefix'] + '/bin')
