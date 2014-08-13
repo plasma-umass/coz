@@ -1,5 +1,7 @@
+#include <libgen.h>
 #include <unistd.h>
 
+#include <cstdio>
 #include <iostream>
 #include <string>
 
@@ -9,9 +11,43 @@ using std::cerr;
 using std::cout;
 using std::string;
 
-#if !defined(CAUSAL_ROOT_PATH)
-#error "The path to the causal root must be set in the CAUSAL_ROOT_PATH variable."
-#endif
+bool file_exists(string path) {
+  FILE* f = fopen(path.c_str(), "r");
+  if(f != nullptr) {
+    fclose(f);
+    return true;
+  } else {
+    return false;
+  }
+}
+
+string find_libcausal() {
+  char linkname[PATH_MAX];
+  int len = readlink("/proc/self/exe", linkname, PATH_MAX);
+  
+  if(len > 0) {
+    // Get the directory where coz is installed
+    char* dir = dirname(linkname);
+  
+    // If coz was installed, libcausal will be in ../lib/
+    string libcausal_path = string(dir) + "/../lib/libcausal.so";
+  
+    if(file_exists(libcausal_path)) {
+      return libcausal_path;
+    }
+  
+    // no luck. Maybe we're running in the development directory?
+    libcausal_path = string(dir) + "/../../lib/runtime/libcausal.so";
+    
+    if(file_exists(libcausal_path)) {
+      return libcausal_path;
+    }
+  }
+  
+  fprintf(stderr, "Warning: Unable to locate libcausal.so. Assuming libcausal.so is in the standard library path.\n");
+  
+  return "libcausal.so";
+}
 
 int main(int argc, char** argv, char** env) {
   // Find the "---" separator between causal arguments and the program name
@@ -40,14 +76,9 @@ int main(int argc, char** argv, char** env) {
   
   // Set the program name in the first argument, otherwise file name resolution won't work
   argv[0] = prog_name;
-  
-#if !defined(NDEBUG)
-  // Set the preload string to the path to the debug causal library
-  string causal_preload = CAUSAL_ROOT_PATH "/debug/lib/libcausal.so";
-#else
-  // Preload the release version of the causal library
-  string causal_preload = CAUSAL_ROOT_PATH "/release/lib/libcausal.so";
-#endif
+
+  // Try to find libcausal.so
+  string causal_preload = find_libcausal();
   
   // Loop over the environment array, looking for an LD_PRELOAD entry
   bool ld_preload_found = false;

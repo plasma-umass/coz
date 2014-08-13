@@ -4,7 +4,6 @@ import os
 Import('env')
 env.Append(CPPPATH=['#lib/support/include', '#lib/runtime/include'])
 env.Append(LIBS=['boost_program_options'])
-env.Append(CCFLAGS='-DCAUSAL_ROOT_PATH=\\\"' + os.getcwd() + '\\\"')
 
 coz = env.Program('coz', Glob('*.cpp'))
 
