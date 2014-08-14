@@ -1,4 +1,4 @@
-#include "profiler.h"
+#include "causal/profiler.h"
 
 #include <asm/unistd.h>
 #include <execinfo.h>
@@ -13,13 +13,14 @@
 #include <string>
 #include <vector>
 
-#include "counter.h"
-#include "inspect.h"
-#include "log.h"
-#include "perf.h"
-#include "spinlock.h"
-#include "timer.h"
-#include "util.h"
+#include "causal/counter.h"
+#include "causal/inspect.h"
+#include "causal/perf.h"
+#include "causal/spinlock.h"
+#include "causal/timer.h"
+#include "causal/util.h"
+
+#include "ccutil/log.h"
 
 using namespace std;
 

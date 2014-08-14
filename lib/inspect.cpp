@@ -1,4 +1,4 @@
-#include "inspect.h"
+#include "causal/inspect.h"
 
 #include <cxxabi.h>
 #include <elf.h>
@@ -25,7 +25,7 @@
 #include <libelfin/dwarf/dwarf++.hh>
 #include <libelfin/elf/elf++.hh>
 
-#include "log.h"
+#include "ccutil/log.h"
 
 using boost::is_any_of;
 using boost::split;

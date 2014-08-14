@@ -3,8 +3,9 @@
 
 #include <time.h>
 
-#include "log.h"
-#include "util.h"
+#include "causal/util.h"
+
+#include "ccutil/log.h"
 
 class timer {
 public:

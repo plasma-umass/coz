@@ -5,10 +5,12 @@
 #include <string>
 
 #include "causal.h"
-#include "inspect.h"
-#include "log.h"
-#include "perf.h"
-#include "util.h"
+
+#include "causal/inspect.h"
+#include "causal/perf.h"
+#include "causal/util.h"
+
+#include "ccutil/log.h"
 
 class counter {
 public:

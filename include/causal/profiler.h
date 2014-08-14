@@ -8,10 +8,11 @@
 #include <vector>
 
 #include "causal.h"
-#include "counter.h"
-#include "inspect.h"
-#include "spinlock.h"
-#include "thread_state.h"
+
+#include "causal/counter.h"
+#include "causal/inspect.h"
+#include "causal/spinlock.h"
+#include "causal/thread_state.h"
 
 /// Type of a thread entry function
 typedef void* (*thread_fn_t)(void*);

@@ -5,13 +5,14 @@
 #include <set>
 #include <string>
 
-#include "counter.h"
-#include "inspect.h"
-#include "log.h"
-#include "options.h"
-#include "profiler.h"
-#include "real.h"
-#include "util.h"
+#include "causal/counter.h"
+#include "causal/inspect.h"
+#include "causal/options.h"
+#include "causal/profiler.h"
+#include "causal/real.h"
+#include "causal/util.h"
+
+#include "ccutil/log.h"
 
 using namespace std;
 

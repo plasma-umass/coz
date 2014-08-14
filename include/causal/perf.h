@@ -8,8 +8,8 @@
 #include <cstdint>
 #include <functional>
 
-#include "log.h"
-#include "wrapped_array.h"
+#include "ccutil/log.h"
+#include "ccutil/wrapped_array.h"
 
 class perf_event {
 public:

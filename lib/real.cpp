@@ -1,7 +1,8 @@
-#include "log.h"
-#include "real.h"
+#include "causal/real.h"
 
 #include <dlfcn.h>
+
+#include "ccutil/log.h"
 
 #define DEFINE_WRAPPER(name) decltype(::name)* name;
 #define SET_WRAPPER(name, handle) name = (decltype(::name)*)dlsym(handle, #name)

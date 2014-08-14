@@ -1,4 +1,4 @@
-#include "perf.h"
+#include "causal/perf.h"
 
 #include <asm/unistd.h>
 #include <fcntl.h>
@@ -17,10 +17,11 @@
 
 #include <functional>
 
-#include "log.h"
-#include "spinlock.h"
-#include "util.h"
-#include "wrapped_array.h"
+#include "causal/spinlock.h"
+#include "causal/util.h"
+
+#include "ccutil/log.h"
+#include "ccutil/wrapped_array.h"
 
 using std::function;
 using cppgoodies::wrapped_array;

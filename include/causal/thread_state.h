@@ -3,8 +3,8 @@
 
 #include <atomic>
 
-#include "siglock.h"
-#include "timer.h"
+#include "causal/siglock.h"
+#include "causal/timer.h"
 
 class thread_state {
 public:

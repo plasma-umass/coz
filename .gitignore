@@ -2,8 +2,7 @@
 .debug
 .release
 build.conf
-
-deps
+include/ccutil
 
 benchmarks/*/profile.log
 benchmarks/*/profile.csv

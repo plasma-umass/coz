@@ -5,7 +5,7 @@
 #include <iostream>
 #include <string>
 
-#include "options.h"
+#include "causal/options.h"
 
 using std::cerr;
 using std::cout;

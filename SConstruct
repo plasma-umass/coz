@@ -1,3 +1,4 @@
+import os
 import sys
 
 # Set up the default build environment
@@ -32,7 +33,7 @@ env.Replace(CXX='clang++')
 env.Append(CCFLAGS='--std=c++11 -fPIC')
 
 # Add include paths
-env.Append(CPPPATH=['include', '#/deps/cppgoodies/include'])
+env.Append(CPPPATH=['#/include'])
 
 # Add lib paths
 env.Append(LIBPATH=['#/' + build_dir + '/lib/support'])
@@ -46,6 +47,17 @@ env['LINKCOMSTR'] = 'Linking $TARGET'
 env['SHLINKCOMSTR'] = 'Linking $TARGET'
 env['ARCOMSTR'] = 'Linking $TARGET'
 env['RANLIBCOMSTR'] = 'Indexing $TARGET'
+
+if not os.path.isdir('include/ccutil'):
+  print >> sys.stdout, 'Checking out github.com/ccurtsinger/ccutil'
+  os.system('git clone --quiet git://github.com/ccurtsinger/ccutil include/ccutil > /dev/null')
+
+ccutil_update = env.Command('#/include/ccutil/.git',
+                            [], 
+                            Action('cd include/ccutil; git pull > /dev/null', 
+                                   'Updating include/ccutil'))
+env.Depends(Glob('#/include/ccutil/*.h'), ccutil_update)
+env.AlwaysBuild(ccutil_update)
 
 # Go
 env.SConscript('SConscript', variant_dir=build_dir, duplicate=0)
