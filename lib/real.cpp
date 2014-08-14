@@ -33,12 +33,10 @@ namespace real {
   DEFINE_WRAPPER(pthread_mutex_unlock);
   DEFINE_WRAPPER(pthread_mutex_trylock);
   
-  DEFINE_WRAPPER(pthread_cond_init);
   DEFINE_WRAPPER(pthread_cond_wait);
   DEFINE_WRAPPER(pthread_cond_timedwait);
   DEFINE_WRAPPER(pthread_cond_signal);
   DEFINE_WRAPPER(pthread_cond_broadcast);
-  DEFINE_WRAPPER(pthread_cond_destroy);
   
   DEFINE_WRAPPER(pthread_barrier_wait);
 
@@ -71,12 +69,10 @@ namespace real {
     SET_WRAPPER(pthread_mutex_unlock, pthread_handle);
     SET_WRAPPER(pthread_mutex_trylock, pthread_handle);
     
-    SET_WRAPPER(pthread_cond_init, pthread_handle);
     SET_WRAPPER(pthread_cond_wait, pthread_handle);
     SET_WRAPPER(pthread_cond_timedwait, pthread_handle);
     SET_WRAPPER(pthread_cond_signal, pthread_handle);
     SET_WRAPPER(pthread_cond_broadcast, pthread_handle);
-    SET_WRAPPER(pthread_cond_destroy, pthread_handle);
     
     SET_WRAPPER(pthread_barrier_wait, pthread_handle);
   }
