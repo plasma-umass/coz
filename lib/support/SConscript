@@ -1,6 +1,6 @@
 # Inherit the build evironment
 Import('env')
-env.Append(LIBS=['dwarf++', 'elf++', 'boost_filesystem', 'boost_system'])
+env.Append(LIBS=['boost_filesystem', 'boost_system', 'dwarf++', 'elf++'])
 
 support = env.StaticLibrary('causal_support', Glob('*.cpp'))
 

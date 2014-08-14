@@ -1,3 +1,5 @@
+import sys
+
 # Set up the default build environment
 env = Environment()
 Export('env')
@@ -30,15 +32,20 @@ env.Replace(CXX='clang++')
 env.Append(CCFLAGS='--std=c++11 -fPIC')
 
 # Add include paths
-env.Append(CPPPATH=['include', 
-                    '#/deps/libelfin/dwarf',
-                    '#/deps/libelfin/elf',
-                    '#/deps/cppgoodies/include'])
+env.Append(CPPPATH=['include', '#/deps/cppgoodies/include'])
 
 # Add lib paths
-env.Append(LIBPATH=['#/' + build_dir + '/deps/libelfin/dwarf',
-                    '#/' + build_dir + '/deps/libelfin/elf',
-                    '#/' + build_dir + '/lib/support'])
+env.Append(LIBPATH=['#/' + build_dir + '/lib/support'])
+
+# Set up concise build output
+env['CCCOMSTR'] = 'Compiling $SOURCE'
+env['SHCCCOMSTR'] = 'Compiling $SOURCE'
+env['CXXCOMSTR'] = 'Compiling $SOURCE'
+env['SHCXXCOMSTR'] = 'Compiling $SOURCE'
+env['LINKCOMSTR'] = 'Linking $TARGET'
+env['SHLINKCOMSTR'] = 'Linking $TARGET'
+env['ARCOMSTR'] = 'Linking $TARGET'
+env['RANLIBCOMSTR'] = 'Indexing $TARGET'
 
 # Go
 env.SConscript('SConscript', variant_dir=build_dir, duplicate=0)

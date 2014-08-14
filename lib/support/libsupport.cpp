@@ -22,8 +22,9 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/filesystem.hpp>
 
-#include "dwarf++.hh"
-#include "elf++.hh"
+#include <libelfin/dwarf/dwarf++.hh>
+#include <libelfin/elf/elf++.hh>
+
 #include "log.h"
 
 using boost::is_any_of;

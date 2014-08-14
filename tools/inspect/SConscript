@@ -1,11 +1,11 @@
 # Inherit the build evironment
 Import('env')
 env.Append(CPPPATH=['#lib/support/include'])
-env.Append(LIBS=['causal_support',
+env.Append(LIBS=['boost_filesystem',
+                 'boost_system',
+                 'causal_support',
                  'dwarf++',
-                 'elf++',
-                 'boost_filesystem',
-                 'boost_system'])
+                 'elf++'])
 
 inspect = env.Program('inspect', Glob('*.cpp'))
 
