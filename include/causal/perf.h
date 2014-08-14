@@ -112,7 +112,7 @@ public:
     uint64_t get_tid() const;
     uint64_t get_time() const;
     uint32_t get_cpu() const;
-    cppgoodies::wrapped_array<uint64_t> get_callchain() const;
+    ccutil::wrapped_array<uint64_t> get_callchain() const;
     
   private:
     record(const perf_event& source, struct perf_event_header* header) :

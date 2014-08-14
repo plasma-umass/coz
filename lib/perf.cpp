@@ -24,7 +24,7 @@
 #include "ccutil/wrapped_array.h"
 
 using std::function;
-using cppgoodies::wrapped_array;
+using ccutil::wrapped_array;
 
 enum {
   DataPages = 2,
