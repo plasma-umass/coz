@@ -2,4 +2,4 @@
 Import('env')
 
 # Build libraries
-env.SConscript(dirs=['support', 'runtime'])
+env.SConscript(dirs=['runtime'])

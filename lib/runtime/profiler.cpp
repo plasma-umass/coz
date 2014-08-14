@@ -14,14 +14,13 @@
 #include <vector>
 
 #include "counter.h"
+#include "inspect.h"
 #include "log.h"
 #include "perf.h"
 #include "spinlock.h"
-#include "support.h"
 #include "timer.h"
 #include "util.h"
 
-using namespace causal_support;
 using namespace std;
 
 /**

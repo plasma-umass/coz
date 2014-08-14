@@ -5,9 +5,9 @@
 #include <string>
 
 #include "causal.h"
+#include "inspect.h"
 #include "log.h"
 #include "perf.h"
-#include "support.h"
 #include "util.h"
 
 class counter {
@@ -97,7 +97,7 @@ public:
 
 class sampling_counter : public counter {
 public:
-  sampling_counter(std::string name, std::shared_ptr<causal_support::line> l) : 
+  sampling_counter(std::string name, std::shared_ptr<line> l) : 
     counter(counter::type::progress, name, "sampling"), _line(l) {}
   
   virtual ~sampling_counter() {}
@@ -108,7 +108,7 @@ public:
   }
   
 private:
-  std::shared_ptr<causal_support::line> _line;
+  std::shared_ptr<line> _line;
 };
 
 class end_to_end_counter : public counter {

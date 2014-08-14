@@ -6,15 +6,14 @@
 #include <string>
 
 #include "counter.h"
+#include "inspect.h"
 #include "log.h"
 #include "options.h"
 #include "profiler.h"
 #include "real.h"
-#include "support.h"
 #include "util.h"
 
 using namespace std;
-using namespace causal_support;
 
 /// The type of a main function
 typedef int (*main_fn_t)(int, char**, char**);

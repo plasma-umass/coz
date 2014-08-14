@@ -9,8 +9,8 @@
 
 #include "causal.h"
 #include "counter.h"
+#include "inspect.h"
 #include "spinlock.h"
-#include "support.h"
 #include "thread_state.h"
 
 /// Type of a thread entry function
@@ -30,7 +30,7 @@ class profiler {
 public:
   /// Start the profiler
   void startup(const std::string& outfile,
-               causal_support::line* fixed_line,
+               line* fixed_line,
                int fixed_speedup,
                bool sample_only);
   
@@ -82,7 +82,7 @@ private:
   void end_sampling();    //< Stop sampling in the current thread
   void add_delays(thread_state&);      //< Add any required delays
   void process_samples(thread_state&); //< Process all available samples and insert delays
-  causal_support::line* find_line(perf_event::record&); //< Map a sample to its source line
+  line* find_line(perf_event::record&); //< Map a sample to its source line
   
   static void* start_profiler_thread(void*);          //< Entry point for the profiler thread
   static void* start_thread(void* arg);               //< Entry point for wrapped threads
@@ -95,11 +95,11 @@ private:
   std::atomic<bool> _experiment_active;   //< Is an experiment running?
   std::atomic<size_t> _delays;            //< The total number of delays inserted
   std::atomic<size_t> _delay_size;        //< The current delay size
-  std::atomic<causal_support::line*> _selected_line;  //< The line to speed up
-  std::atomic<causal_support::line*> _next_line;      //< The next line to speed up
+  std::atomic<line*> _selected_line;  //< The line to speed up
+  std::atomic<line*> _next_line;      //< The next line to speed up
   
   std::string _output_filename;       //< File for profiler output
-  causal_support::line* _fixed_line;  //< The only line that should be sped up, if set
+  line* _fixed_line;  //< The only line that should be sped up, if set
   int _fixed_delay_size = -1;         //< The only delay size that should be used, if set
   
   pthread_t _profiler_thread;         //< Handle for the profiler thread
