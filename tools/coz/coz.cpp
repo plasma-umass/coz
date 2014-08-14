@@ -37,7 +37,7 @@ string find_libcausal() {
     }
   
     // no luck. Maybe we're running in the development directory?
-    libcausal_path = string(dir) + "/../../lib/runtime/libcausal.so";
+    libcausal_path = string(dir) + "/../../lib/libcausal.so";
     
     if(file_exists(libcausal_path)) {
       return libcausal_path;
