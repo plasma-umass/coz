@@ -17,6 +17,7 @@ Coz, our prototype causal profiler, runs with unmodified Linux executables. Coz 
 - [Clang 3.1 or newer](http://clang.llvm.org) or another compiler with C++11 support
 - [Linux](http://kernel.org) version 2.6.32 or newer, including the `perf_event` API
 - [Boost](http://boost.org) filesystem, program_options, and system libraries
+- [libelfin](https://github.com/ccurtsinger/libelfin), a C++11 library for accessing ELF binaries and reading DWARF debugging information
 
 ## Building
 To build Coz, just clone this repository and run `scons`. Adding `mode=release` will build an optimized version with less debug logging.
