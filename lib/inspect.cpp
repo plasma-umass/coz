@@ -16,6 +16,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include <boost/algorithm/string/classification.hpp>
@@ -41,6 +42,7 @@ using std::pair;
 using std::shared_ptr;
 using std::string;
 using std::stringstream;
+using std::system_error;
 using std::vector;
 
 /// Path for the main executable, as passed to exec()
@@ -212,8 +214,12 @@ map<string, uintptr_t> get_loaded_files(bool include_libs) {
 
 void memory_map::build(const vector<string>& scope, bool include_libs) {
   for(const auto& f : get_loaded_files(include_libs)) {
-    if(process_file(f.first, f.second, scope)) {
-      INFO << "Including lines from " << f.first;
+    try {
+      if(process_file(f.first, f.second, scope)) {
+        INFO << "Including lines from " << f.first;
+      }
+    } catch(const system_error& e) {
+      WARNING << "Processing file \"" << f.first << "\" failed: " << e.what();
     }
   }
 }
