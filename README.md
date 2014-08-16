@@ -16,8 +16,19 @@ Coz, our prototype causal profiler, runs with unmodified Linux executables. Coz 
 - [SCons](http://scons.org), a python-based build system
 - [Clang 3.1 or newer](http://clang.llvm.org) or another compiler with C++11 support
 - [Linux](http://kernel.org) version 2.6.32 or newer, including the `perf_event` API
-- [Boost](http://boost.org) filesystem, program_options, and system libraries
+- [Boost](http://boost.org) [filesystem](http://www.boost.org/doc/libs/1_39_0/libs/filesystem/doc/index.htm), [program_options](http://www.boost.org/doc/libs/1_56_0/doc/html/program_options.html), and [system](http://www.boost.org/doc/libs/1_46_1/libs/system/doc/index.html) libraries
 - [libelfin](https://github.com/ccurtsinger/libelfin), a C++11 library for accessing ELF binaries and reading DWARF debugging information
+- [R](http://r-project.org) used for plotting, including the [ggplot2](http://ggplot2.org) library.
+
+On debian or ubuntu, you can install all build dependencies with the following lines:
+
+```
+sudo apt-get install scons clang libboost-filesystem-dev libboost-program-options-dev libboost-system-dev r-base r-base-dev r-cran-ggplot2 r-cran-plyr
+git clone git://github.com/ccurtsinger/libelfin
+cd libelfin
+make
+sudo make install
+```
 
 ## Building
 To build Coz, just clone this repository and run `scons`. Adding `mode=release` will build an optimized version with less debug logging.
