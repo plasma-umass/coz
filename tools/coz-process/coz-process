@@ -1,3 +1,0 @@
-#!/bin/bash
-
-python /home/charlie/Projects/causal/tools/coz-process/coz_profile.py $@
