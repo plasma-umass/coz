@@ -64,7 +64,7 @@ int wrapped_main(int argc, char** argv, char** env) {
   real::init();
   
   // Get the profiler scope
-  vector<string> scope = args["include"].as<vector<string>>();
+  vector<string> scope = args["scope"].as<vector<string>>();
   // If no scope was specified, use the current directory
   if(scope.size() == 0) {
     char cwd[PATH_MAX];
@@ -87,7 +87,7 @@ int wrapped_main(int argc, char** argv, char** env) {
     }
   }
 
-  string fixed_line_name = args["fixed-line"].as<string>();
+  string fixed_line_name = args["line"].as<string>();
   shared_ptr<line> fixed_line;
   if(fixed_line_name != "") {
     fixed_line = memory_map::get_instance().find_line(fixed_line_name);
@@ -102,7 +102,7 @@ int wrapped_main(int argc, char** argv, char** env) {
   // Start the profiler
   profiler::get_instance().startup(args["output"].as<string>(),
                                    fixed_line.get(),
-                                   args["fixed-speedup"].as<int>(),
+                                   args["speedup"].as<int>(),
                                    args.count("sample-only"));
   
   // Run the real main function
