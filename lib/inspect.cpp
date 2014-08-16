@@ -194,7 +194,7 @@ map<string, uintptr_t> get_loaded_files(bool include_libs) {
       // The first entry is the main executable, which doesn't include a name.
       // Use the __progname_full constant instead.
       result[string(__progname_full)] = info->dlpi_addr;
-    } else {
+    } else if(info->dlpi_name != nullptr) {
       // The rest of the entries will include both a name and load address
       result[string(info->dlpi_name)] = info->dlpi_addr;
     }
