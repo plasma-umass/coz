@@ -3,6 +3,7 @@
 
 #ifndef __USE_GNU
 #  define __USE_GNU
+#  define _GNU_SOURCE
 #endif
 
 #include <dlfcn.h>
