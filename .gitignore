@@ -1,6 +1,6 @@
 .sconsign.dblite
-.debug
-.release
+debug
+release
 build.conf
 include/ccutil
 

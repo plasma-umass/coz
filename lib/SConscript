@@ -4,16 +4,14 @@ env.Append(LIBS=['dl',
                  'dwarf++',
                  'elf++',
                  'rt',
+                 'boost_filesystem',
+                 'boost_program_options',
                  'boost_system'])
 
-#runtime = env.SharedLibrary('causal', Glob('*.cpp'))
-runtime = env.SharedLibrary('causal', ['inspect.cpp', 'libcausal.cpp', 'perf.cpp', 'profiler.cpp', 'real.cpp'])
-
-tester = env.Program('tester', ['tester.cpp', 'perf.cpp'], LINKFLAGS='-rdynamic')
+runtime = env.SharedLibrary('causal', Glob('*.cpp'))
 
 # Build libcausal_runtime as part of the 'all' target
 env.Alias('all', runtime)
-env.Alias('all', tester)
 
 # Insall libcausal_runtime in <prefix>/lib
 env.Install(env['prefix'] + '/lib', runtime)

@@ -18,11 +18,11 @@ vars.Update(env)
 vars.Save('build.conf', env)
 
 if env['mode'] == 'debug':
-  build_dir = '.debug'
+  build_dir = 'debug'
   env.Append(CCFLAGS='-g -O2')
   
 else:
-  build_dir = '.release'
+  build_dir = 'release'
   env.Append(CCFLAGS='-DNDEBUG -O3')
 
 # Build with clang
