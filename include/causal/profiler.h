@@ -111,45 +111,4 @@ private:
   std::atomic_flag _shutdown_run = ATOMIC_FLAG_INIT;  //< Used to ensure shutdown only runs once
 };
 
-inline void profiler::catch_up() {
-  //auto state = thread_state::get(siglock::thread_context);
-  //REQUIRE(state) << "Unable to acquire exclusive access to thread state";
-  thread_state& state = thread_state::get();
-  
-  // Handle all samples and add delays as required
-  if(_experiment_active) {
-    state.set_in_use(true);
-    //process_samples(state);
-    add_delays(state);
-    state.set_in_use(false);
-  }
-}
-
-/**
- * Called before a thread (possibly) blocks on some cross-thread dependency
- */
-inline void profiler::before_blocking() {
-  //auto state = thread_state::get(siglock::thread_context);
-  //REQUIRE(state) << "Unable to acquire exclusive access to thread state";
-  
-  // Nothing required
-}
-
-/**
- * Called after a thread unblocks. Skip delays if the thread was unblocked by another thread.
- */
-inline void profiler::after_unblocking(bool by_thread) {
-  thread_state& state = thread_state::get();
-  state.set_in_use(true);
-  //auto state = thread_state::get(siglock::thread_context);
-  //REQUIRE(state) << "Unable to acquire exclusive access to thread state";
-  
-  if(by_thread && _experiment_active) {
-    // Skip ahead on delays
-    state.delay_count = _delays.load(std::memory_order_relaxed);
-  }
-  
-  state.set_in_use(false);
-}
-
 #endif

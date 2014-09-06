@@ -32,6 +32,8 @@ extern "C" void __causal_register_counter(counter::type kind,
   profiler::get_instance().register_counter(new source_counter(kind, counter, name));
 }
 
+bool initialized = false;
+
 /**
  * Pass the real __libc_start_main this main function, then run the real main
  * function. This allows Causal to shut down when the real main function returns.
@@ -52,19 +54,17 @@ int wrapped_main(int argc, char** argv, char** env) {
   }
   
   // Parse the causal command line arguments
-  auto args = causal::parse_args(causal_argc, argv);
+//  auto args = causal::parse_args(causal_argc, argv);
   
   // Show usage information if the help argument was passed
-  if(args.count("help")) {
-    causal::show_usage();
-    return 1;
-  }
-  
-  // Collect all the real function pointers for interposed functions
-  real::init();
+//  if(args.count("help")) {
+//    causal::show_usage();
+//    return 1;
+//  }
   
   // Get the profiler scope
-  vector<string> scope = args["scope"].as<vector<string>>();
+//  vector<string> scope = args["scope"].as<vector<string>>();
+vector<string> scope;
   // If no scope was specified, use the current directory
   if(scope.size() == 0) {
     char cwd[PATH_MAX];
@@ -73,10 +73,12 @@ int wrapped_main(int argc, char** argv, char** env) {
   }
   
   // Build a map of addresses to source lines
-  memory_map::get_instance().build(scope, args.count("search-libs"));
-  
+//  memory_map::get_instance().build(scope, args.count("search-libs"));
+memory_map::get_instance().build(scope);
+    
   // Register any sampling progress points
-  vector<string> progress_names = args["progress"].as<vector<string>>();
+//  vector<string> progress_names = args["progress"].as<vector<string>>();
+vector<string> progress_names;
   
   for(const string& line_name : progress_names) {
     shared_ptr<line> l = memory_map::get_instance().find_line(line_name);
@@ -87,7 +89,8 @@ int wrapped_main(int argc, char** argv, char** env) {
     }
   }
 
-  string fixed_line_name = args["line"].as<string>();
+//  string fixed_line_name = args["line"].as<string>();
+string fixed_line_name = "";
   shared_ptr<line> fixed_line;
   if(fixed_line_name != "") {
     fixed_line = memory_map::get_instance().find_line(fixed_line_name);
@@ -96,14 +99,16 @@ int wrapped_main(int argc, char** argv, char** env) {
   
   // Create a phony end-to-end counter and register it if running in end-to-end mode
   end_to_end_counter c;
-  if(args.count("end-to-end"))
-    profiler::get_instance().register_counter(&c);
+//  if(args.count("end-to-end"))
+//    profiler::get_instance().register_counter(&c);
   
   // Start the profiler
-  profiler::get_instance().startup(args["output"].as<string>(),
-                                   fixed_line.get(),
-                                   args["speedup"].as<int>(),
-                                   args.count("sample-only"));
+//  profiler::get_instance().startup(args["output"].as<string>(),
+//                                   fixed_line.get(),
+//                                   args["speedup"].as<int>(),
+//                                   args.count("sample-only"));
+
+profiler::get_instance().startup("profile.log", nullptr, -1, false);
   
   // Run the real main function
   int result = real_main(argc - causal_argc - 1, &argv[causal_argc + 1], env);
@@ -120,8 +125,12 @@ int wrapped_main(int argc, char** argv, char** env) {
 /**
  * Interpose on the call to __libc_start_main to run before libc constructors.
  */
-extern "C" int __libc_start_main(main_fn_t main_fn, int argc, char** argv,
+extern "C" int __libc_start_main(main_fn_t, int, char**, void (*)(), void (*)(), void (*)(), void*) __attribute__((weak, alias("causal_libc_start_main")));
+extern "C" int causal_libc_start_main(main_fn_t main_fn, int argc, char** argv,
     void (*init)(), void (*fini)(), void (*rtld_fini)(), void* stack_end) {
+  // Initialize real::* wrappers
+  real::init();
+  initialized = true;
   // Find the real __libc_start_main
   auto real_libc_start_main = (decltype(__libc_start_main)*)dlsym(RTLD_NEXT, "__libc_start_main");
   // Save the program's real main function
@@ -172,14 +181,14 @@ extern "C" {
     
     return result;
   }
-
+  extern int __pthread_mutex_lock(pthread_mutex_t*);
   /// Skip any global delays added while blocked on a mutex
   int pthread_mutex_lock(pthread_mutex_t* mutex) {
     profiler::get_instance().before_blocking();
-    int result = real::pthread_mutex_lock(mutex);  
-    profiler::get_instance().after_unblocking(true);          
-    
-    return result;   
+    //int result = real::pthread_mutex_lock(mutex);
+    int result = __pthread_mutex_lock(mutex);
+    profiler::get_instance().after_unblocking(true);     
+    return result;
   }
   
   /// Catch up on delays before unblocking any threads waiting on a mutex

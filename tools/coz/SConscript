@@ -2,13 +2,15 @@ import os
 
 # Inherit the build evironment
 Import('env')
-env.Append(LIBS=['boost_program_options'])
+my_env = env.Clone()
 
-coz = env.Program('coz', Glob('*.cpp'))
+my_env.Append(LIBS=['boost_program_options'])
+
+coz = my_env.Program('coz', Glob('*.cpp'))
 
 # Build coz as part of the 'all' target
-env.Alias('all', coz)
+my_env.Alias('all', coz)
 
 # Install coz in <prefix>/bin
-env.Install(env['prefix'] + '/bin', coz)
-env.Alias('install', env['prefix'] + '/bin')
+my_env.Install(env['prefix'] + '/bin', coz)
+my_env.Alias('install', env['prefix'] + '/bin')

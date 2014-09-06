@@ -2,4 +2,4 @@
 Import('env')
 
 # Build all tools
-env.SConscript(dirs=['coz', 'coz-plot', 'coz-process'])
+env.SConscript(dirs=['attach', 'coz', 'coz-plot', 'coz-process'])

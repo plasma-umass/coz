@@ -13,6 +13,8 @@ extern "C" int main(int argc, char** argv);
 namespace real {
   DECLARE_WRAPPER(main);
   
+  DECLARE_WRAPPER(calloc);
+  
   DECLARE_WRAPPER(exit);
   DECLARE_WRAPPER(_exit);
   DECLARE_WRAPPER(_Exit);

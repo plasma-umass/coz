@@ -24,6 +24,8 @@
 
 using namespace std;
 
+thread_local thread_state local_state;
+
 /**
  * Start the profiler
  */
@@ -259,7 +261,7 @@ void* profiler::start_thread(void* p) {
   
   // Set up thread state. Be sure to release the state lock before running the real thread function
   {
-    thread_state& state = thread_state::get();
+    thread_state& state = local_state;
     //auto state = thread_state::get(siglock::thread_context);
     //REQUIRE(state) << "Failed to acquire exclusive access to thread state on thread startup";
   
@@ -283,6 +285,47 @@ void* profiler::start_thread(void* p) {
   pthread_exit(result);
 }
 
+void profiler::catch_up() {
+  //auto state = thread_state::get(siglock::thread_context);
+  //REQUIRE(state) << "Unable to acquire exclusive access to thread state";
+  thread_state& state = local_state;
+  
+  // Handle all samples and add delays as required
+  if(_experiment_active) {
+    state.set_in_use(true);
+    //process_samples(state);
+    add_delays(state);
+    state.set_in_use(false);
+  }
+}
+
+/**
+ * Called before a thread (possibly) blocks on some cross-thread dependency
+ */
+void profiler::before_blocking() {
+  //auto state = thread_state::get(siglock::thread_context);
+  //REQUIRE(state) << "Unable to acquire exclusive access to thread state";
+  
+  // Nothing required
+}
+
+/**
+ * Called after a thread unblocks. Skip delays if the thread was unblocked by another thread.
+ */
+void profiler::after_unblocking(bool by_thread) {
+  thread_state& state = local_state;
+  state.set_in_use(true);
+  //auto state = thread_state::get(siglock::thread_context);
+  //REQUIRE(state) << "Unable to acquire exclusive access to thread state";
+  
+  if(by_thread && _experiment_active) {
+    // Skip ahead on delays
+    state.delay_count = _delays.load(std::memory_order_relaxed);
+  }
+  
+  state.set_in_use(false);
+}
+
 /**
  * Wrap calls to pthread_create so children inherit delay counts
  */
@@ -297,7 +340,7 @@ int profiler::handle_pthread_create(pthread_t* thread,
   {
     //auto state = thread_state::get(siglock::thread_context);
     //REQUIRE(state) << "Unable to acquire exclusive access to thread state in pthread_create";
-    thread_state& state = thread_state::get();
+    thread_state& state = local_state;
     // Allocate a struct to pass as an argument to the new thread
     new_arg = new thread_start_arg(fn, arg,
                                    state.delay_count,
@@ -317,7 +360,7 @@ void profiler::handle_pthread_exit(void* result) {
 }
 
 void profiler::begin_sampling() {
-  thread_state& state = thread_state::get();
+  thread_state& state = local_state;
   //auto state = thread_state::get(siglock::thread_context);
   //REQUIRE(state) << "Unable to acquire exclusive access to thread state in begin_sampling()";
   
@@ -342,7 +385,7 @@ void profiler::begin_sampling() {
 }
 
 void profiler::end_sampling() {
-  thread_state& state = thread_state::get();
+  thread_state& state = local_state;
   //auto state = thread_state::get(siglock::thread_context);
   //REQUIRE(state) << "Unable to acquire exclusive access to thread state in end_sampling()";
   
@@ -459,7 +502,7 @@ void* profiler::start_profiler_thread(void* arg) {
 
 void profiler::samples_ready(int signum, siginfo_t* info, void* p) {
   //auto state = thread_state::get(siglock::signal_context);
-  thread_state& state = thread_state::get();
+  thread_state& state = local_state;
   if(!state.check_in_use()) {
     // Process all available samples
     profiler::get_instance().process_samples(state);

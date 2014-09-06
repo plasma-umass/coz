@@ -261,10 +261,7 @@ wrapped_array<uint64_t> perf_event::record::get_callchain() const {
   uint64_t* base = locate_field<sample::callchain, uint64_t*>();
   uint64_t size = *base;
   // Advance the callchain array pointer past the size
-  // The first entry in the callchain seems to be invalid (always 0xfffffffffffffe00)
-  // The next entry is always the IP where the sample occurred so skip that too
-  base += 3;
-  size -= 2;
+  base++;
   return wrapped_array<uint64_t>(base, size);
 }
 

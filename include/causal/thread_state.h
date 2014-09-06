@@ -22,14 +22,6 @@ public:
   bool check_in_use() {
     return in_use;
   }
-  
-  /**
-  * Get state for the current thread
-  */
-  static thread_state& get() {
-    static thread_local thread_state s;
-    return s;
-  }
 };
 
 #endif
