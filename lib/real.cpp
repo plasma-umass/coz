@@ -2,30 +2,251 @@
 
 #include <dlfcn.h>
 
-#include "ccutil/log.h"
+#include <dlfcn.h>
+#include <stdint.h>
+#include <string.h>
 
-extern "C" void* __libc_dlsym(void *map, const char* name);
-extern "C" void* __libc_dlopen_mode(const char* file, int mode);
+static bool resolving = false;
+static bool in_dlopen = false;
+static void* pthread_handle = NULL;
 
-#define DEFINE_WRAPPER(name) decltype(::name)* name
-#define SET_WRAPPER(name, handle) name = (decltype(::name)*)dlsym(handle, #name)
+#define GET_SYMBOL_HANDLE(name, handle) \
+  static decltype(::name)* real_##name = nullptr; \
+  if(!__atomic_exchange_n(&resolving, true, __ATOMIC_ACQ_REL)) { \
+    uintptr_t addr = reinterpret_cast<uintptr_t>(dlsym(handle, #name)); \
+    memcpy(&real_##name, &addr, sizeof(uintptr_t)); \
+    if(real_##name) { \
+      memcpy(&real::name, &addr, sizeof(uintptr_t)); \
+    } \
+    __atomic_store_n(&resolving, false, __ATOMIC_RELEASE); \
+  }
 
-extern "C" {
-  extern int __pthread_mutex_lock(pthread_mutex_t*) __THROW;
-  extern int __pthread_mutex_unlock(pthread_mutex_t*) __THROW;
-  extern int __pthread_mutex_trylock(pthread_mutex_t*) __THROW;
+#define GET_SYMBOL(name) GET_SYMBOL_HANDLE(name, RTLD_NEXT)
+
+#define NORETURN __attribute__((noreturn))
+#define NOTHROW throw()
+
+static void* get_pthread_handle() {
+  if(pthread_handle == NULL && !__atomic_exchange_n(&in_dlopen, true, __ATOMIC_ACQ_REL)) {
+    pthread_handle = dlopen("libpthread.so.0", RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD);
+    __atomic_store_n(&in_dlopen, false, __ATOMIC_RELEASE);
+  }
+  
+  return pthread_handle;
 }
 
+static NORETURN void resolve_exit(int status) NOTHROW {
+  GET_SYMBOL(exit);
+  if(real_exit) real_exit(status);
+  else abort();
+}
+
+static NORETURN void resolve__exit(int status) NOTHROW {
+  GET_SYMBOL(_exit);
+  if(real__exit) real__exit(status);
+  else abort();
+}
+
+static NORETURN void resolve__Exit(int status) NOTHROW {
+  GET_SYMBOL(_Exit);
+  if(real__Exit) real__Exit(status);
+  else abort();
+}
+
+static int resolve_fork() NOTHROW {
+  GET_SYMBOL(fork);
+  if(real_fork) return real_fork();
+  else return -1;
+}
+
+static int resolve_sigaction(int signum, const struct sigaction* act, struct sigaction* old_act) NOTHROW {
+  GET_SYMBOL(sigaction);
+  if(real_sigaction) return real_sigaction(signum, act, old_act);
+  else return -1;
+}
+
+static sighandler_t resolve_signal(int signum, sighandler_t handler) NOTHROW {
+  GET_SYMBOL(signal);
+  if(real_signal) return real_signal(signum, handler);
+  else return SIG_ERR;
+}
+
+static int resolve_kill(pid_t pid, int sig) NOTHROW {
+  GET_SYMBOL(kill);
+  if(real_kill) return real_kill(pid, sig);
+  else return -1;
+}
+
+static int resolve_sigprocmask(int how, const sigset_t* set, sigset_t* oldset) NOTHROW {
+  GET_SYMBOL(sigprocmask);
+  if(real_sigprocmask) return real_sigprocmask(how, set, oldset);
+  else return -1;
+}
+
+static int resolve_sigwait(const sigset_t* set, int* sig) {
+  GET_SYMBOL(sigwait);
+  if(real_sigwait) return real_sigwait(set, sig);
+  else return -1;
+}
+
+static int resolve_sigwaitinfo(const sigset_t* set, siginfo_t* info) {
+  GET_SYMBOL(sigwaitinfo);
+  if(real_sigwaitinfo) return real_sigwaitinfo(set, info);
+  else return -1;
+}
+
+static int resolve_sigtimedwait(const sigset_t* set, siginfo_t* info, const struct timespec* timeout) {
+  GET_SYMBOL(sigtimedwait);
+  if(real_sigtimedwait) return real_sigtimedwait(set, info, timeout);
+  else return -1;
+}
+
+static int resolve_pthread_create(pthread_t* t, const pthread_attr_t* attr, void* (*fn)(void*), void* arg) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_create, get_pthread_handle());
+  if(real_pthread_create) return real_pthread_create(t, attr, fn, arg);
+  else return -1;
+}
+
+static NORETURN void resolve_pthread_exit(void* retval) {
+  GET_SYMBOL_HANDLE(pthread_exit, get_pthread_handle());
+  if(real_pthread_exit) real_pthread_exit(retval);
+  else abort();
+}
+  
+static int resolve_pthread_join(pthread_t t, void** ret) {
+  GET_SYMBOL_HANDLE(pthread_join, get_pthread_handle());
+  if(real_pthread_join) return real_pthread_join(t, ret);
+  else return -1;
+}
+  
+static int resolve_pthread_tryjoin_np(pthread_t t, void** ret) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_tryjoin_np, get_pthread_handle());
+  if(real_pthread_tryjoin_np) return real_pthread_tryjoin_np(t, ret);
+  else return -1;
+}
+  
+static int resolve_pthread_timedjoin_np(pthread_t t, void** ret, const struct timespec* abstime) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_timedjoin_np, get_pthread_handle());
+  if(real_pthread_timedjoin_np) return real_pthread_timedjoin_np(t, ret, abstime);
+  else return -1;
+}
+  
+static int resolve_pthread_kill(pthread_t t, int sig) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_kill, get_pthread_handle());
+  if(real_pthread_kill) return real_pthread_kill(t, sig);
+  else return -1;
+}
+
+static int resolve_pthread_sigqueue(pthread_t t, int sig, const union sigval val) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_sigqueue, get_pthread_handle());
+  if(real_pthread_sigqueue) return real_pthread_sigqueue(t, sig, val);
+  else return -1;
+}
+  
+static int resolve_pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_sigmask, get_pthread_handle());
+  if(real_pthread_sigmask) return real_pthread_sigmask(how, set, oldset);
+  else return -1;
+}
+
+static int resolve_pthread_mutex_lock(pthread_mutex_t* mutex) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_mutex_lock, get_pthread_handle());
+  if(real_pthread_mutex_lock) return real_pthread_mutex_lock(mutex);
+  else return 0;  // Silently elide locks during linking
+}
+
+static int resolve_pthread_mutex_trylock(pthread_mutex_t* mutex) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_mutex_trylock, get_pthread_handle());
+  if(real_pthread_mutex_trylock) return real_pthread_mutex_trylock(mutex);
+  else return 0;  // Silently elide locks during linking
+}
+
+static int resolve_pthread_mutex_unlock(pthread_mutex_t* mutex) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_mutex_unlock, get_pthread_handle());
+  if(real_pthread_mutex_unlock) return real_pthread_mutex_unlock(mutex);
+  else return 0;  // Silently elide locks during linking
+}
+
+static int resolve_pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_cond_wait, get_pthread_handle());
+  if(real_pthread_cond_wait) return real_pthread_cond_wait(cond, mutex);
+  else return 0;  // Silently elide synchronization during linking
+}
+
+static int resolve_pthread_cond_timedwait(pthread_cond_t* cond, pthread_mutex_t* mutex, const struct timespec* abstime) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_cond_timedwait, get_pthread_handle());
+  if(real_pthread_cond_timedwait) return real_pthread_cond_timedwait(cond, mutex, abstime);
+  else return 0;  // Silently elide synchronization during linking
+}
+
+static int resolve_pthread_cond_signal(pthread_cond_t* cond) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_cond_signal, get_pthread_handle());
+  if(real_pthread_cond_signal) return real_pthread_cond_signal(cond);
+  else return 0;  // Silently elide synchronization during linking
+}
+
+static int resolve_pthread_cond_broadcast(pthread_cond_t* cond) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_cond_broadcast, get_pthread_handle());
+  if(real_pthread_cond_broadcast) return real_pthread_cond_broadcast(cond);
+  else return 0;  // Silently elide synchronization during linking
+}
+
+static int resolve_pthread_barrier_wait(pthread_barrier_t* barr) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_barrier_wait, get_pthread_handle());
+  if(real_pthread_barrier_wait) return real_pthread_barrier_wait(barr);
+  else return 0;  // Silently elide synchronization during linking
+}
+
+static int resolve_pthread_rwlock_rdlock(pthread_rwlock_t* rwlock) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_rwlock_rdlock, get_pthread_handle());
+  if(real_pthread_rwlock_rdlock) return real_pthread_rwlock_rdlock(rwlock);
+  else return 0;  // Silently elide synchronization during linking
+}
+
+static int resolve_pthread_rwlock_tryrdlock(pthread_rwlock_t* rwlock) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_rwlock_tryrdlock, get_pthread_handle());
+  if(real_pthread_rwlock_tryrdlock) return real_pthread_rwlock_tryrdlock(rwlock);
+  else return 0;  // Silently elide synchronization during linking
+}
+
+static int resolve_pthread_rwlock_timedrdlock(pthread_rwlock_t* rwlock, const struct timespec* abstime) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_rwlock_timedrdlock, get_pthread_handle());
+  if(real_pthread_rwlock_timedrdlock) return real_pthread_rwlock_timedrdlock(rwlock, abstime);
+  else return 0;  // Silently elide synchronization during linking
+}
+
+static int resolve_pthread_rwlock_wrlock(pthread_rwlock_t* rwlock) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_rwlock_wrlock, get_pthread_handle());
+  if(real_pthread_rwlock_wrlock) return real_pthread_rwlock_wrlock(rwlock);
+  else return 0;  // Silently elide synchronization during linking
+}
+
+static int resolve_pthread_rwlock_trywrlock(pthread_rwlock_t* rwlock) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_rwlock_trywrlock, get_pthread_handle());
+  if(real_pthread_rwlock_trywrlock) return real_pthread_rwlock_trywrlock(rwlock);
+  else return 0;  // Silently elide synchronization during linking
+}
+
+static int resolve_pthread_rwlock_timedwrlock(pthread_rwlock_t* rwlock, const struct timespec* abstime) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_rwlock_timedwrlock, get_pthread_handle());
+  if(real_pthread_rwlock_timedwrlock) return real_pthread_rwlock_timedwrlock(rwlock, abstime);
+  else return 0;  // Silently elide synchronization during linking
+}
+
+static int resolve_pthread_rwlock_unlock(pthread_rwlock_t* rwlock) NOTHROW {
+  GET_SYMBOL_HANDLE(pthread_rwlock_unlock, get_pthread_handle());
+  if(real_pthread_rwlock_unlock) return real_pthread_rwlock_unlock(rwlock);
+  else return 0;  // Silently elide synchronization during linking
+}
+
+#define DEFINE_WRAPPER(name) decltype(::name)* name = &resolve_##name;
+
 namespace real {
-  DEFINE_WRAPPER(main);
-
-  DEFINE_WRAPPER(calloc);
-
   DEFINE_WRAPPER(exit);
   DEFINE_WRAPPER(_exit);
   DEFINE_WRAPPER(_Exit);
   DEFINE_WRAPPER(fork);
-
+  
   DEFINE_WRAPPER(sigaction);
   DEFINE_WRAPPER(signal);
   DEFINE_WRAPPER(kill);
@@ -33,16 +254,19 @@ namespace real {
   DEFINE_WRAPPER(sigwait);
   DEFINE_WRAPPER(sigwaitinfo);
   DEFINE_WRAPPER(sigtimedwait);
-
+  
   DEFINE_WRAPPER(pthread_create);
   DEFINE_WRAPPER(pthread_exit);
   DEFINE_WRAPPER(pthread_join);
+  DEFINE_WRAPPER(pthread_tryjoin_np);
+  DEFINE_WRAPPER(pthread_timedjoin_np);
   DEFINE_WRAPPER(pthread_sigmask);
   DEFINE_WRAPPER(pthread_kill);
+  DEFINE_WRAPPER(pthread_sigqueue);
   
-  DEFINE_WRAPPER(pthread_mutex_lock) = __pthread_mutex_lock;
-  DEFINE_WRAPPER(pthread_mutex_unlock) = __pthread_mutex_unlock;
-  DEFINE_WRAPPER(pthread_mutex_trylock) = __pthread_mutex_trylock;
+  DEFINE_WRAPPER(pthread_mutex_lock);
+  DEFINE_WRAPPER(pthread_mutex_trylock);
+  DEFINE_WRAPPER(pthread_mutex_unlock);
   
   DEFINE_WRAPPER(pthread_cond_wait);
   DEFINE_WRAPPER(pthread_cond_timedwait);
@@ -50,40 +274,12 @@ namespace real {
   DEFINE_WRAPPER(pthread_cond_broadcast);
   
   DEFINE_WRAPPER(pthread_barrier_wait);
-
-  void init() {
-    SET_WRAPPER(main, RTLD_NEXT);
-    
-    SET_WRAPPER(calloc, RTLD_NEXT);
-
-    SET_WRAPPER(exit, RTLD_NEXT);
-    SET_WRAPPER(_exit, RTLD_NEXT);
-    SET_WRAPPER(_Exit, RTLD_NEXT);
-    SET_WRAPPER(fork, RTLD_NEXT);
-
-    SET_WRAPPER(sigaction, RTLD_NEXT);
-    SET_WRAPPER(signal, RTLD_NEXT);
-    SET_WRAPPER(kill, RTLD_NEXT);
-    SET_WRAPPER(sigprocmask, RTLD_NEXT);
-    SET_WRAPPER(sigwait, RTLD_NEXT);
-    SET_WRAPPER(sigwaitinfo, RTLD_NEXT);
-    SET_WRAPPER(sigtimedwait, RTLD_NEXT);
-    
-    SET_WRAPPER(pthread_create, RTLD_NEXT);
-    SET_WRAPPER(pthread_exit, RTLD_NEXT);
-    SET_WRAPPER(pthread_join, RTLD_NEXT);
-    SET_WRAPPER(pthread_sigmask, RTLD_NEXT);
-    SET_WRAPPER(pthread_kill, RTLD_NEXT);
-    
-    SET_WRAPPER(pthread_mutex_lock, RTLD_NEXT);
-    SET_WRAPPER(pthread_mutex_unlock, RTLD_NEXT);
-    SET_WRAPPER(pthread_mutex_trylock, RTLD_NEXT);
-    
-    SET_WRAPPER(pthread_cond_wait, RTLD_NEXT);
-    SET_WRAPPER(pthread_cond_timedwait, RTLD_NEXT);
-    SET_WRAPPER(pthread_cond_signal, RTLD_NEXT);
-    SET_WRAPPER(pthread_cond_broadcast, RTLD_NEXT);
-    
-    SET_WRAPPER(pthread_barrier_wait, RTLD_NEXT);
-  }
+  
+  DEFINE_WRAPPER(pthread_rwlock_rdlock);
+  DEFINE_WRAPPER(pthread_rwlock_tryrdlock);
+  DEFINE_WRAPPER(pthread_rwlock_timedrdlock);
+  DEFINE_WRAPPER(pthread_rwlock_wrlock);
+  DEFINE_WRAPPER(pthread_rwlock_trywrlock);
+  DEFINE_WRAPPER(pthread_rwlock_timedwrlock);
+  DEFINE_WRAPPER(pthread_rwlock_unlock);
 }

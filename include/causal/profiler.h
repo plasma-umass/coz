@@ -17,6 +17,9 @@
 /// Type of a thread entry function
 typedef void* (*thread_fn_t)(void*);
 
+/// The type of a main function
+typedef int (*main_fn_t)(int, char**, char**);
+
 enum {
   SampleSignal = SIGPROF, //< Signal to generate when samples are ready
   SamplePeriod = 10000000, //< Time between samples (10ms)
@@ -46,9 +49,6 @@ public:
   
   /// Force threads to catch up on delays, and stop sampling before the thread exits
   void handle_pthread_exit(void*) __attribute__((noreturn));
-  
-  /// Call before a thread executes a potentially blocking call
-  void before_blocking();
   
   /// Ensure a thread has executed all the required delays before possibly unblocking another thread
   void catch_up();
@@ -81,8 +81,8 @@ private:
   void profiler_thread(spinlock& l);  //< Body of the main profiler thread
   void begin_sampling();  //< Start sampling in the current thread
   void end_sampling();    //< Stop sampling in the current thread
-  void add_delays(thread_state&);      //< Add any required delays
-  void process_samples(thread_state&); //< Process all available samples and insert delays
+  void add_delays();      //< Add any required delays
+  void process_samples(); //< Process all available samples and insert delays
   line* find_line(perf_event::record&); //< Map a sample to its source line
   
   static void* start_profiler_thread(void*);          //< Entry point for the profiler thread

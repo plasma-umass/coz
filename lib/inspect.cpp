@@ -45,9 +45,6 @@ using std::stringstream;
 using std::system_error;
 using std::vector;
 
-/// Path for the main executable, as passed to exec()
-extern "C" char* __progname_full;
-
 /**
  * Locate the build ID encoded in an ELF file and return it as a formatted string
  */
@@ -189,26 +186,31 @@ static elf::elf locate_debug_executable(const string filename) {
 map<string, uintptr_t> get_loaded_files(bool include_libs) {
   map<string, uintptr_t> result;
 
-  // Walk through the loaded libraries
-  dl_iterate_phdr([](struct dl_phdr_info* info, size_t sz, void* data) {
-    map<string, uintptr_t>& result = *reinterpret_cast<map<string, uintptr_t>*>(data);
-    if(result.size() == 0) {
-      // The first entry is the main executable, which doesn't include a name.
-      // Use the __progname_full constant instead.
-      result[string(__progname_full)] = info->dlpi_addr;
-    } else if(info->dlpi_name != nullptr) {
-      // The rest of the entries will include both a name and load address
-      result[string(info->dlpi_name)] = info->dlpi_addr;
+  FILE* map = fopen("/proc/self/maps", "r");
+  int rc;
+  do {
+    // If we aren't including libraries, exit once there's a single executable mapping
+    if(!include_libs && result.size() == 1) {
+      break;
     }
-    return 0;
-  }, (void*)&result);
-
-  if(!include_libs) {
-    map<string, uintptr_t> main_exe_only;
-    main_exe_only[string(__progname_full)] = result[string(__progname_full)];
-    return main_exe_only;
-  }
-
+    
+    uintptr_t base, limit;
+    char perms[4];
+    size_t offset;
+    uint8_t dev_major, dev_minor;
+    int inode;
+    char path[512];
+    rc = fscanf(map, "%lx-%lx %s %lx %hhx:%hhx %d %s\n",
+      &base, &limit, perms, &offset, &dev_major, &dev_minor, &inode, path);
+    
+    // If the mapping parsed correctly, check whether this is an executable file:
+    // Executables are mapped at offset 0, mapped executable, and have a corresponding absolute path
+    if(rc == 8 && offset == 0 && perms[2] == 'x' && path[0] == '/') {
+      result[string(path)] = base;
+    }
+  } while(rc == 8);
+  fclose(map);
+  
   return result;
 }
 
@@ -217,6 +219,8 @@ void memory_map::build(const vector<string>& scope, bool include_libs) {
     try {
       if(process_file(f.first, f.second, scope)) {
         INFO << "Including lines from " << f.first;
+      } else {
+        INFO << "Unable to locate debug information for " << f.first;
       }
     } catch(const system_error& e) {
       WARNING << "Processing file \"" << f.first << "\" failed: " << e.what();

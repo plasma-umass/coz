@@ -4,6 +4,7 @@ env.Append(LIBS=['dl',
                  'dwarf++',
                  'elf++',
                  'rt',
+                 'pthread',
                  'boost_filesystem',
                  'boost_program_options',
                  'boost_system'])

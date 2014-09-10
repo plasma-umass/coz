@@ -7,14 +7,8 @@
 #include <unistd.h>
 
 #define DECLARE_WRAPPER(name) extern decltype(::name)* name;
-  
-extern "C" int main(int argc, char** argv);
 
 namespace real {
-  DECLARE_WRAPPER(main);
-  
-  DECLARE_WRAPPER(calloc);
-  
   DECLARE_WRAPPER(exit);
   DECLARE_WRAPPER(_exit);
   DECLARE_WRAPPER(_Exit);
@@ -31,12 +25,15 @@ namespace real {
   DECLARE_WRAPPER(pthread_create);
   DECLARE_WRAPPER(pthread_exit);
   DECLARE_WRAPPER(pthread_join);
+  DECLARE_WRAPPER(pthread_tryjoin_np);
+  DECLARE_WRAPPER(pthread_timedjoin_np);
   DECLARE_WRAPPER(pthread_sigmask);
   DECLARE_WRAPPER(pthread_kill);
+  DECLARE_WRAPPER(pthread_sigqueue);
   
   DECLARE_WRAPPER(pthread_mutex_lock);
-  DECLARE_WRAPPER(pthread_mutex_unlock);
   DECLARE_WRAPPER(pthread_mutex_trylock);
+  DECLARE_WRAPPER(pthread_mutex_unlock);
   
   DECLARE_WRAPPER(pthread_cond_wait);
   DECLARE_WRAPPER(pthread_cond_timedwait);
@@ -45,7 +42,13 @@ namespace real {
   
   DECLARE_WRAPPER(pthread_barrier_wait);
   
-  void init();
+  DECLARE_WRAPPER(pthread_rwlock_rdlock);
+  DECLARE_WRAPPER(pthread_rwlock_tryrdlock);
+  DECLARE_WRAPPER(pthread_rwlock_timedrdlock);
+  DECLARE_WRAPPER(pthread_rwlock_wrlock);
+  DECLARE_WRAPPER(pthread_rwlock_trywrlock);
+  DECLARE_WRAPPER(pthread_rwlock_timedwrlock);
+  DECLARE_WRAPPER(pthread_rwlock_unlock);
 };
 
 #endif

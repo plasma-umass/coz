@@ -30,7 +30,7 @@ env.Replace(CC='clang')
 env.Replace(CXX='clang++')
 
 # Set C++11 mode, generate position-independent code
-env.Append(CCFLAGS='--std=c++11 -fPIC')
+env.Append(CCFLAGS='--std=c++11')
 
 # Add include paths
 env.Append(CPPPATH=['#/include'])
@@ -43,8 +43,8 @@ env['CCCOMSTR'] = 'Compiling $SOURCE'
 env['SHCCCOMSTR'] = 'Compiling $SOURCE'
 env['CXXCOMSTR'] = 'Compiling $SOURCE'
 env['SHCXXCOMSTR'] = 'Compiling $SOURCE'
-#env['LINKCOMSTR'] = 'Linking $TARGET'
-#env['SHLINKCOMSTR'] = 'Linking $TARGET'
+env['LINKCOMSTR'] = 'Linking $TARGET'
+env['SHLINKCOMSTR'] = 'Linking $TARGET'
 env['ARCOMSTR'] = 'Linking $TARGET'
 env['RANLIBCOMSTR'] = 'Indexing $TARGET'
 

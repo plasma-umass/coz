@@ -121,8 +121,6 @@ int wrapped_main(int argc, char** argv, char** env) {
 extern "C" int __libc_start_main(main_fn_t, int, char**, void (*)(), void (*)(), void (*)(), void*) __attribute__((weak, alias("causal_libc_start_main")));
 extern "C" int causal_libc_start_main(main_fn_t main_fn, int argc, char** argv,
     void (*init)(), void (*fini)(), void (*rtld_fini)(), void* stack_end) {
-  // Initialize real::* wrappers
-  real::init();
   // Find the real __libc_start_main
   auto real_libc_start_main = (decltype(__libc_start_main)*)dlsym(RTLD_NEXT, "__libc_start_main");
   // Save the program's real main function
@@ -167,7 +165,6 @@ extern "C" {
  
   /// Skip any delays added while waiting to join a thread
   int pthread_join(pthread_t t, void** retval) {
-    profiler::get_instance().before_blocking();
     int result = real::pthread_join(t, retval);
     profiler::get_instance().after_unblocking(true);
     
@@ -176,9 +173,7 @@ extern "C" {
   extern int __pthread_mutex_lock(pthread_mutex_t*);
   /// Skip any global delays added while blocked on a mutex
   int pthread_mutex_lock(pthread_mutex_t* mutex) {
-    profiler::get_instance().before_blocking();
-    //int result = real::pthread_mutex_lock(mutex);
-    int result = __pthread_mutex_lock(mutex);
+    int result = real::pthread_mutex_lock(mutex);
     profiler::get_instance().after_unblocking(true);     
     return result;
   }
@@ -191,7 +186,6 @@ extern "C" {
 
   /// Skip any delays added while waiting on a condition variable
   int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
-    profiler::get_instance().before_blocking();
     int result = real::pthread_cond_wait(cond, mutex);       
     profiler::get_instance().after_unblocking(true);     
     
@@ -205,7 +199,6 @@ extern "C" {
   int pthread_cond_timedwait(pthread_cond_t* cond,
                              pthread_mutex_t* mutex,
                              const struct timespec* time) {
-    profiler::get_instance().before_blocking();
     int result = real::pthread_cond_timedwait(cond, mutex, time);
 
     // Skip delays only if the wait didn't time out
@@ -229,7 +222,6 @@ extern "C" {
   /// Catch up before, and skip ahead after waking from a barrier
   int pthread_barrier_wait(pthread_barrier_t* barrier) {
     profiler::get_instance().catch_up();
-    profiler::get_instance().before_blocking();
     
     int result = real::pthread_barrier_wait(barrier);
     
@@ -329,8 +321,6 @@ extern "C" {
     remove_causal_signals(&myset);
     siginfo_t info;
     
-    profiler::get_instance().before_blocking();
-    
     int result = real::sigwaitinfo(&myset, &info);
     
     // Woken up by another thread if the call did not fail, and the waking process is this one
@@ -355,8 +345,6 @@ extern "C" {
     siginfo_t myinfo;
     remove_causal_signals(&myset);
     
-    profiler::get_instance().before_blocking();
-    
     int result = real::sigwaitinfo(&myset, &myinfo);
     
     // Woken up by another thread if the call did not fail, and the waking process is this one
@@ -376,8 +364,6 @@ extern "C" {
     sigset_t myset = *set;
     siginfo_t myinfo;
     remove_causal_signals(&myset);
-    
-    profiler::get_instance().before_blocking();
     
     int result = real::sigtimedwait(&myset, &myinfo, timeout);
     

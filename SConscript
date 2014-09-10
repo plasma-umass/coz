@@ -1,4 +1,4 @@
 Import('env')
 
 # Invoke scons in all building subdirectories
-env.SConscript(dirs=['include', 'lib', 'tools'])
+env.SConscript(dirs=['include', 'lib', 'tests', 'tools'])
