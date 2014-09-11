@@ -5,14 +5,17 @@
 #include <cstdint>
 #include <fstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "causal.h"
 
 #include "causal/counter.h"
 #include "causal/inspect.h"
+#include "causal/safe_map.h"
 #include "causal/spinlock.h"
 #include "causal/thread_state.h"
+#include "causal/util.h"
 
 /// Type of a thread entry function
 typedef void* (*thread_fn_t)(void*);
@@ -78,12 +81,16 @@ private:
   profiler(const profiler&) = delete;
   void operator=(const profiler&) = delete;
   
-  void profiler_thread(spinlock& l);  //< Body of the main profiler thread
-  void begin_sampling();  //< Start sampling in the current thread
-  void end_sampling();    //< Stop sampling in the current thread
-  void add_delays();      //< Add any required delays
-  void process_samples(); //< Process all available samples and insert delays
-  line* find_line(perf_event::record&); //< Map a sample to its source line
+  void profiler_thread(spinlock& l);          //< Body of the main profiler thread
+  void begin_sampling(thread_state* state);   //< Start sampling in the current thread
+  void end_sampling();                        //< Stop sampling in the current thread
+  void add_delays(thread_state* state);       //< Add any required delays
+  void process_samples(thread_state* state);  //< Process all available samples and insert delays
+  line* find_line(perf_event::record&);       //< Map a sample to its source line
+  
+  thread_state* add_thread(); //< Add a thread state entry for this thread
+  thread_state* get_thread_state(); //< Get a reference to the thread state object for this thread
+  void remove_thread(); //< Remove the thread state structure for the current thread
   
   static void* start_profiler_thread(void*);          //< Entry point for the profiler thread
   static void* start_thread(void* arg);               //< Entry point for wrapped threads
@@ -93,11 +100,13 @@ private:
   std::vector<counter*> _counters;  //< All the progress points
   spinlock _counters_lock;          //< Spinlock to protect the counters list
   
-  std::atomic<bool> _experiment_active;   //< Is an experiment running?
-  std::atomic<size_t> _delays;            //< The total number of delays inserted
-  std::atomic<size_t> _delay_size;        //< The current delay size
-  std::atomic<line*> _selected_line;  //< The line to speed up
-  std::atomic<line*> _next_line;      //< The next line to speed up
+  safe_map<pid_t, thread_state> _thread_states;   //< Map from thread IDs to thread-local state
+  
+  std::atomic<bool> _experiment_active; //< Is an experiment running?
+  std::atomic<size_t> _delays;          //< The total number of delays inserted
+  std::atomic<size_t> _delay_size;      //< The current delay size
+  std::atomic<line*> _selected_line;    //< The line to speed up
+  std::atomic<line*> _next_line;        //< The next line to speed up
   
   std::string _output_filename;       //< File for profiler output
   line* _fixed_line;  //< The only line that should be sped up, if set

@@ -22,6 +22,8 @@ typedef int (*main_fn_t)(int, char**, char**);
 /// The program's real main function
 main_fn_t real_main;
 
+bool initialized = false;
+
 /**
  * Called by the application to register a progress counter
  */
@@ -103,6 +105,8 @@ int wrapped_main(int argc, char** argv, char** env) {
                                    args["speedup"].as<int>(),
                                    args.count("sample-only"));
   
+  initialized = true;
+  
   // Run the real main function
   int result = real_main(argc - causal_argc - 1, &argv[causal_argc + 1], env);
   
@@ -170,24 +174,30 @@ extern "C" {
     
     return result;
   }
-  extern int __pthread_mutex_lock(pthread_mutex_t*);
+
   /// Skip any global delays added while blocked on a mutex
   int pthread_mutex_lock(pthread_mutex_t* mutex) {
     int result = real::pthread_mutex_lock(mutex);
-    profiler::get_instance().after_unblocking(true);     
+    if(initialized) {
+      profiler::get_instance().after_unblocking(true);
+    }
     return result;
   }
   
   /// Catch up on delays before unblocking any threads waiting on a mutex
   int pthread_mutex_unlock(pthread_mutex_t* mutex) {
-    profiler::get_instance().catch_up();
+    if(initialized) {
+      profiler::get_instance().catch_up();
+    }
     return real::pthread_mutex_unlock(mutex);
   }
 
   /// Skip any delays added while waiting on a condition variable
   int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
-    int result = real::pthread_cond_wait(cond, mutex);       
-    profiler::get_instance().after_unblocking(true);     
+    int result = real::pthread_cond_wait(cond, mutex); 
+    if(initialized) {
+      profiler::get_instance().after_unblocking(true);
+    }
     
     return result;  
   }
@@ -202,30 +212,40 @@ extern "C" {
     int result = real::pthread_cond_timedwait(cond, mutex, time);
 
     // Skip delays only if the wait didn't time out
-    profiler::get_instance().after_unblocking(result == 0);
+    if(initialized) {
+      profiler::get_instance().after_unblocking(result == 0);
+    }
     
     return result;
   }
   
   /// Catchup on delays before waking a thread waiting on a condition variable
   int pthread_cond_signal(pthread_cond_t* cond) {
-    profiler::get_instance().catch_up();
+    if(initialized) {
+      profiler::get_instance().catch_up();
+    }
     return real::pthread_cond_signal(cond);
   }
   
   /// Catch up on delays before waking any threads waiting on a condition variable
   int pthread_cond_broadcast(pthread_cond_t* cond) {
-    profiler::get_instance().catch_up();
+    if(initialized) {
+      profiler::get_instance().catch_up();
+    }
     return real::pthread_cond_broadcast(cond);
   }
   
   /// Catch up before, and skip ahead after waking from a barrier
   int pthread_barrier_wait(pthread_barrier_t* barrier) {
-    profiler::get_instance().catch_up();
+    if(initialized) {
+      profiler::get_instance().catch_up();
+    }
     
     int result = real::pthread_barrier_wait(barrier);
     
-    profiler::get_instance().after_unblocking(true);
+    if(initialized) {
+      profiler::get_instance().after_unblocking(true);
+    }
     
     return result;
   }

@@ -3,6 +3,8 @@
 
 #include <atomic>
 
+#include "causal/util.h"
+
 class spinlock {
 public:
   inline void lock() {
