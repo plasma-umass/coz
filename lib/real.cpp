@@ -6,9 +6,9 @@
 #include <stdint.h>
 #include <string.h>
 
-static bool resolving = false;
-static bool in_dlopen = false;
-static void* pthread_handle = NULL;
+static bool resolving = false;        //< Set to true while symbol resolution is in progress
+static bool in_dlopen = false;        //< Set to true while dlopen is running
+static void* pthread_handle = NULL;   //< The `dlopen` handle to libpthread
 
 #define GET_SYMBOL_HANDLE(name, handle) \
   static decltype(::name)* real_##name = nullptr; \
@@ -25,6 +25,9 @@ static void* pthread_handle = NULL;
 
 #define NORETURN __attribute__((noreturn))
 
+/**
+ * Get the `dlopen` handle for libpthread
+ */
 static void* get_pthread_handle() {
   if(pthread_handle == NULL && !__atomic_exchange_n(&in_dlopen, true, __ATOMIC_ACQ_REL)) {
     pthread_handle = dlopen("libpthread.so.0", RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD);
@@ -33,6 +36,14 @@ static void* get_pthread_handle() {
   
   return pthread_handle;
 }
+
+/*
+ * Resolver functions attempt to locate the requested function. Resolution will fail if
+ * it is invoked recursively, or if the symbol is not found. If resolution fails, most
+ * cases an error code of -1 is returned. Synchronization options will fail silently to
+ * accommodate synchronization operations during startup. If resolution succeeds, the
+ * located function is called.
+ */
 
 static NORETURN void resolve_exit(int status) throw() {
   GET_SYMBOL(exit);
@@ -240,6 +251,10 @@ static int resolve_pthread_rwlock_unlock(pthread_rwlock_t* rwlock) throw() {
 
 #define DEFINE_WRAPPER(name) decltype(::name)* name = &resolve_##name;
 
+/**
+ * Define all wrapper symbols in the `real` namespace. Initialize all wrappers to the
+ * corresponding resolver function.
+ */
 namespace real {
   DEFINE_WRAPPER(exit);
   DEFINE_WRAPPER(_exit);
