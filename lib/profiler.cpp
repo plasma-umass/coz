@@ -310,19 +310,27 @@ void profiler::catch_up() {
   }
 }
 
+void profiler::pre_block() {
+  thread_state* state = get_thread_state();
+  if(!state)
+    return;
+  
+  state->pre_block_time = _delays.load(std::memory_order_relaxed);
+}
+
 /**
  * Called after a thread unblocks. Skip delays if the thread was unblocked by another thread.
  */
-void profiler::after_unblocking(bool by_thread) {
+void profiler::post_block(bool skip_delays) {
   thread_state* state = get_thread_state();
   if(!state)
     return;
   
   state->set_in_use(true);
   
-  if(by_thread && _experiment_active) {
-    // Skip ahead on delays
-    state->delay_count = _delays.load(std::memory_order_relaxed);
+  if(skip_delays) {
+    // Skip all delays that were inserted during the blocked period
+    state->delay_count += _delays.load(std::memory_order_relaxed) - state->pre_block_time;
   }
   
   state->set_in_use(false);
@@ -454,9 +462,6 @@ void profiler::add_delays(thread_state* state) {
 }
 
 void profiler::process_samples(thread_state* state) {
-  // Stop sampling
-  //local_state->sampler.stop();
-  
   for(perf_event::record r : state->sampler) {
     if(r.is_sample()) {
       _samples.fetch_add(1, memory_order_relaxed);
@@ -480,9 +485,6 @@ void profiler::process_samples(thread_state* state) {
   }
   
   add_delays(state);
-  
-  // Resume sampling
-  //local_state->sampler.start();
 }
 
 /**

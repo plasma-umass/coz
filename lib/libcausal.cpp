@@ -163,41 +163,53 @@ extern "C" {
   }
   
   /// Catch up on delays before exiting, possibly unblocking a thread joining this one
-  void pthread_exit(void* result) {
+  void __attribute__((noreturn)) pthread_exit(void* result) {
 	  profiler::get_instance().handle_pthread_exit(result);
   }
  
   /// Skip any delays added while waiting to join a thread
   int pthread_join(pthread_t t, void** retval) {
+    if(initialized) profiler::get_instance().pre_block();
     int result = real::pthread_join(t, retval);
-    profiler::get_instance().after_unblocking(true);
+    if(initialized) profiler::get_instance().post_block(true);
     
+    return result;
+  }
+  
+  int pthread_tryjoin_np(pthread_t t, void** retval) throw() {
+    if(initialized) profiler::get_instance().pre_block();
+    int result = real::pthread_tryjoin_np(t, retval);
+    if(initialized) profiler::get_instance().post_block(result == 0);
+    return result;
+  }
+  
+  int pthread_timedjoin_np(pthread_t t, void** ret, const struct timespec* abstime) {
+    if(initialized) profiler::get_instance().pre_block();
+    int result = real::pthread_timedjoin_np(t, ret, abstime);
+    if(initialized) profiler::get_instance().post_block(result == 0);
     return result;
   }
 
   /// Skip any global delays added while blocked on a mutex
-  int pthread_mutex_lock(pthread_mutex_t* mutex) {
+  int pthread_mutex_lock(pthread_mutex_t* mutex) throw() {
+    if(initialized) profiler::get_instance().pre_block();
     int result = real::pthread_mutex_lock(mutex);
-    if(initialized) {
-      profiler::get_instance().after_unblocking(true);
-    }
+    if(initialized) profiler::get_instance().post_block(true);
+    
     return result;
   }
   
   /// Catch up on delays before unblocking any threads waiting on a mutex
-  int pthread_mutex_unlock(pthread_mutex_t* mutex) {
-    if(initialized) {
-      profiler::get_instance().catch_up();
-    }
+  int pthread_mutex_unlock(pthread_mutex_t* mutex) throw() {
+    if(initialized) profiler::get_instance().catch_up();
     return real::pthread_mutex_unlock(mutex);
   }
 
   /// Skip any delays added while waiting on a condition variable
   int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
+    if(initialized) profiler::get_instance().pre_block();
     int result = real::pthread_cond_wait(cond, mutex); 
-    if(initialized) {
-      profiler::get_instance().after_unblocking(true);
-    }
+    if(initialized) profiler::get_instance().post_block(true);
     
     return result;  
   }
@@ -209,67 +221,92 @@ extern "C" {
   int pthread_cond_timedwait(pthread_cond_t* cond,
                              pthread_mutex_t* mutex,
                              const struct timespec* time) {
+    if(initialized) profiler::get_instance().pre_block();
     int result = real::pthread_cond_timedwait(cond, mutex, time);
 
     // Skip delays only if the wait didn't time out
-    if(initialized) {
-      profiler::get_instance().after_unblocking(result == 0);
-    }
+    if(initialized) profiler::get_instance().post_block(result == 0);
     
     return result;
   }
   
   /// Catchup on delays before waking a thread waiting on a condition variable
-  int pthread_cond_signal(pthread_cond_t* cond) {
-    if(initialized) {
-      profiler::get_instance().catch_up();
-    }
+  int pthread_cond_signal(pthread_cond_t* cond) throw() {
+    if(initialized) profiler::get_instance().catch_up();
     return real::pthread_cond_signal(cond);
   }
   
   /// Catch up on delays before waking any threads waiting on a condition variable
-  int pthread_cond_broadcast(pthread_cond_t* cond) {
-    if(initialized) {
-      profiler::get_instance().catch_up();
-    }
+  int pthread_cond_broadcast(pthread_cond_t* cond) throw() {
+    if(initialized) profiler::get_instance().catch_up();
     return real::pthread_cond_broadcast(cond);
   }
   
   /// Catch up before, and skip ahead after waking from a barrier
-  int pthread_barrier_wait(pthread_barrier_t* barrier) {
-    if(initialized) {
-      profiler::get_instance().catch_up();
-    }
+  int pthread_barrier_wait(pthread_barrier_t* barrier) throw() {
+    if(initialized) profiler::get_instance().catch_up();
+    if(initialized) profiler::get_instance().pre_block();
     
     int result = real::pthread_barrier_wait(barrier);
     
-    if(initialized) {
-      profiler::get_instance().after_unblocking(true);
-    }
+    if(initialized) profiler::get_instance().post_block(true);
     
     return result;
   }
+  
+  int pthread_rwlock_rdlock(pthread_rwlock_t* rwlock) throw() {
+    if(initialized) profiler::get_instance().pre_block();
+    int result = real::pthread_rwlock_rdlock(rwlock);
+    if(initialized) profiler::get_instance().post_block(true);
+    return result;
+  }
+
+  int pthread_rwlock_timedrdlock(pthread_rwlock_t* rwlock, const struct timespec* abstime) throw() {
+    if(initialized) profiler::get_instance().pre_block();
+    int result = real::pthread_rwlock_timedrdlock(rwlock, abstime);
+    if(initialized) profiler::get_instance().post_block(result == 0);
+    return result;
+  }
+
+  int pthread_rwlock_wrlock(pthread_rwlock_t* rwlock) throw() {
+    if(initialized) profiler::get_instance().pre_block();
+    int result = real::pthread_rwlock_wrlock(rwlock);
+    if(initialized) profiler::get_instance().post_block(true);
+    return result;
+  }
+
+  int pthread_rwlock_timedwrlock(pthread_rwlock_t* rwlock, const struct timespec* abstime) throw() {
+    if(initialized) profiler::get_instance().pre_block();
+    int result = real::pthread_rwlock_timedwrlock(rwlock, abstime);
+    if(initialized) profiler::get_instance().post_block(result == 0);
+    return result;
+  }
+
+  int pthread_rwlock_unlock(pthread_rwlock_t* rwlock) throw() {
+    if(initialized) profiler::get_instance().catch_up();
+    return real::pthread_rwlock_unlock(rwlock);
+  }
 
   /// Run shutdown before exiting
-  void exit(int status) {
+  void __attribute__((noreturn)) exit(int status) throw() {
     profiler::get_instance().shutdown();
     real::exit(status);
   }
 
   /// Run shutdown before exiting
-  void _exit(int status) {
+  void __attribute__((noreturn)) _exit(int status) {
     profiler::get_instance().shutdown();
   	real::_exit(status);
   }
 
   /// Run shutdown before exiting
-  void _Exit(int status) {
+  void __attribute__((noreturn)) _Exit(int status) throw() {
     profiler::get_instance().shutdown();
     real::_Exit(status);
   }
 
   /// Don't allow programs to set signal handlers for causal's required signals
-  sighandler_t signal(int signum, sighandler_t handler) {
+  sighandler_t signal(int signum, sighandler_t handler) throw() {
     if(is_causal_signal(signum)) {
       return NULL;
     } else {
@@ -278,7 +315,7 @@ extern "C" {
   }
 
   /// Don't allow programs to set handlers or mask signals required for causal
-  int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact) {
+  int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact) throw() {
     if(is_causal_signal(signum)) {
       return 0;
     } else if(act != NULL) {
@@ -291,7 +328,7 @@ extern "C" {
   }
 
   /// Ensure causal's signals remain unmasked
-  int sigprocmask(int how, const sigset_t* set, sigset_t* oldset) {
+  int sigprocmask(int how, const sigset_t* set, sigset_t* oldset) throw() {
     if(how == SIG_BLOCK || how == SIG_SETMASK) {
       if(set != NULL) {
         sigset_t myset = *set;
@@ -304,7 +341,7 @@ extern "C" {
   }
 
   /// Ensure causal's signals remain unmasked
-  int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset) {
+  int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset) throw() {
     if(how == SIG_BLOCK || how == SIG_SETMASK) {
       if(set != NULL) {
         sigset_t myset = *set;
@@ -318,17 +355,22 @@ extern "C" {
   }
   
   /// Catch up on delays before sending a signal to the current process
-  int kill(pid_t pid, int sig) {
+  int kill(pid_t pid, int sig) throw() {
     if(pid == getpid())
       profiler::get_instance().catch_up();
     return real::kill(pid, sig);
   }
   
   /// Catch up on delays before sending a signal to another thread
-  int pthread_kill(pthread_t thread, int sig) {
+  int pthread_kill(pthread_t thread, int sig) throw() {
     // TODO: Don't allow threads to send causal's signals
-    profiler::get_instance().catch_up();
+    if(initialized) profiler::get_instance().catch_up();
     return real::pthread_kill(thread, sig);
+  }
+  
+  int pthread_sigqueue(pthread_t thread, int sig, const union sigval val) throw() {
+    if(initialized) profiler::get_instance().catch_up();
+    return real::pthread_sigqueue(thread, sig, val);
   }
   
   /**
@@ -341,10 +383,12 @@ extern "C" {
     remove_causal_signals(&myset);
     siginfo_t info;
     
+    if(initialized) profiler::get_instance().pre_block();
+    
     int result = real::sigwaitinfo(&myset, &info);
     
     // Woken up by another thread if the call did not fail, and the waking process is this one
-    profiler::get_instance().after_unblocking(result != -1 && info.si_pid == getpid());
+    if(initialized) profiler::get_instance().post_block(result != -1 && info.si_pid == getpid());
     
     if(result == -1) {
       // If there was an error, return the error code
@@ -365,10 +409,12 @@ extern "C" {
     siginfo_t myinfo;
     remove_causal_signals(&myset);
     
+    if(initialized) profiler::get_instance().pre_block();
+    
     int result = real::sigwaitinfo(&myset, &myinfo);
     
     // Woken up by another thread if the call did not fail, and the waking process is this one
-    profiler::get_instance().after_unblocking(result > 0 && myinfo.si_pid == getpid());
+    if(initialized) profiler::get_instance().post_block(result > 0 && myinfo.si_pid == getpid());
     
     if(result > 0 && info)
       *info = myinfo;
@@ -385,10 +431,12 @@ extern "C" {
     siginfo_t myinfo;
     remove_causal_signals(&myset);
     
+    if(initialized) profiler::get_instance().pre_block();
+    
     int result = real::sigtimedwait(&myset, &myinfo, timeout);
     
     // Woken up by another thread if the call did not fail, and the waking process is this one
-    profiler::get_instance().after_unblocking(result > 0 && myinfo.si_pid == getpid());
+    if(initialized) profiler::get_instance().post_block(result > 0 && myinfo.si_pid == getpid());
     
     if(result > 0 && info)
       *info = myinfo;

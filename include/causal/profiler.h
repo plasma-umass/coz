@@ -56,8 +56,11 @@ public:
   /// Ensure a thread has executed all the required delays before possibly unblocking another thread
   void catch_up();
   
+  /// Call before (possibly) blocking
+  void pre_block();
+  
   /// Call after unblocking. If by_thread is true, delays will be skipped
-  void after_unblocking(bool by_thread);
+  void post_block(bool skip_delays);
   
   /// Only allow one instance of the profiler, and never run the destructor
   static profiler& get_instance() {
