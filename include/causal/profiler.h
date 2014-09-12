@@ -25,7 +25,7 @@ typedef int (*main_fn_t)(int, char**, char**);
 
 enum {
   SampleSignal = SIGPROF, //< Signal to generate when samples are ready
-  SamplePeriod = 10000000, //< Time between samples (10ms)
+  SamplePeriod = 1000000, //< Time between samples (1ms)
   SampleBatchSize = 10,   //< Samples to batch together for one processing run
   SpeedupDivisions = 20,  //< How many different speedups to try (20 = 5% increments)
   ExperimentMinTime = SamplePeriod * SampleBatchSize * 10,  //< Minimum experiment length

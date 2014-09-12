@@ -105,6 +105,7 @@ int wrapped_main(int argc, char** argv, char** env) {
                                    args["speedup"].as<int>(),
                                    args.count("sample-only"));
   
+  // Synchronizations can be intercepted once the profiler has been initialized
   initialized = true;
   
   // Run the real main function
@@ -123,6 +124,7 @@ int wrapped_main(int argc, char** argv, char** env) {
  * Interpose on the call to __libc_start_main to run before libc constructors.
  */
 extern "C" int __libc_start_main(main_fn_t, int, char**, void (*)(), void (*)(), void (*)(), void*) __attribute__((weak, alias("causal_libc_start_main")));
+
 extern "C" int causal_libc_start_main(main_fn_t main_fn, int argc, char** argv,
     void (*init)(), void (*fini)(), void (*rtld_fini)(), void* stack_end) {
   // Find the real __libc_start_main

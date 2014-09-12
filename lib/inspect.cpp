@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <system_error>
@@ -39,6 +40,7 @@ using boost::filesystem::path;
 using std::ios;
 using std::map;
 using std::pair;
+using std::set;
 using std::shared_ptr;
 using std::string;
 using std::stringstream;
@@ -218,7 +220,7 @@ void memory_map::build(const vector<string>& scope, bool include_libs) {
   for(const auto& f : get_loaded_files(include_libs)) {
     try {
       if(process_file(f.first, f.second, scope)) {
-        INFO << "Including lines from " << f.first;
+        INFO << "Including lines from executable " << f.first;
       } else {
         INFO << "Unable to locate debug information for " << f.first;
       }
@@ -368,6 +370,20 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
     return false;
   }
   
+  switch(f.get_hdr().type) {
+    case elf::et::exec:
+      // Loaded at base zero
+      load_address = 0;
+      break;
+    
+    case elf::et::dyn:
+      // Load address should stay as-is
+      break;
+    
+    default:
+      WARNING << "Unsupported ELF file type...";
+  }
+  
   // Read the DWARF information from the chosen file
   dwarf::dwarf d(dwarf::elf::create_loader(f));
   
@@ -377,10 +393,12 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
     string prev_filename;
     size_t prev_line;
     uintptr_t prev_address = 0;
+    set<string> included_files;
     // Walk through the line instructions in the DWARF line table
     for(auto& line_info : unit.get_line_table()) {
       // Insert an entry if this isn't the first line command in the sequence
       if(prev_address != 0 && in_scope(prev_filename, scope)) {
+        included_files.insert(prev_filename);
         add_range(prev_filename,
                   prev_line, 
                   interval(prev_address, line_info.address) + load_address);
@@ -395,6 +413,10 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
       }
     }
     process_inlines(unit.root(), unit.get_line_table(), scope, load_address);
+    
+    for(const string& filename : included_files) {
+      INFO << "Included source file " << filename;
+    }
   }
   
   return true;
