@@ -15,15 +15,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <functional>
-
-#include "causal/spinlock.h"
 #include "causal/util.h"
 
 #include "ccutil/log.h"
+#include "ccutil/spinlock.h"
+#include "ccutil/thread.h"
 #include "ccutil/wrapped_array.h"
 
-using std::function;
 using ccutil::wrapped_array;
 
 enum {

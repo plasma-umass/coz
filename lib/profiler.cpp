@@ -16,11 +16,11 @@
 #include "causal/counter.h"
 #include "causal/inspect.h"
 #include "causal/perf.h"
-#include "causal/spinlock.h"
-#include "causal/timer.h"
 #include "causal/util.h"
 
 #include "ccutil/log.h"
+#include "ccutil/spinlock.h"
+#include "ccutil/timer.h"
 
 using namespace std;
 

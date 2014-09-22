@@ -66,8 +66,4 @@ static inline int rt_tgsigqueueinfo(pid_t tgid, pid_t tid, int sig, siginfo_t *u
   return syscall(__NR_rt_tgsigqueueinfo, tgid, tid, sig, uinfo);
 }
 
-static inline pid_t gettid() {
-  return syscall(__NR_gettid);
-}
-
 #endif

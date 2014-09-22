@@ -3,7 +3,7 @@
 
 #include <atomic>
 
-#include "causal/timer.h"
+#include "ccutil/timer.h"
 
 class thread_state {
 public:

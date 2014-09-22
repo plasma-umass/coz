@@ -12,10 +12,11 @@
 
 #include "causal/counter.h"
 #include "causal/inspect.h"
-#include "causal/safe_map.h"
-#include "causal/spinlock.h"
 #include "causal/thread_state.h"
 #include "causal/util.h"
+
+#include "ccutil/spinlock.h"
+#include "ccutil/static_map.h"
 
 /// Type of a thread entry function
 typedef void* (*thread_fn_t)(void*);
@@ -103,7 +104,7 @@ private:
   std::vector<counter*> _counters;  //< All the progress points
   spinlock _counters_lock;          //< Spinlock to protect the counters list
   
-  safe_map<pid_t, thread_state> _thread_states;   //< Map from thread IDs to thread-local state
+  static_map<pid_t, thread_state> _thread_states;   //< Map from thread IDs to thread-local state
   
   std::atomic<bool> _experiment_active; //< Is an experiment running?
   std::atomic<size_t> _delays;          //< The total number of delays inserted
