@@ -1,13 +1,14 @@
 #include <dlfcn.h>
+#include <linux/limits.h>
 #include <pthread.h>
 #include <stdlib.h>
 
-#include <set>
+#include <sstream>
 #include <string>
+#include <unordered_set>
 
 #include "causal/counter.h"
 #include "causal/inspect.h"
-#include "causal/options.h"
 #include "causal/profiler.h"
 #include "causal/real.h"
 #include "causal/util.h"
@@ -41,43 +42,31 @@ extern "C" void __causal_register_counter(counter::type kind,
 int wrapped_main(int argc, char** argv, char** env) {
   // Remove causal from LD_PRELOAD. Just clearing LD_PRELOAD for now FIXME!
   unsetenv("LD_PRELOAD");
-  
-  // Find the "---" separator between causal arguments and the program name
-  size_t causal_argc;
-  for(causal_argc = 1; causal_argc < argc && argv[causal_argc] != string("---"); causal_argc++) {
-    // Do nothing
+
+  // Read settings out of environment variables
+  string output_file = getenv_safe("COZ_OUTPUT", "profile.coz");
+  unordered_set<string> binary_scope = split(getenv_safe("COZ_BINARY_SCOPE"), '\t');
+  unordered_set<string> source_scope = split(getenv_safe("COZ_SOURCE_SCOPE"), '\t');
+  unordered_set<string> progress_points = split(getenv_safe("COZ_PROGRESS_POINTS"), '\t');
+  bool end_to_end = getenv("COZ_END_TO_END");
+  bool sample_only = getenv("COZ_SAMPLE_ONLY");
+  string fixed_line_name = getenv_safe("COZ_FIXED_LINE", "");
+  int fixed_speedup;
+  stringstream(getenv_safe("COZ_FIXED_SPEEDUP", "-1")) >> fixed_speedup;
+
+  // Replace 'MAIN' in the binary_scope with the real path of the main executable
+  if(binary_scope.find("MAIN") != binary_scope.end()) {
+    char buf[PATH_MAX];
+    readlink("/proc/self/exe", buf, PATH_MAX);
+    binary_scope.erase("MAIN");
+    binary_scope.insert(string(buf));
   }
-  
-  // If there is no separator, there must not be any causal arguments
-  if(causal_argc == argc) {
-    causal_argc = 1;
-  }
-  
-  // Parse the causal command line arguments
-  auto args = causal::parse_args(causal_argc, argv);
-  
-  // Show usage information if the help argument was passed
-  if(args.count("help")) {
-    causal::show_usage();
-    return 1;
-  }
-  
-  // Get the profiler scope
-  vector<string> scope = args["scope"].as<vector<string>>();
-  // If no scope was specified, use the current directory
-  if(scope.size() == 0) {
-    char cwd[PATH_MAX];
-    getcwd(cwd, PATH_MAX);
-    scope.push_back(string(cwd));
-  }
-  
-  // Build a map of addresses to source lines
-  memory_map::get_instance().build(scope, args.count("search-libs"));
-    
+
+  // Build the memory map for all in-scope binaries
+  memory_map::get_instance().build(binary_scope, source_scope);
+
   // Register any sampling progress points
-  vector<string> progress_names = args["progress"].as<vector<string>>();
-  
-  for(const string& line_name : progress_names) {
+  for(const string& line_name : progress_points) {
     shared_ptr<line> l = memory_map::get_instance().find_line(line_name);
     if(l) {
       profiler::get_instance().register_counter(new sampling_counter(line_name, l));
@@ -86,37 +75,33 @@ int wrapped_main(int argc, char** argv, char** env) {
     }
   }
 
-  string fixed_line_name = args["line"].as<string>();
   shared_ptr<line> fixed_line;
   if(fixed_line_name != "") {
     fixed_line = memory_map::get_instance().find_line(fixed_line_name);
     PREFER(fixed_line) << "Fixed line \"" << fixed_line_name << "\" was not found.";
   }
-  
+
   // Create a phony end-to-end counter and register it if running in end-to-end mode
   end_to_end_counter c;
-  if(args.count("end-to-end")) {
+  if(end_to_end) {
     profiler::get_instance().register_counter(&c);
   }
-  
+
   // Start the profiler
-  profiler::get_instance().startup(args["output"].as<string>(),
-                                   fixed_line.get(),
-                                   args["speedup"].as<int>(),
-                                   args.count("sample-only"));
-  
+  profiler::get_instance().startup(output_file, fixed_line.get(), fixed_speedup, sample_only);
+
   // Synchronizations can be intercepted once the profiler has been initialized
   initialized = true;
-  
+
   // Run the real main function
-  int result = real_main(argc - causal_argc - 1, &argv[causal_argc + 1], env);
-  
+  int result = real_main(argc, argv, env);
+
   // Increment the end-to-end counter just before shutdown
   c.done();
-  
+
   // Shut down the profiler
   profiler::get_instance().shutdown();
-  
+
   return result;
 }
 
@@ -133,7 +118,7 @@ extern "C" int causal_libc_start_main(main_fn_t main_fn, int argc, char** argv,
   real_main = main_fn;
   // Run the real __libc_start_main, but pass in the wrapped main function
   int result = real_libc_start_main(wrapped_main, argc, argv, init, fini, rtld_fini, stack_end);
-  
+
   return result;
 }
 
@@ -163,28 +148,28 @@ extern "C" {
                      void* arg) {
     return profiler::get_instance().handle_pthread_create(thread, attr, fn, arg);
   }
-  
+
   /// Catch up on delays before exiting, possibly unblocking a thread joining this one
   void __attribute__((noreturn)) pthread_exit(void* result) {
 	  profiler::get_instance().handle_pthread_exit(result);
   }
- 
+
   /// Skip any delays added while waiting to join a thread
   int pthread_join(pthread_t t, void** retval) {
     if(initialized) profiler::get_instance().pre_block();
     int result = real::pthread_join(t, retval);
     if(initialized) profiler::get_instance().post_block(true);
-    
+
     return result;
   }
-  
+
   int pthread_tryjoin_np(pthread_t t, void** retval) throw() {
     if(initialized) profiler::get_instance().pre_block();
     int result = real::pthread_tryjoin_np(t, retval);
     if(initialized) profiler::get_instance().post_block(result == 0);
     return result;
   }
-  
+
   int pthread_timedjoin_np(pthread_t t, void** ret, const struct timespec* abstime) {
     if(initialized) profiler::get_instance().pre_block();
     int result = real::pthread_timedjoin_np(t, ret, abstime);
@@ -197,10 +182,10 @@ extern "C" {
     if(initialized) profiler::get_instance().pre_block();
     int result = real::pthread_mutex_lock(mutex);
     if(initialized) profiler::get_instance().post_block(true);
-    
+
     return result;
   }
-  
+
   /// Catch up on delays before unblocking any threads waiting on a mutex
   int pthread_mutex_unlock(pthread_mutex_t* mutex) throw() {
     if(initialized) profiler::get_instance().catch_up();
@@ -210,12 +195,12 @@ extern "C" {
   /// Skip any delays added while waiting on a condition variable
   int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
     if(initialized) profiler::get_instance().pre_block();
-    int result = real::pthread_cond_wait(cond, mutex); 
+    int result = real::pthread_cond_wait(cond, mutex);
     if(initialized) profiler::get_instance().post_block(true);
-    
-    return result;  
+
+    return result;
   }
-  
+
   /**
    * Wait on a condvar for a fixed timeout. If the wait does *not* time out, skip any global
    * delays added during the waiting period.
@@ -228,34 +213,34 @@ extern "C" {
 
     // Skip delays only if the wait didn't time out
     if(initialized) profiler::get_instance().post_block(result == 0);
-    
+
     return result;
   }
-  
+
   /// Catchup on delays before waking a thread waiting on a condition variable
   int pthread_cond_signal(pthread_cond_t* cond) throw() {
     if(initialized) profiler::get_instance().catch_up();
     return real::pthread_cond_signal(cond);
   }
-  
+
   /// Catch up on delays before waking any threads waiting on a condition variable
   int pthread_cond_broadcast(pthread_cond_t* cond) throw() {
     if(initialized) profiler::get_instance().catch_up();
     return real::pthread_cond_broadcast(cond);
   }
-  
+
   /// Catch up before, and skip ahead after waking from a barrier
   int pthread_barrier_wait(pthread_barrier_t* barrier) throw() {
     if(initialized) profiler::get_instance().catch_up();
     if(initialized) profiler::get_instance().pre_block();
-    
+
     int result = real::pthread_barrier_wait(barrier);
-    
+
     if(initialized) profiler::get_instance().post_block(true);
-    
+
     return result;
   }
-  
+
   int pthread_rwlock_rdlock(pthread_rwlock_t* rwlock) throw() {
     if(initialized) profiler::get_instance().pre_block();
     int result = real::pthread_rwlock_rdlock(rwlock);
@@ -338,7 +323,7 @@ extern "C" {
         return real::sigprocmask(how, &myset, oldset);
       }
     }
-  
+
     return real::sigprocmask(how, set, oldset);
   }
 
@@ -348,33 +333,33 @@ extern "C" {
       if(set != NULL) {
         sigset_t myset = *set;
         remove_causal_signals(&myset);
-      
+
         return real::pthread_sigmask(how, &myset, oldset);
       }
     }
-  
+
     return real::pthread_sigmask(how, set, oldset);
   }
-  
+
   /// Catch up on delays before sending a signal to the current process
   int kill(pid_t pid, int sig) throw() {
     if(pid == getpid())
       profiler::get_instance().catch_up();
     return real::kill(pid, sig);
   }
-  
+
   /// Catch up on delays before sending a signal to another thread
   int pthread_kill(pthread_t thread, int sig) throw() {
     // TODO: Don't allow threads to send causal's signals
     if(initialized) profiler::get_instance().catch_up();
     return real::pthread_kill(thread, sig);
   }
-  
+
   int pthread_sigqueue(pthread_t thread, int sig, const union sigval val) throw() {
     if(initialized) profiler::get_instance().catch_up();
     return real::pthread_sigqueue(thread, sig, val);
   }
-  
+
   /**
    * Ensure a thread cannot wait for causal's signals.
    * If the waking signal is delivered from the same process, skip any global delays added
@@ -384,14 +369,14 @@ extern "C" {
     sigset_t myset = *set;
     remove_causal_signals(&myset);
     siginfo_t info;
-    
+
     if(initialized) profiler::get_instance().pre_block();
-    
+
     int result = real::sigwaitinfo(&myset, &info);
-    
+
     // Woken up by another thread if the call did not fail, and the waking process is this one
     if(initialized) profiler::get_instance().post_block(result != -1 && info.si_pid == getpid());
-    
+
     if(result == -1) {
       // If there was an error, return the error code
       return errno;
@@ -401,7 +386,7 @@ extern "C" {
       return 0;
     }
   }
-  
+
   /**
    * Ensure a thread cannot wait for causal's signals.
    * If the waking signal is delivered from the same process, skip any added global delays.
@@ -410,20 +395,20 @@ extern "C" {
     sigset_t myset = *set;
     siginfo_t myinfo;
     remove_causal_signals(&myset);
-    
+
     if(initialized) profiler::get_instance().pre_block();
-    
+
     int result = real::sigwaitinfo(&myset, &myinfo);
-    
+
     // Woken up by another thread if the call did not fail, and the waking process is this one
     if(initialized) profiler::get_instance().post_block(result > 0 && myinfo.si_pid == getpid());
-    
+
     if(result > 0 && info)
       *info = myinfo;
-    
+
     return result;
   }
-  
+
   /**
    * Ensure a thread cannot wait for causal's signals.
    * If the waking signal is delivered from the same process, skip any global delays.
@@ -432,20 +417,20 @@ extern "C" {
     sigset_t myset = *set;
     siginfo_t myinfo;
     remove_causal_signals(&myset);
-    
+
     if(initialized) profiler::get_instance().pre_block();
-    
+
     int result = real::sigtimedwait(&myset, &myinfo, timeout);
-    
+
     // Woken up by another thread if the call did not fail, and the waking process is this one
     if(initialized) profiler::get_instance().post_block(result > 0 && myinfo.si_pid == getpid());
-    
+
     if(result > 0 && info)
       *info = myinfo;
-    
+
     return result;
   }
-  
+
   /**
    * Set the process signal mask, suspend, then wake and restore the signal mask.
    * If the waking signal is delivered from within the process, skip any added global delays

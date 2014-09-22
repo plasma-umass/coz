@@ -9,8 +9,8 @@
 #include <memory>
 #include <new>
 #include <string>
+#include <unordered_set>
 #include <utility>
-#include <vector>
 
 namespace dwarf {
   class die;
@@ -130,8 +130,10 @@ public:
   inline const std::map<std::string, std::shared_ptr<file>>& files() const { return _files; }
   inline const std::map<interval, std::shared_ptr<line>>& ranges() const { return _ranges; }
   
-  /// Build a map from addresses to source lines with the provided source file scope
-  void build(const std::vector<std::string>& scope, bool include_libs = false);
+  /// Build a map from addresses to source lines by examining binaries that match the provided
+  /// scope patterns, adding only source files matching the source scope patterns.
+  void build(const std::unordered_set<std::string>& binary_scope,
+             const std::unordered_set<std::string>& source_scope);
   
   std::shared_ptr<line> find_line(const std::string& name);
   std::shared_ptr<line> find_line(uintptr_t addr);
@@ -159,12 +161,12 @@ private:
   
   /// Find a debug version of provided file and add all of its in-scope lines to the map
   bool process_file(const std::string& name, uintptr_t load_address,
-                    const std::vector<std::string>& scope);
+                    const std::unordered_set<std::string>& source_scope);
   
   /// Add entries for all inlined calls
   void process_inlines(const dwarf::die& d,
                        const dwarf::line_table& table,
-                       const std::vector<std::string>& scope,
+                       const std::unordered_set<std::string>& source_scope,
                        uintptr_t load_address);
   
   std::map<std::string, std::shared_ptr<file>> _files;

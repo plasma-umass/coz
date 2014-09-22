@@ -6,13 +6,13 @@ env.Append(LIBS=['dl',
                  'rt',
                  'pthread',
                  'boost_filesystem',
-                 'boost_program_options',
                  'boost_system'])
 
 runtime = env.SharedLibrary('causal', Glob('*.cpp'))
+runtime_local = env.Command('#/lib/libcausal.so', runtime, 'cp $SOURCE $TARGET')
 
 # Build libcausal_runtime as part of the 'all' target
-env.Alias('all', runtime)
+env.Alias('all', runtime_local)
 
 # Insall libcausal_runtime in <prefix>/lib
 env.Install(env['prefix'] + '/lib', runtime)

@@ -13,39 +13,31 @@
 #include <unistd.h>
 
 #include <cstdint>
+#include <iostream>
+#include <fstream>
 #include <map>
 #include <set>
 #include <sstream>
 #include <string>
 #include <system_error>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <boost/filesystem.hpp>
 
 #include <libelfin/dwarf/dwarf++.hh>
 #include <libelfin/elf/elf++.hh>
 
+#include "causal/util.h"
 #include "ccutil/log.h"
-
-using boost::is_any_of;
-using boost::split;
 
 using boost::filesystem::absolute;
 using boost::filesystem::canonical;
 using boost::filesystem::exists;
 using boost::filesystem::path;
 
-using std::ios;
-using std::map;
-using std::pair;
-using std::set;
-using std::shared_ptr;
-using std::string;
-using std::stringstream;
-using std::system_error;
-using std::vector;
+using namespace std;
 
 /**
  * Locate the build ID encoded in an ELF file and return it as a formatted string
@@ -57,7 +49,7 @@ static string find_build_id(elf::elf& f) {
       size_t offset = 0;
       while(offset < section.size()) {
         Elf64_Nhdr* hdr = reinterpret_cast<Elf64_Nhdr*>(base + offset);
-      
+
         if(hdr->n_type == NT_GNU_BUILD_ID) {
           // Found the build-id note
           stringstream ss;
@@ -70,7 +62,7 @@ static string find_build_id(elf::elf& f) {
             ss << static_cast<size_t>(build_id[i]);
           }
           return ss.str();
-        
+
         } else {
           // Advance to the next note header
           offset += sizeof(Elf64_Nhdr) + hdr->n_namesz + hdr->n_descsz;
@@ -88,16 +80,15 @@ static string find_build_id(elf::elf& f) {
 static const string get_full_path(const string filename) {
   if(filename[0] == '/') {
     return filename;
-  
+
   } else if(filename.find('/') != string::npos) {
     return canonical(filename).string();
-  
-  } else {  
+
+  } else {
     // Search the environment's path for the first match
     const string path_env = getenv("PATH");
-    vector<string> search_dirs;
-    split(search_dirs, path_env, is_any_of(":"));
-  
+    unordered_set<string> search_dirs = split(getenv_safe("PATH", ":"));
+
     for(const string& dir : search_dirs) {
       auto p = path(dir) / filename;
       if(exists(p)) {
@@ -145,7 +136,7 @@ static elf::elf locate_debug_executable(const string filename) {
   // Store the full path to the executable and its directory name
   string directory = full_path.substr(0, full_path.find_last_of('/'));
 
-  // Build a vector of paths to search for a debug version of the file
+  // Build a set of paths to search for a debug version of the file
   vector<string> search_paths;
 
   // Check for a build-id section
@@ -153,7 +144,7 @@ static elf::elf locate_debug_executable(const string filename) {
   if(build_id.length() > 0) {
     string prefix = build_id.substr(0, 2);
     string suffix = build_id.substr(2);
-  
+
     auto p = path("/usr/lib/debug/.build-id") / prefix / (suffix + ".debug");
     search_paths.push_back(p.string());
   }
@@ -161,12 +152,12 @@ static elf::elf locate_debug_executable(const string filename) {
   // Check for a debug_link section
   if(link_section.valid()) {
     string link_name = reinterpret_cast<const char*>(link_section.data());
-  
+
     search_paths.push_back(directory + "/" + link_name);
     search_paths.push_back(directory + "/.debug/" + link_name);
     search_paths.push_back("/usr/lib/debug" + directory + "/" + link_name);
   }
-  
+
   // Clear the loaded file so if we have to return it, it won't be valid()
   f = elf::elf();
 
@@ -185,92 +176,152 @@ static elf::elf locate_debug_executable(const string filename) {
   return f;
 }
 
-map<string, uintptr_t> get_loaded_files(bool include_libs) {
-  map<string, uintptr_t> result;
+unordered_map<string, uintptr_t> get_loaded_files() {
+  unordered_map<string, uintptr_t> result;
 
-  FILE* map = fopen("/proc/self/maps", "r");
-  int rc;
-  do {
-    // If we aren't including libraries, exit once there's a single executable mapping
-    if(!include_libs && result.size() == 1) {
-      break;
-    }
-    
+  ifstream maps("/proc/self/maps");
+  while(maps.good() && !maps.eof()) {
     uintptr_t base, limit;
-    char perms[4];
+    char perms[5];
     size_t offset;
-    uint8_t dev_major, dev_minor;
+    size_t dev_major, dev_minor;
     int inode;
-    char path[512];
-    rc = fscanf(map, "%lx-%lx %s %lx %hhx:%hhx %d %s\n",
-      &base, &limit, perms, &offset, &dev_major, &dev_minor, &inode, path);
-    
-    // If the mapping parsed correctly, check whether this is an executable file:
-    // Executables are mapped at offset 0, mapped executable, and have a corresponding absolute path
-    if(rc == 8 && offset == 0 && perms[2] == 'x' && path[0] == '/') {
-      result[string(path)] = base;
+    string path;
+
+    // Skip over whitespace
+    maps >> skipws;
+
+    // Read in "<base>-<limit> <perms> <offset> <dev_major>:<dev_minor> <inode>"
+    maps >> std::hex >> base;
+    if(maps.get() != '-') break;
+    maps >> std::hex >> limit;
+
+    if(maps.get() != ' ') break;
+    maps.get(perms, 5);
+
+    maps >> std::hex >> offset;
+    maps >> std::hex >> dev_major;
+    if(maps.get() != ':') break;
+    maps >> std::hex >> dev_minor;
+    maps >> std::dec >> inode;
+
+    // Skip over spaces and tabs
+    while(maps.peek() == ' ' || maps.peek() == '\t') { maps.ignore(1); }
+
+    // Read out the mapped file's path
+    getline(maps, path);
+
+    // If this is an executable mapping of an absolute path, include it
+    if(perms[2] == 'x' && path[0] == '/') {
+      result[path] = base;
     }
-  } while(rc == 8);
-  fclose(map);
-  
+  }
+
   return result;
 }
 
-void memory_map::build(const vector<string>& scope, bool include_libs) {
-  for(const auto& f : get_loaded_files(include_libs)) {
-    try {
-      if(process_file(f.first, f.second, scope)) {
-        INFO << "Including lines from executable " << f.first;
-      } else {
-        INFO << "Unable to locate debug information for " << f.first;
+bool wildcard_match(string::const_iterator subject,
+                    string::const_iterator subject_end,
+                    string::const_iterator pattern,
+                    string::const_iterator pattern_end) {
+
+  if((pattern == pattern_end) != (subject == subject_end)) {
+    // If one but not both of the iterators have finished, match failed
+    return false;
+  } else if(pattern == pattern_end && subject == subject_end) {
+    // If both iterators have finished, match succeeded
+    return true;
+
+  } else if(*pattern == '%') {
+    // Try possible matches of the wildcard, starting with the longest possible match
+    for(auto match_end = subject_end; match_end >= subject; match_end--) {
+      if(wildcard_match(match_end, subject_end, pattern+1, pattern_end)) {
+        return true;
       }
-    } catch(const system_error& e) {
-      WARNING << "Processing file \"" << f.first << "\" failed: " << e.what();
     }
+    // No matches found. Abort
+    return false;
+
+  } else {
+    // Walk through non-wildcard characters to match
+    while(subject != subject_end && pattern != pattern_end && *pattern != '%') {
+      // If the characters do not match, abort. Otherwise keep going.
+      if(*pattern != *subject) {
+        return false;
+      } else {
+        pattern++;
+        subject++;
+      }
+    }
+
+    // Recursive call to handle wildcard or termination cases
+    return wildcard_match(subject, subject_end, pattern, pattern_end);
   }
 }
 
-bool in_scope(string file, const vector<string>& scope) {
-  for(const string& s : scope) {
-    if(path(file).normalize().string().find(s) == 0) {
+bool wildcard_match(const string& subject, const string& pattern) {
+  return wildcard_match(subject.begin(), subject.end(), pattern.begin(), pattern.end());
+}
+
+bool in_scope(const string& name, const unordered_set<string>& scope) {
+  for(const string& pattern : scope) {
+    string normalized = path(name).normalize().string();
+    if(wildcard_match(normalized, pattern)) {
       return true;
     }
   }
   return false;
 }
 
+void memory_map::build(const unordered_set<string>& binary_scope,
+                       const unordered_set<string>& source_scope) {
+  for(const auto& f : get_loaded_files()) {
+    if(in_scope(f.first, binary_scope)) {
+      try {
+        if(process_file(f.first, f.second, source_scope)) {
+          INFO << "Including lines from executable " << f.first;
+        } else {
+          INFO << "Unable to locate debug information for " << f.first;
+        }
+      } catch(const system_error& e) {
+        WARNING << "Processing file \"" << f.first << "\" failed: " << e.what();
+      }
+    }
+  }
+}
+
 dwarf::value find_attribute(const dwarf::die& d, dwarf::DW_AT attr) {
   if(!d.valid())
     return dwarf::value();
-  
+
   if(d.has(attr))
     return d[attr];
-  
+
   if(d.has(dwarf::DW_AT::abstract_origin)) {
     const dwarf::die child = d.resolve(dwarf::DW_AT::abstract_origin).as_reference();
     dwarf::value v = find_attribute(child, attr);
     if(v.valid())
       return v;
   }
-  
+
   if(d.has(dwarf::DW_AT::specification)) {
     const dwarf::die child = d.resolve(dwarf::DW_AT::specification).as_reference();
     dwarf::value v = find_attribute(child, attr);
     if(v.valid())
       return v;
   }
-  
+
   return dwarf::value();
 }
 
 void memory_map::add_range(std::string filename, size_t line_no, interval range) {
   shared_ptr<file> f = get_file(filename);
   shared_ptr<line> l = f->get_line(line_no);
-  
+
   /*auto iter = _ranges.find(range);
   if(iter != _ranges.end() && iter->second != l) {
-    WARNING << "Overlapping entries for lines " 
-      << f->get_name() << ":" << l->get_line() << " and " 
+    WARNING << "Overlapping entries for lines "
+      << f->get_name() << ":" << l->get_line() << " and "
       << iter->second->get_file()->get_name() << ":" << iter->second->get_line();
   }*/
 
@@ -280,42 +331,42 @@ void memory_map::add_range(std::string filename, size_t line_no, interval range)
 
 void memory_map::process_inlines(const dwarf::die& d,
                                  const dwarf::line_table& table,
-                                 const vector<string>& scope,
+                                 const unordered_set<string>& source_scope,
                                  uintptr_t load_address) {
   if(!d.valid())
     return;
-  
+
   if(d.tag == dwarf::DW_TAG::inlined_subroutine) {
     string name;
     dwarf::value name_val = find_attribute(d, dwarf::DW_AT::name);
     if(name_val.valid()) {
       name = name_val.as_string();
     }
-    
+
     string decl_file;
     dwarf::value decl_file_val = find_attribute(d, dwarf::DW_AT::decl_file);
     if(decl_file_val.valid() && table.valid()) {
       decl_file = table.get_file(decl_file_val.as_uconstant())->path;
     }
-    
+
     size_t decl_line = 0;
     dwarf::value decl_line_val = find_attribute(d, dwarf::DW_AT::decl_line);
     if(decl_line_val.valid())
       decl_line = decl_line_val.as_uconstant();
-    
+
     string call_file;
     if(d.has(dwarf::DW_AT::call_file) && table.valid()) {
       call_file = table.get_file(d[dwarf::DW_AT::call_file].as_uconstant())->path;
     }
-    
+
     size_t call_line = 0;
     if(d.has(dwarf::DW_AT::call_line)) {
       call_line = d[dwarf::DW_AT::call_line].as_uconstant();
     }
-    
-    // If the call location is in scope but the function is not, add an entry 
+
+    // If the call location is in scope but the function is not, add an entry
     if(decl_file.size() > 0 && call_file.size() > 0) {
-      if(!in_scope(decl_file, scope) && in_scope(call_file, scope)) {
+      if(!in_scope(decl_file, source_scope) && in_scope(call_file, source_scope)) {
         // Does this inline have separate ranges?
         dwarf::value ranges_val = find_attribute(d, dwarf::DW_AT::ranges);
         if(ranges_val.valid()) {
@@ -333,21 +384,21 @@ void memory_map::process_inlines(const dwarf::die& d,
           if(low_pc_val.valid() && high_pc_val.valid()) {
             uint64_t low_pc;
             uint64_t high_pc;
-            
+
             if(low_pc_val.get_type() == dwarf::value::type::address)
               low_pc = low_pc_val.as_address();
             else if(low_pc_val.get_type() == dwarf::value::type::uconstant)
               low_pc = low_pc_val.as_uconstant();
             else if(low_pc_val.get_type() == dwarf::value::type::sconstant)
               low_pc = low_pc_val.as_sconstant();
-            
+
             if(high_pc_val.get_type() == dwarf::value::type::address)
               high_pc = high_pc_val.as_address();
             else if(high_pc_val.get_type() == dwarf::value::type::uconstant)
               high_pc = high_pc_val.as_uconstant();
             else if(high_pc_val.get_type() == dwarf::value::type::sconstant)
               high_pc = high_pc_val.as_sconstant();
-            
+
             add_range(call_file,
                       call_line,
                       interval(low_pc, high_pc) + load_address);
@@ -356,40 +407,40 @@ void memory_map::process_inlines(const dwarf::die& d,
       }
     }
   }
-  
+
   for(const auto& child : d) {
-    process_inlines(child, table, scope, load_address);
+    process_inlines(child, table, source_scope, load_address);
   }
 }
 
 bool memory_map::process_file(const string& name, uintptr_t load_address,
-                              const vector<string>& scope) {
+                              const unordered_set<string>& source_scope) {
   elf::elf f = locate_debug_executable(name);
   // If a debug version of the file could not be located, return false
   if(!f.valid()) {
     return false;
   }
-  
+
   switch(f.get_hdr().type) {
     case elf::et::exec:
       // Loaded at base zero
       load_address = 0;
       break;
-    
+
     case elf::et::dyn:
       // Load address should stay as-is
       break;
-    
+
     default:
       WARNING << "Unsupported ELF file type...";
   }
-  
+
   // Read the DWARF information from the chosen file
   dwarf::dwarf d(dwarf::elf::create_loader(f));
-  
+
   // Walk through the compilation units (source files) in the executable
   for(auto unit : d.compilation_units()) {
-    
+
     string prev_filename;
     size_t prev_line;
     uintptr_t prev_address = 0;
@@ -397,13 +448,13 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
     // Walk through the line instructions in the DWARF line table
     for(auto& line_info : unit.get_line_table()) {
       // Insert an entry if this isn't the first line command in the sequence
-      if(prev_address != 0 && in_scope(prev_filename, scope)) {
+      if(prev_address != 0 && in_scope(prev_filename, source_scope)) {
         included_files.insert(prev_filename);
         add_range(prev_filename,
-                  prev_line, 
+                  prev_line,
                   interval(prev_address, line_info.address) + load_address);
       }
-    
+
       if(line_info.end_sequence) {
         prev_address = 0;
       } else {
@@ -412,13 +463,13 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
         prev_address = line_info.address;
       }
     }
-    process_inlines(unit.root(), unit.get_line_table(), scope, load_address);
-    
+    process_inlines(unit.root(), unit.get_line_table(), source_scope, load_address);
+
     for(const string& filename : included_files) {
       INFO << "Included source file " << filename;
     }
   }
-  
+
   return true;
 }
 
@@ -428,13 +479,13 @@ shared_ptr<line> memory_map::find_line(const string& name) {
     WARNING << "Could not identify file name in input " << name;
     return shared_ptr<line>();
   }
-  
+
   string filename = name.substr(0, colon_pos);
   string line_no_str = name.substr(colon_pos + 1);
-  
+
   size_t line_no;
   stringstream(line_no_str) >> line_no;
-  
+
   for(const auto& f : files()) {
     string::size_type last_pos = f.first.rfind(filename);
     if(last_pos != string::npos && last_pos + filename.size() == f.first.size()) {
@@ -443,7 +494,7 @@ shared_ptr<line> memory_map::find_line(const string& name) {
       }
     }
   }
-  
+
   return shared_ptr<line>();
 }
 

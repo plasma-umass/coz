@@ -1,5 +1,11 @@
 # Inherit the default build environment
 Import('env')
 
-# Build all tools
-env.SConscript(dirs=['coz', 'coz-plot', 'coz-process'])
+coz = env.Command('coz', '#/bin/coz', 'cat $SOURCE > $TARGET; chmod a+x $TARGET')
+
+# "Build" coz as part of the 'all' target
+env.Alias('all', coz)
+
+# Install coz-process in <prefix>/bin
+env.Install(env['prefix'] + '/bin', coz)
+env.Alias('install', env['prefix'] + '/bin')

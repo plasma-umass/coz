@@ -11,6 +11,10 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include <sstream>
+#include <string>
+#include <unordered_set>
+
 #include "causal/real.h"
 
 /**
@@ -40,6 +44,22 @@ static inline size_t wait(size_t ns) {
   while(nanosleep(&ts, &ts) != 0) {}
   
   return get_time() - start_time;
+}
+
+static inline std::unordered_set<std::string> split(const std::string& s, char delim='\t') {
+  std::unordered_set<std::string> elems;
+  std::stringstream ss(s);
+  std::string item;
+  while (std::getline(ss, item, delim)) {
+    if(item.length()) elems.insert(item);
+  }
+  return elems;
+}
+
+static inline std::string getenv_safe(const char* var, const char* fallback = "") {
+  const char* value = getenv(var);
+  if(!value) value = fallback;
+  return std::string(value);
 }
 
 static inline int rt_tgsigqueueinfo(pid_t tgid, pid_t tid, int sig, siginfo_t *uinfo) {
