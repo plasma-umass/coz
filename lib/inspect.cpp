@@ -91,8 +91,6 @@ static string canonicalize_path(const string filename) {
     result += "/" + part;
   }
   
-  INFO << "Canonical form of " << filename << " is " << result;
-  
   return result;
 }
 

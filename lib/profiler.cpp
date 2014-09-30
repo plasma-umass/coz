@@ -109,7 +109,6 @@ void profiler::profiler_thread(spinlock& l) {
     if(_fixed_line) {
       selected = _fixed_line;
     } else {
-      INFO << "Selecting line";
       // Otherwise, wait for the next line to be selected
       selected = _next_line.load(memory_order_relaxed);
       while(_running && selected == nullptr) {
@@ -131,8 +130,6 @@ void profiler::profiler_thread(spinlock& l) {
     
     size_t start_time = get_time();
     size_t starting_delays = _delays.load(memory_order_relaxed);
-    
-    INFO << "Starting experiment";
     
     // Log the start of the experiment
     output << "start-experiment\t"
@@ -173,8 +170,6 @@ void profiler::profiler_thread(spinlock& l) {
       
       // Could increase wait time here, but that might delay exiting
     } while(_running && !experiment_finished);
-    
-    INFO << "Done";
     
     // Log the end of the experiment, whether it finished or the profiler is shutting down
     output << "end-experiment\t"
