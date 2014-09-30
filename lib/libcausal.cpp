@@ -45,9 +45,16 @@ int wrapped_main(int argc, char** argv, char** env) {
 
   // Read settings out of environment variables
   string output_file = getenv_safe("COZ_OUTPUT", "profile.coz");
-  unordered_set<string> binary_scope = split(getenv_safe("COZ_BINARY_SCOPE"), '\t');
-  unordered_set<string> source_scope = split(getenv_safe("COZ_SOURCE_SCOPE"), '\t');
-  unordered_set<string> progress_points = split(getenv_safe("COZ_PROGRESS_POINTS"), '\t');
+  
+  vector<string> binary_scope_v = split(getenv_safe("COZ_BINARY_SCOPE"), '\t');
+  unordered_set<string> binary_scope(binary_scope_v.begin(), binary_scope_v.end());
+  
+  vector<string> source_scope_v = split(getenv_safe("COZ_SOURCE_SCOPE"), '\t');
+  unordered_set<string> source_scope(source_scope_v.begin(), source_scope_v.end());
+  
+  vector<string> progress_points_v = split(getenv_safe("COZ_PROGRESS_POINTS"), '\t');
+  unordered_set<string> progress_points(progress_points_v.begin(), progress_points_v.end());
+  
   bool end_to_end = getenv("COZ_END_TO_END");
   bool sample_only = getenv("COZ_SAMPLE_ONLY");
   string fixed_line_name = getenv_safe("COZ_FIXED_LINE", "");

@@ -1,13 +1,26 @@
-.sconsign.dblite
-debug
-release
-build.conf
 include/ccutil
 
 lib/libcausal.so
+lib/obj
+
+benchmarks/*/obj
+benchmarks/*/profile.coz
+
+benchmarks/histogram/histogram
+benchmarks/kmeans/kmeans
+benchmarks/linear_regression/linear_regression
+benchmarks/matrix_multiply/matrix_multiply
+benchmarks/pbzip2/pbzip2
+benchmarks/pca/pca
+benchmarks/producer_consumer/producer_consumer
+benchmarks/string_match/string_match
+benchmarks/toy/toy
+benchmarks/word_count/word_count
 
 benchmarks/histogram/histogram_datafiles
 benchmarks/linear_regression/linear_regression_datafiles
+benchmarks/matrix_multiply/.input_bench
+benchmarks/matrix_multiply/.input_test
 benchmarks/matrix_multiply/matrix_file_A.txt
 benchmarks/matrix_multiply/matrix_file_B.txt
 benchmarks/matrix_multiply/matrix_file_out_pthreads.txt

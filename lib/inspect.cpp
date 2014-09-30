@@ -1,13 +1,8 @@
 #include "causal/inspect.h"
 
-#include <cxxabi.h>
 #include <elf.h>
 #include <fcntl.h>
-#include <libgen.h>
-#include <limits.h>
-#include <link.h>
 #include <stdlib.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -24,18 +19,11 @@
 #include <unordered_set>
 #include <vector>
 
-#include <boost/filesystem.hpp>
-
 #include <libelfin/dwarf/dwarf++.hh>
 #include <libelfin/elf/elf++.hh>
 
 #include "causal/util.h"
 #include "ccutil/log.h"
-
-using boost::filesystem::absolute;
-using boost::filesystem::canonical;
-using boost::filesystem::exists;
-using boost::filesystem::path;
 
 using namespace std;
 
@@ -73,26 +61,65 @@ static string find_build_id(elf::elf& f) {
   return "";
 }
 
+static string absolute_path(const string filename) {
+  if(filename[0] == '/') return filename;
+  
+  char* cwd = getcwd(NULL, 0);
+  REQUIRE(cwd != NULL) << "Failed to get current directory";
+  
+  return string(cwd) + '/' + filename;
+}
+
+static string canonicalize_path(const string filename) {
+  vector<string> parts = split(absolute_path(filename), '/');
+  
+  // Iterate over the path parts to produce a reduced list of path sections
+  vector<string> reduced;
+  for(string part : parts) {
+    if(part == "..") {
+      REQUIRE(reduced.size() > 0) << "Invalid absolute path";
+      reduced.pop_back();
+    } else if(part.length() > 0 && part != ".") {
+      // Skip single-dot or empty entries
+      reduced.push_back(part);
+    }
+  }
+  
+  // Join path sections into a single string
+  string result;
+  for(string part : reduced) {
+    result += "/" + part;
+  }
+  
+  INFO << "Canonical form of " << filename << " is " << result;
+  
+  return result;
+}
+
+static bool file_exists(const string& filename) {
+  struct stat statbuf;
+  int rc = stat(filename.c_str(), &statbuf);
+  // If the stat call succeeds, the file must exist
+  return rc == 0;
+}
+
 /**
  * Get the full path to a file specified via absolute path, relative path, or raw name
  * resolved via the PATH variable.
  */
 static const string get_full_path(const string filename) {
-  if(filename[0] == '/') {
-    return filename;
-
-  } else if(filename.find('/') != string::npos) {
-    return canonical(filename).string();
-
+  if(filename.find('/') != string::npos) {
+    return canonicalize_path(filename);
+    
   } else {
     // Search the environment's path for the first match
     const string path_env = getenv("PATH");
-    unordered_set<string> search_dirs = split(getenv_safe("PATH", ":"));
+    vector<string> search_dirs = split(getenv_safe("PATH", ":"));
 
     for(const string& dir : search_dirs) {
-      auto p = path(dir) / filename;
-      if(exists(p)) {
-        return p.string();
+      string full_path = dir + '/' + filename;
+      if(file_exists(full_path)) {
+        return full_path;
       }
     }
   }
@@ -145,8 +172,8 @@ static elf::elf locate_debug_executable(const string filename) {
     string prefix = build_id.substr(0, 2);
     string suffix = build_id.substr(2);
 
-    auto p = path("/usr/lib/debug/.build-id") / prefix / (suffix + ".debug");
-    search_paths.push_back(p.string());
+    auto p = string("/usr/lib/debug/.build-id/") + prefix + "/" + suffix + ".debug";
+    search_paths.push_back(p);
   }
 
   // Check for a debug_link section
@@ -264,8 +291,8 @@ bool wildcard_match(const string& subject, const string& pattern) {
 }
 
 bool in_scope(const string& name, const unordered_set<string>& scope) {
+  string normalized = canonicalize_path(name);
   for(const string& pattern : scope) {
-    string normalized = path(name).normalize().string();
     if(wildcard_match(normalized, pattern)) {
       return true;
     }
@@ -317,14 +344,6 @@ dwarf::value find_attribute(const dwarf::die& d, dwarf::DW_AT attr) {
 void memory_map::add_range(std::string filename, size_t line_no, interval range) {
   shared_ptr<file> f = get_file(filename);
   shared_ptr<line> l = f->get_line(line_no);
-
-  /*auto iter = _ranges.find(range);
-  if(iter != _ranges.end() && iter->second != l) {
-    WARNING << "Overlapping entries for lines "
-      << f->get_name() << ":" << l->get_line() << " and "
-      << iter->second->get_file()->get_name() << ":" << iter->second->get_line();
-  }*/
-
   // Add the entry
   _ranges.emplace(range, l);
 }
@@ -458,7 +477,7 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
       if(line_info.end_sequence) {
         prev_address = 0;
       } else {
-        prev_filename = path(line_info.file->path).normalize().string();
+        prev_filename = canonicalize_path(line_info.file->path);
         prev_line = line_info.line;
         prev_address = line_info.address;
       }

@@ -13,7 +13,7 @@
 
 #include <sstream>
 #include <string>
-#include <unordered_set>
+#include <vector>
 
 #include "causal/real.h"
 
@@ -46,12 +46,12 @@ static inline size_t wait(size_t ns) {
   return get_time() - start_time;
 }
 
-static inline std::unordered_set<std::string> split(const std::string& s, char delim='\t') {
-  std::unordered_set<std::string> elems;
+static inline std::vector<std::string> split(const std::string& s, char delim='\t') {
+  std::vector<std::string> elems;
   std::stringstream ss(s);
   std::string item;
   while (std::getline(ss, item, delim)) {
-    if(item.length()) elems.insert(item);
+    if(item.length()) elems.push_back(item);
   }
   return elems;
 }

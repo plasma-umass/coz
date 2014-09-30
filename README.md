@@ -13,17 +13,17 @@ developers had assumed they were getting all along.
 ## Requirements
 Coz, our prototype causal profiler, runs with unmodified Linux executables. Coz requires:
 
+- [Python](http://www.python.org), along with the [ggplot](https://pypi.python.org/pypi/ggplot) package (only required for plotting. See details below)
 - [SCons](http://scons.org), a python-based build system
 - [Clang 3.1 or newer](http://clang.llvm.org) or another compiler with C++11 support
 - [Linux](http://kernel.org) version 2.6.32 or newer, including the `perf_event` API
-- [Boost](http://boost.org) [filesystem](http://www.boost.org/doc/libs/1_39_0/libs/filesystem/doc/index.htm), [program_options](http://www.boost.org/doc/libs/1_56_0/doc/html/program_options.html), and [system](http://www.boost.org/doc/libs/1_46_1/libs/system/doc/index.html) libraries
+- [Boost](http://boost.org) [filesystem](http://www.boost.org/doc/libs/1_39_0/libs/filesystem/doc/index.htm), and [system](http://www.boost.org/doc/libs/1_46_1/libs/system/doc/index.html) libraries
 - [libelfin](https://github.com/ccurtsinger/libelfin), a C++11 library for accessing ELF binaries and reading DWARF debugging information
-- [R](http://r-project.org) used for plotting, including the [ggplot2](http://ggplot2.org) library.
 
 On debian or ubuntu, you can install all build dependencies with the following lines:
 
 ```
-sudo apt-get install scons clang libboost-filesystem-dev libboost-program-options-dev libboost-system-dev r-base r-base-dev r-cran-ggplot2 r-cran-plyr
+sudo apt-get install scons clang libboost-filesystem-dev libboost-system-dev
 git clone git://github.com/ccurtsinger/libelfin
 cd libelfin
 make
@@ -31,7 +31,7 @@ sudo make install
 ```
 
 ## Building
-To build Coz, just clone this repository and run `scons`. Adding `mode=release` will build an optimized version with less debug logging.
+To build Coz, just clone this repository and run `scons`. Adding `mode=release` will build an optimized version without debug output.
 
 You can install Coz by running `scons install`, with an optional `prefix=<install prefix>` argument if you do not want to install to `/usr/local`.
 
@@ -40,11 +40,9 @@ Before running your program with Coz, you will need to identify one or more prog
 
 To add a progress point, add the `CAUSAL_PROGRESS` macro to the line you would like to execute more frequently. This macro is defined in `causal.h`, which is installed to `<prefix>/include` (`/usr/local/include` by default).
 
-To run a program with Coz, just type `coz --- <your program and arguments>` on the command line. You can specify profiling options befor the `---`. Run `coz --help` for a description of the available options. Profiling output is placed in the file `profile.log` by default.
+To run a program with Coz, just type `coz run --- <your program and arguments>` on the command line. You can specify profiling options befor the `---`. Run `coz run -h` for a description of the available options. Profiling output is placed in the file `profile.log` by default.
 
 ## Processing Results
-To process results, run `coz-process profile.log`. This will generate a `profile.csv` file with predicted program speedups for all lines in the causal profile. To graph these results, run `coz-plot profile.csv`.
+To plot the results from a causal profile, run `coz plot`. This will generate an image from the `profile.coz` file in the current directory. This functionality requires the Python `ggplot` package. You can install this package with the command `pip install ggplot`.
 
-The `coz-plot` tool requires [R](http://r-project.org), along with the `ggplot2` and `plyr` packages. To install these, run R and type the command `install.packages('ggplot2', 'plyr')`.
-
-Note that `coz-plot` may produce error messages if there are not enough samples in the profile to produce a plot. You can execute the profiled application several times to collect additional samples.
+If you do not have `ggplot` installed, you can generate a CSV from the causal profile results using the `coz process` command. The output file `profile.csv` can be used with most spreadsheet programs.
