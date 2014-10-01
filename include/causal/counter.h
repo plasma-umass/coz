@@ -195,16 +195,4 @@ private:
   static size_t _overhead;
 };
 
-static std::ostream& operator<<(std::ostream& os, const counter& c) {
-  return os << "counter\t"
-            << "name=" << c.get_name() << "\t"
-            << "kind=" << c.get_kind_name() << "\t"
-            << "impl=" << c.get_impl_name() << "\t"
-            << "value=" << c.get_count() << "\n";
-}
-
-static std::ostream& operator<<(std::ostream& os, const counter* c) {
-  return os << *c;
-}
-
 #endif
