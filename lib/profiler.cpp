@@ -113,7 +113,7 @@ void profiler::profiler_thread(spinlock& l) {
     _progress_points_lock.unlock();
     
     // Log sample counts after this many experiments (doubles each time)
-    size_t sample_log_interval = 4;
+    size_t sample_log_interval = 32;
     size_t sample_log_countdown = sample_log_interval;
     
     // Main experiment loop
