@@ -38,8 +38,7 @@ static void _causal_init_counter(int kind,
     static __thread unsigned long _local_counter; \
     static unsigned long _backoff = 0; \
     \
-    if(!_initialized) { \
-      _initialized = 1; \
+    if(!_initialized && __atomic_exchange_n(&_initialized, 1, __ATOMIC_SEQ_CST) == 0) { \
       _causal_init_counter(kind, &_global_counter, &_backoff, name); \
     } \
     \

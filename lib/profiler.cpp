@@ -13,9 +13,9 @@
 #include <string>
 #include <vector>
 
-#include "causal/counter.h"
 #include "causal/inspect.h"
 #include "causal/perf.h"
+#include "causal/progress_point.h"
 #include "causal/util.h"
 
 #include "ccutil/log.h"
@@ -103,14 +103,18 @@ void profiler::profiler_thread(spinlock& l) {
     }
     
   } else {
-    // Wait until there is at least one progress counter
-    _counters_lock.lock();
-    while(_counters.size() == 0 && _running) {
-      _counters_lock.unlock();
+    // Wait until there is at least one progress point
+    _progress_points_lock.lock();
+    while(_progress_points.size() == 0 && _running) {
+      _progress_points_lock.unlock();
       wait(ExperimentCoolOffTime);
-      _counters_lock.lock();
+      _progress_points_lock.lock();
     }
-    _counters_lock.unlock();
+    _progress_points_lock.unlock();
+    
+    // Log sample counts after this many experiments (doubles each time)
+    size_t sample_log_interval = 4;
+    size_t sample_log_countdown = sample_log_interval;
     
     // Main experiment loop
     while(_running) {
@@ -145,13 +149,13 @@ void profiler::profiler_thread(spinlock& l) {
         size_t starting_samples = selected->get_samples();
         size_t starting_delays = _delays.load();
         
-        // Save counter values at the start of the experiment
-        vector<size_t> saved_counters;
-        _counters_lock.lock();
-        for(counter* c : _counters) {
-          saved_counters.push_back(c->get_count());
+        // Save progress point values at the start of the experiment
+        vector<unique_ptr<progress_point::saved>> saved;
+        _progress_points_lock.lock();
+        for(progress_point* p : _progress_points) {
+          saved.emplace_back(p->save());
         }
-        _counters_lock.unlock();
+        _progress_points_lock.unlock();
     
         // Tell threads to start the experiment
         _experiment_active.store(true);
@@ -163,16 +167,13 @@ void profiler::profiler_thread(spinlock& l) {
           // Wait for the experiment to run
           wait(wait_time);
       
-          // End unless we find a counter that hasn't changed
+          // End unless we find a progress point that hasn't changed
           experiment_finished = true;
       
-          // Check if counters have changed enough to finish
-          _counters_lock.lock();
-          for(size_t i=0; i<saved_counters.size(); i++) {
-            if(_counters[i]->get_count() - saved_counters[i] < ExperimentMinCounterChange)
-              experiment_finished = false;
+          // Check if progress points have changed enough to finish
+          for(const auto& s : saved) {
+            experiment_finished &= s->changed(ExperimentMinCounterChange);
           }
-          _counters_lock.unlock();
       
           // Could increase wait time here, but that might delay exiting
         } while(_running && !experiment_finished);
@@ -190,17 +191,10 @@ void profiler::profiler_thread(spinlock& l) {
                << "duration=" << duration << "\t"
                << "selected-samples=" << selected_samples << "\n";
     
-        // Log counter deltas
-        _counters_lock.lock();
-        for(size_t i=0; i<saved_counters.size(); i++) {
-          size_t delta = _counters[i]->get_count() - saved_counters[i];
-          output << "counter\t"
-                 << "name=" << _counters[i]->get_name() << "\t"
-                 << "kind=" << _counters[i]->get_kind_name() << "\t"
-                 << "impl=" << _counters[i]->get_impl_name() << "\t"
-                 << "delta=" << delta << "\n";
+        // Log progress point changes
+        for(const auto& s : saved) {
+          s->log(output);
         }
-        _counters_lock.unlock();
     
         output.flush();
     
@@ -209,6 +203,13 @@ void profiler::profiler_thread(spinlock& l) {
     
         // End the experiment
         _experiment_active.store(false);
+        
+        // Log samples after a while, then double the countdown
+        if(--sample_log_countdown == 0) {
+          log_samples(output);
+          sample_log_interval *= 2;
+          sample_log_countdown = sample_log_interval;
+        }
     
         // Cool off before starting a new experiment, unless the program is exiting
         if(_running) wait(ExperimentCoolOffTime);
@@ -220,6 +221,14 @@ void profiler::profiler_thread(spinlock& l) {
          << "time=" << _end_time << "\t"
          << "samples=" << _samples << "\n";
   
+  // Log the sample counts on exit
+  log_samples(output);
+  
+  output.flush();
+  output.close();
+}
+
+void profiler::log_samples(ofstream& output) {
   // Log sample counts for all observed lines
   for(const auto& file_entry : memory_map::get_instance().files()) {
     for(const auto& line_entry : file_entry.second->lines()) {
@@ -231,9 +240,6 @@ void profiler::profiler_thread(spinlock& l) {
       }
     }
   }
-  
-  output.flush();
-  output.close();
 }
 
 /**
@@ -266,12 +272,12 @@ void profiler::remove_thread() {
 }
 
 /**
- * Register a new progress counter
+ * Register a new progress point
  */
-void profiler::register_counter(counter* c) {
-  _counters_lock.lock();
-  _counters.push_back(c);
-  _counters_lock.unlock();
+void profiler::register_progress_point(progress_point* p) {
+  _progress_points_lock.lock();
+  _progress_points.push_back(p);
+  _progress_points_lock.unlock();
 };
 
 /**

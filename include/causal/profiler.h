@@ -10,8 +10,8 @@
 
 #include "causal.h"
 
-#include "causal/counter.h"
 #include "causal/inspect.h"
+#include "causal/progress_point.h"
 #include "causal/thread_state.h"
 #include "causal/util.h"
 
@@ -31,7 +31,7 @@ enum {
   SpeedupDivisions = 20,  //< How many different speedups to try (20 = 5% increments)
   ExperimentMinTime = SamplePeriod * SampleBatchSize * 10,  //< Minimum experiment length
   ExperimentCoolOffTime = SamplePeriod * SampleBatchSize,   //< Time to wait after an experiment
-  ExperimentMinCounterChange = 5  //< Minimum change in counters before experiment can end 
+  ExperimentMinCounterChange = 5  //< Minimum change in progres points before experiment can end 
 };
 
 class profiler {
@@ -45,8 +45,8 @@ public:
   /// Shut down the profiler
   void shutdown();
   
-  /// Register a progress counter
-  void register_counter(counter* c);
+  /// Register a progress point
+  void register_progress_point(progress_point* c);
   
   /// Pass local delay counts and excess delay time to the child thread
   int handle_pthread_create(pthread_t*, const pthread_attr_t*, thread_fn_t, void*);
@@ -91,6 +91,7 @@ private:
   void add_delays(thread_state* state);       //< Add any required delays
   void process_samples(thread_state* state);  //< Process all available samples and insert delays
   line* find_line(perf_event::record&);       //< Map a sample to its source line
+  void log_samples(std::ofstream&);           //< Log sample counts for all identified regions
   
   thread_state* add_thread(); //< Add a thread state entry for this thread
   thread_state* get_thread_state(); //< Get a reference to the thread state object for this thread
@@ -101,8 +102,8 @@ private:
   static void samples_ready(int, siginfo_t*, void*);  //< Signal handler for sample processing
   static void on_error(int, siginfo_t*, void*);       //< Handle errors
   
-  std::vector<counter*> _counters;  //< All the progress points
-  spinlock _counters_lock;          //< Spinlock to protect the counters list
+  std::vector<progress_point*> _progress_points;    //< All the progress points
+  spinlock _progress_points_lock;                   //< Spinlock to protect the progress points list
   
   static_map<pid_t, thread_state> _thread_states;   //< Map from thread IDs to thread-local state
   
