@@ -1,5 +1,4 @@
-include/ccutil
-
+lib/include/ccutil
 lib/libcausal.so
 lib/obj
 

@@ -43,13 +43,13 @@ clean::
 .PHONY: all clean bench test
 
 # Compile a C++ source file (and generate its dependency rules)
-obj/%.o: %.cpp
+obj/%.o: %.cpp $(PREREQS)
 	@echo $(LOG_PREFIX) Compiling $< $(LOG_SUFFIX)
 	@mkdir -p obj
 	@$(CXX) $(CXXFLAGS) -MMD -MP -o $@ -c $<
 
 # Compile a C source file (and generate its dependency rules)
-obj/%.o: %.c
+obj/%.o: %.c $(PREREQS)
 	@echo $(LOG_PREFIX) Compiling $< $(LOG_SUFFIX)
 	@mkdir -p obj
 	@$(CC) $(CFLAGS) -MMD -MP -o $@ -c $<
