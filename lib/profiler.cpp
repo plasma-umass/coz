@@ -235,7 +235,7 @@ void profiler::log_samples(ofstream& output) {
       shared_ptr<line> l = line_entry.second;
       if(l->get_samples() > 0) {
         output << "samples\t"
-               << "line=" << l << "\t"
+               << "location=" << l << "\t"
                << "count=" << l->get_samples() << "\n";
       }
     }
