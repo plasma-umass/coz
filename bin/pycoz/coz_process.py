@@ -1,3 +1,4 @@
+import profile
 
 def build_subparser(subparsers):
   # Build the parser for the `process` sub-command
@@ -16,4 +17,8 @@ def build_subparser(subparsers):
   parser.set_defaults(func=run, parser=parser)
 
 def run(args):
-  print 'In coz process handler'
+  p = profile.read_profile(args.input)
+  p.prune()
+  f = open(args.output, 'w+')
+  f.write(p.to_csv())
+  f.close()

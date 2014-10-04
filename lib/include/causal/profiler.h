@@ -91,7 +91,7 @@ private:
   void add_delays(thread_state* state);       //< Add any required delays
   void process_samples(thread_state* state);  //< Process all available samples and insert delays
   line* find_line(perf_event::record&);       //< Map a sample to its source line
-  void log_samples(std::ofstream&);           //< Log sample counts for all identified regions
+  void log_samples(std::ofstream&, size_t);   //< Log runtime and sample counts for all identified regions
   
   thread_state* add_thread(); //< Add a thread state entry for this thread
   thread_state* get_thread_state(); //< Get a reference to the thread state object for this thread

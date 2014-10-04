@@ -89,9 +89,11 @@ void profiler::profiler_thread(spinlock& l) {
   default_random_engine generator(get_time());
   uniform_int_distribution<size_t> delay_dist(0, SpeedupDivisions);
   
+  size_t start_time = get_time();
+  
   // Log the start of this execution
   output << "startup\t"
-         << "time=" << get_time() << "\n";
+         << "time=" << start_time << "\n";
   
   // Unblock the main thread
   l.unlock();
@@ -206,7 +208,7 @@ void profiler::profiler_thread(spinlock& l) {
         
         // Log samples after a while, then double the countdown
         if(--sample_log_countdown == 0) {
-          log_samples(output);
+          log_samples(output, start_time);
           sample_log_interval *= 2;
           sample_log_countdown = sample_log_interval;
         }
@@ -222,13 +224,17 @@ void profiler::profiler_thread(spinlock& l) {
          << "samples=" << _samples << "\n";
   
   // Log the sample counts on exit
-  log_samples(output);
+  log_samples(output, start_time);
   
   output.flush();
   output.close();
 }
 
-void profiler::log_samples(ofstream& output) {
+void profiler::log_samples(ofstream& output, size_t start_time) {
+  // Log total runtime for phase correction
+  output << "runtime\t"
+         << "time=" << (get_time() - start_time) << "\n";
+  
   // Log sample counts for all observed lines
   for(const auto& file_entry : memory_map::get_instance().files()) {
     for(const auto& line_entry : file_entry.second->lines()) {
