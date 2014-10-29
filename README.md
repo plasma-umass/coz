@@ -42,3 +42,6 @@ To run a program with Coz, just type `coz run --- <your program and arguments>` 
 To plot the results from a causal profile, run `coz plot`. This will generate an image from the `profile.coz` file in the current directory. This functionality requires the Python `ggplot` package. You can install this package with the command `pip install ggplot`.
 
 If you do not have `ggplot` installed, you can generate a CSV from the causal profile results using the `coz process` command. The output file `profile.csv` can be used with most spreadsheet programs.
+
+## License
+All source code is licensed under the GPLv2 unless otherwise indicated. Copyright (C) 2014 University of Massachusetts Amherst
