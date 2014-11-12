@@ -2,6 +2,7 @@
 #include <linux/limits.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 #include <sstream>
 #include <string>
@@ -41,6 +42,28 @@ extern "C" void __causal_register_counter(progress_point::kind k,
 }
 
 /**
+ * Read a link's contents and return it as a string
+ */
+static string readlink_str(const char* path) {
+  size_t exe_size = 1024;
+  ssize_t exe_used;
+  
+  while(true) {
+    char exe_path[exe_size];
+    
+    exe_used = readlink(path, exe_path, exe_size - 1);
+    REQUIRE(exe_used > 0) << "Unable to read link";
+    
+    if(exe_used < exe_size - 1) {
+      exe_path[exe_used] = '\0';
+      return string(exe_path);
+    }
+    
+    exe_size += 1024;
+  }
+}
+
+/**
  * Pass the real __libc_start_main this main function, then run the real main
  * function. This allows Causal to shut down when the real main function returns.
  */
@@ -68,10 +91,10 @@ int wrapped_main(int argc, char** argv, char** env) {
 
   // Replace 'MAIN' in the binary_scope with the real path of the main executable
   if(binary_scope.find("MAIN") != binary_scope.end()) {
-    char buf[PATH_MAX];
-    readlink("/proc/self/exe", buf, PATH_MAX);
     binary_scope.erase("MAIN");
-    binary_scope.insert(string(buf));
+    string main_name = readlink_str("/proc/self/exe");
+    binary_scope.insert(main_name);
+    INFO << "Including MAIN, which is " << main_name;
   }
 
   // Build the memory map for all in-scope binaries
