@@ -66,5 +66,5 @@ ggplot(dat, aes(x=Speedup, y=Progress.Speedup, color=Location, shape=Progress.Po
   geom_point(alpha=I(0.5)) +
   facet_wrap(~Location) +
   geom_smooth(method='lm', se=FALSE) +
-  theme(legend.position='bottom') +
+  theme(legend.position='bottom', text=element_text(size=6)) +
   scale_y_continuous(limits=c(-1, 1))
