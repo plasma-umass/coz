@@ -300,6 +300,8 @@ bool in_scope(const string& name, const unordered_set<string>& scope) {
 
 void memory_map::build(const unordered_set<string>& binary_scope,
                        const unordered_set<string>& source_scope) {
+  //REQUIRE(wildcard_match("/abc/def/ghij", "/abc/def/ghij")) << "ohshit";
+  
   for(const auto& f : get_loaded_files()) {
     if(in_scope(f.first, binary_scope)) {
       try {
@@ -311,6 +313,8 @@ void memory_map::build(const unordered_set<string>& binary_scope,
       } catch(const system_error& e) {
         WARNING << "Processing file \"" << f.first << "\" failed: " << e.what();
       }
+    } else {
+      INFO << f.first << " is not in scope";
     }
   }
 }
@@ -319,21 +323,25 @@ dwarf::value find_attribute(const dwarf::die& d, dwarf::DW_AT attr) {
   if(!d.valid())
     return dwarf::value();
 
-  if(d.has(attr))
-    return d[attr];
+  try {
+    if(d.has(attr))
+      return d[attr];
 
-  if(d.has(dwarf::DW_AT::abstract_origin)) {
-    const dwarf::die child = d.resolve(dwarf::DW_AT::abstract_origin).as_reference();
-    dwarf::value v = find_attribute(child, attr);
-    if(v.valid())
-      return v;
-  }
+    if(d.has(dwarf::DW_AT::abstract_origin)) {
+      const dwarf::die child = d.resolve(dwarf::DW_AT::abstract_origin).as_reference();
+      dwarf::value v = find_attribute(child, attr);
+      if(v.valid())
+        return v;
+    }
 
-  if(d.has(dwarf::DW_AT::specification)) {
-    const dwarf::die child = d.resolve(dwarf::DW_AT::specification).as_reference();
-    dwarf::value v = find_attribute(child, attr);
-    if(v.valid())
-      return v;
+    if(d.has(dwarf::DW_AT::specification)) {
+      const dwarf::die child = d.resolve(dwarf::DW_AT::specification).as_reference();
+      dwarf::value v = find_attribute(child, attr);
+      if(v.valid())
+        return v;
+    }
+  } catch(dwarf::format_error e) {
+    WARNING << "Ignoring DWARF format error " << e.what();
   }
 
   return dwarf::value();
@@ -352,77 +360,81 @@ void memory_map::process_inlines(const dwarf::die& d,
                                  uintptr_t load_address) {
   if(!d.valid())
     return;
+  
+  try {
+    if(d.tag == dwarf::DW_TAG::inlined_subroutine) {
+      string name;
+      dwarf::value name_val = find_attribute(d, dwarf::DW_AT::name);
+      if(name_val.valid()) {
+        name = name_val.as_string();
+      }
 
-  if(d.tag == dwarf::DW_TAG::inlined_subroutine) {
-    string name;
-    dwarf::value name_val = find_attribute(d, dwarf::DW_AT::name);
-    if(name_val.valid()) {
-      name = name_val.as_string();
-    }
+      string decl_file;
+      dwarf::value decl_file_val = find_attribute(d, dwarf::DW_AT::decl_file);
+      if(decl_file_val.valid() && table.valid()) {
+        decl_file = table.get_file(decl_file_val.as_uconstant())->path;
+      }
 
-    string decl_file;
-    dwarf::value decl_file_val = find_attribute(d, dwarf::DW_AT::decl_file);
-    if(decl_file_val.valid() && table.valid()) {
-      decl_file = table.get_file(decl_file_val.as_uconstant())->path;
-    }
+      size_t decl_line = 0;
+      dwarf::value decl_line_val = find_attribute(d, dwarf::DW_AT::decl_line);
+      if(decl_line_val.valid())
+        decl_line = decl_line_val.as_uconstant();
 
-    size_t decl_line = 0;
-    dwarf::value decl_line_val = find_attribute(d, dwarf::DW_AT::decl_line);
-    if(decl_line_val.valid())
-      decl_line = decl_line_val.as_uconstant();
+      string call_file;
+      if(d.has(dwarf::DW_AT::call_file) && table.valid()) {
+        call_file = table.get_file(d[dwarf::DW_AT::call_file].as_uconstant())->path;
+      }
 
-    string call_file;
-    if(d.has(dwarf::DW_AT::call_file) && table.valid()) {
-      call_file = table.get_file(d[dwarf::DW_AT::call_file].as_uconstant())->path;
-    }
+      size_t call_line = 0;
+      if(d.has(dwarf::DW_AT::call_line)) {
+        call_line = d[dwarf::DW_AT::call_line].as_uconstant();
+      }
 
-    size_t call_line = 0;
-    if(d.has(dwarf::DW_AT::call_line)) {
-      call_line = d[dwarf::DW_AT::call_line].as_uconstant();
-    }
+      // If the call location is in scope but the function is not, add an entry
+      if(decl_file.size() > 0 && call_file.size() > 0) {
+        if(!in_scope(decl_file, source_scope) && in_scope(call_file, source_scope)) {
+          // Does this inline have separate ranges?
+          dwarf::value ranges_val = find_attribute(d, dwarf::DW_AT::ranges);
+          if(ranges_val.valid()) {
+            // Add each range
+            for(auto r : ranges_val.as_rangelist()) {
+              add_range(call_file,
+                        call_line,
+                        interval(r.low, r.high) + load_address);
+            }
+          } else {
+            // Must just be one range. Add it
+            dwarf::value low_pc_val = find_attribute(d, dwarf::DW_AT::low_pc);
+            dwarf::value high_pc_val = find_attribute(d, dwarf::DW_AT::high_pc);
 
-    // If the call location is in scope but the function is not, add an entry
-    if(decl_file.size() > 0 && call_file.size() > 0) {
-      if(!in_scope(decl_file, source_scope) && in_scope(call_file, source_scope)) {
-        // Does this inline have separate ranges?
-        dwarf::value ranges_val = find_attribute(d, dwarf::DW_AT::ranges);
-        if(ranges_val.valid()) {
-          // Add each range
-          for(auto r : ranges_val.as_rangelist()) {
-            add_range(call_file,
-                      call_line,
-                      interval(r.low, r.high) + load_address);
-          }
-        } else {
-          // Must just be one range. Add it
-          dwarf::value low_pc_val = find_attribute(d, dwarf::DW_AT::low_pc);
-          dwarf::value high_pc_val = find_attribute(d, dwarf::DW_AT::high_pc);
+            if(low_pc_val.valid() && high_pc_val.valid()) {
+              uint64_t low_pc;
+              uint64_t high_pc;
 
-          if(low_pc_val.valid() && high_pc_val.valid()) {
-            uint64_t low_pc;
-            uint64_t high_pc;
+              if(low_pc_val.get_type() == dwarf::value::type::address)
+                low_pc = low_pc_val.as_address();
+              else if(low_pc_val.get_type() == dwarf::value::type::uconstant)
+                low_pc = low_pc_val.as_uconstant();
+              else if(low_pc_val.get_type() == dwarf::value::type::sconstant)
+                low_pc = low_pc_val.as_sconstant();
 
-            if(low_pc_val.get_type() == dwarf::value::type::address)
-              low_pc = low_pc_val.as_address();
-            else if(low_pc_val.get_type() == dwarf::value::type::uconstant)
-              low_pc = low_pc_val.as_uconstant();
-            else if(low_pc_val.get_type() == dwarf::value::type::sconstant)
-              low_pc = low_pc_val.as_sconstant();
+              if(high_pc_val.get_type() == dwarf::value::type::address)
+                high_pc = high_pc_val.as_address();
+              else if(high_pc_val.get_type() == dwarf::value::type::uconstant)
+                high_pc = high_pc_val.as_uconstant();
+              else if(high_pc_val.get_type() == dwarf::value::type::sconstant)
+                high_pc = high_pc_val.as_sconstant();
 
-            if(high_pc_val.get_type() == dwarf::value::type::address)
-              high_pc = high_pc_val.as_address();
-            else if(high_pc_val.get_type() == dwarf::value::type::uconstant)
-              high_pc = high_pc_val.as_uconstant();
-            else if(high_pc_val.get_type() == dwarf::value::type::sconstant)
-              high_pc = high_pc_val.as_sconstant();
-
-            add_range(call_file,
-                      call_line,
-                      interval(low_pc, high_pc) + load_address);
+              add_range(call_file,
+                        call_line,
+                        interval(low_pc, high_pc) + load_address);
+            }
           }
         }
       }
     }
+  } catch(dwarf::format_error e) {
+    WARNING << "Ignoring DWARF format error " << e.what();
   }
 
   for(const auto& child : d) {
@@ -458,32 +470,36 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
   // Walk through the compilation units (source files) in the executable
   for(auto unit : d.compilation_units()) {
 
-    string prev_filename;
-    size_t prev_line;
-    uintptr_t prev_address = 0;
-    set<string> included_files;
-    // Walk through the line instructions in the DWARF line table
-    for(auto& line_info : unit.get_line_table()) {
-      // Insert an entry if this isn't the first line command in the sequence
-      if(prev_address != 0 && in_scope(prev_filename, source_scope)) {
-        included_files.insert(prev_filename);
-        add_range(prev_filename,
-                  prev_line,
-                  interval(prev_address, line_info.address) + load_address);
-      }
+    try {
+      string prev_filename;
+      size_t prev_line;
+      uintptr_t prev_address = 0;
+      set<string> included_files;
+      // Walk through the line instructions in the DWARF line table
+      for(auto& line_info : unit.get_line_table()) {
+        // Insert an entry if this isn't the first line command in the sequence
+        if(prev_address != 0 && in_scope(prev_filename, source_scope)) {
+          included_files.insert(prev_filename);
+          add_range(prev_filename,
+                    prev_line,
+                    interval(prev_address, line_info.address) + load_address);
+        }
 
-      if(line_info.end_sequence) {
-        prev_address = 0;
-      } else {
-        prev_filename = canonicalize_path(line_info.file->path);
-        prev_line = line_info.line;
-        prev_address = line_info.address;
+        if(line_info.end_sequence) {
+          prev_address = 0;
+        } else {
+          prev_filename = canonicalize_path(line_info.file->path);
+          prev_line = line_info.line;
+          prev_address = line_info.address;
+        }
       }
-    }
-    process_inlines(unit.root(), unit.get_line_table(), source_scope, load_address);
+      process_inlines(unit.root(), unit.get_line_table(), source_scope, load_address);
 
-    for(const string& filename : included_files) {
-      INFO << "Included source file " << filename;
+      for(const string& filename : included_files) {
+        INFO << "Included source file " << filename;
+      }
+    } catch(dwarf::format_error e) {
+      WARNING << "Ignoring DWARF format error when reading line table: " << e.what();
     }
   }
 
