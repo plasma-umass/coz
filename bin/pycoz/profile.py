@@ -88,9 +88,9 @@ class profile:
     return len(self.measurements) == 0
   
   def get_columns(self):
-    return ('Location', 'Progress Point', 'Speedup', 'Progress Period', 'Progress Speedup')
+    return ('Location', 'Progress Point', 'Speedup', 'Progress Period', 'Progress Speedup', 'Progress Count', 'Duration')
   
-  def to_records(self, abbrv_locations=True):
+  def to_records(self, abbrv_locations=True, phase_correction=True):
     result = []
     
     for (selected, progress_points) in self.measurements.items():
@@ -112,13 +112,13 @@ class profile:
               progress_speedup = 1.0 - measurement.period() / baseline_period
               
               # Apply the phase correction to the speedup if there are any samples in the selected location
-              if measurement.samples > 0:
+              if phase_correction and measurement.samples > 0:
                 progress_speedup *= measurement.duration
                 progress_speedup /= measurement.samples
                 progress_speedup *= self.sample_counts[selected]
                 progress_speedup /= self.runtime
             
-            result.append((print_location, progress_point, speedup, measurement.period(), progress_speedup))
+            result.append((print_location, progress_point, speedup, measurement.period(), progress_speedup, measurement.delta, measurement.duration))
             
     return result
   
