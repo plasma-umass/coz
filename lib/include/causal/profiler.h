@@ -29,6 +29,7 @@ enum {
   SamplePeriod = 1000000, //< Time between samples (1ms)
   SampleBatchSize = 10,   //< Samples to batch together for one processing run
   SpeedupDivisions = 20,  //< How many different speedups to try (20 = 5% increments)
+  ZeroSpeedupWeight = 20, //< Weight of speedup=0 versus other speedup values
   ExperimentMinTime = SamplePeriod * SampleBatchSize * 10,  //< Minimum experiment length
   ExperimentCoolOffTime = SamplePeriod * SampleBatchSize,   //< Time to wait after an experiment
   ExperimentMinCounterChange = 5  //< Minimum change in progres points before experiment can end 

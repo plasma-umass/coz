@@ -87,7 +87,7 @@ void profiler::profiler_thread(spinlock& l) {
   
   // Initialize the delay size RNG
   default_random_engine generator(get_time());
-  uniform_int_distribution<size_t> delay_dist(0, SpeedupDivisions);
+  uniform_int_distribution<size_t> delay_dist(0, ZeroSpeedupWeight + SpeedupDivisions);
   
   size_t start_time = get_time();
   
@@ -139,10 +139,16 @@ void profiler::profiler_thread(spinlock& l) {
         
         // Choose a delay size
         size_t delay_size;
-        if(_fixed_delay_size >= 0)
+        if(_fixed_delay_size >= 0) {
           delay_size = _fixed_delay_size;
-        else
-          delay_size = delay_dist(generator) * SamplePeriod / SpeedupDivisions;
+        } else {
+          size_t r = delay_dist(generator);
+          if(r <= ZeroSpeedupWeight) {
+            delay_size = 0;
+          } else {
+            delay_size = (r - ZeroSpeedupWeight) * SamplePeriod / SpeedupDivisions;
+          }
+        }
     
         _delay_size.store(delay_size);
         
