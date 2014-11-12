@@ -124,7 +124,7 @@ class profile:
   
   def to_csv(self, abbrv_locations=True):
     result = ''
-    result += ','.join(self.get_columns())
+    result += ','.join(self.get_columns()) + '\n'
     
     for record in self.to_records():
       result += ','.join(map(str, record)) + '\n'
