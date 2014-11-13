@@ -11,7 +11,7 @@ static bool in_dlopen = false;        //< Set to true while dlopen is running
 static void* pthread_handle = NULL;   //< The `dlopen` handle to libpthread
 
 #define GET_SYMBOL_HANDLE(name, handle) \
-  static decltype(::name)* real_##name = nullptr; \
+  decltype(::name)* real_##name = nullptr; \
   if(!__atomic_exchange_n(&resolving, true, __ATOMIC_ACQ_REL)) { \
     uintptr_t addr = reinterpret_cast<uintptr_t>(dlsym(handle, #name)); \
     memcpy(&real_##name, &addr, sizeof(uintptr_t)); \
