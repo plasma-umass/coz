@@ -49,6 +49,10 @@ public:
   /// Register a progress point
   void register_progress_point(progress_point* c);
   
+  /// Register begin and end points for latency profiling
+  void register_begin_point(progress_point* c);
+  void register_end_point(progress_point* c);
+  
   /// Pass local delay counts and excess delay time to the child thread
   int handle_pthread_create(pthread_t*, const pthread_attr_t*, thread_fn_t, void*);
   
@@ -124,6 +128,9 @@ private:
   std::atomic<size_t> _samples;       //< Total number of samples collected
   std::atomic<bool> _running;         //< Clear to signal the profiler thread to quit
   std::atomic_flag _shutdown_run = ATOMIC_FLAG_INIT;  //< Used to ensure shutdown only runs once
+  
+  std::atomic<progress_point*> _begin_point;
+  std::atomic<progress_point*> _end_point;
 };
 
 #endif

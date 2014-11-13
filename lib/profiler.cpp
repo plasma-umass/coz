@@ -165,6 +165,13 @@ void profiler::profiler_thread(spinlock& l) {
         }
         _progress_points_lock.unlock();
     
+        // Is latency begin monitored?
+        bool latency = _begin_point.load() != nullptr && _end_point.load() != nullptr;
+        unique_ptr<progress_point::saved> saved_begin_point;
+        if(latency) {
+          saved_begin_point = unique_ptr<progress_point::saved>(_begin_point.load()->save());
+        }
+    
         // Tell threads to start the experiment
         _experiment_active.store(true);
     
@@ -202,6 +209,22 @@ void profiler::profiler_thread(spinlock& l) {
         // Log progress point changes
         for(const auto& s : saved) {
           s->log(output);
+        }
+        
+        // Log latency info
+        if(latency) {
+          // queue_len = arrival_rate * latency
+          // latency = queue_len * arrival_period
+          size_t delta = saved_begin_point->get_change();
+          float period = ((float)duration) / delta;
+          size_t queue_len = _begin_point.load()->get_count() - _end_point.load()->get_count();
+          float latency = period * queue_len;
+          
+          output << "latency-point\t"
+                 << "name=latency\t"
+                 << "type=latency\t"
+                 << "latency=" << latency << "\t"
+                 << "delta=" << delta << "\n";
         }
     
         output.flush();
@@ -291,6 +314,14 @@ void profiler::register_progress_point(progress_point* p) {
   _progress_points.push_back(p);
   _progress_points_lock.unlock();
 };
+
+void profiler::register_begin_point(progress_point* c) {
+  _begin_point.store(c);
+}
+
+void profiler::register_end_point(progress_point* c) {
+  _end_point.store(c);
+}
 
 /**
  * Argument type passed to wrapped threads

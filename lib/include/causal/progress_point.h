@@ -29,6 +29,8 @@ public:
    */
   class saved {
   public:
+    saved() {}
+    
     /// Save the state of a progress point
     saved(const progress_point* origin) : _origin(origin), _start_count(origin->get_count()) {}
     
@@ -43,6 +45,10 @@ public:
          << "name=" << _origin->get_name() << "\t"
          << "type=" << _origin->get_type() << "\t"
          << "delta=" << (_origin->get_count() - _start_count) << "\n";
+    }
+    
+    virtual size_t get_change() const {
+      return _origin->get_count() - _start_count;
     }
     
   protected:

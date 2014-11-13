@@ -33,11 +33,13 @@ extern "C" void __causal_register_counter(progress_point::kind k,
                                           size_t* counter,
                                           size_t* backoff,
                                           const char* name) {
+  progress_point* p = new source_progress_point(name, counter);
   if(k == progress_point::kind::progress) {
-    progress_point* p = new source_progress_point(name, counter);
     profiler::get_instance().register_progress_point(p);
-  } else {
-    WARNING << "Ignored unsupported progress point type";
+  } else if(k == progress_point::kind::begin) {
+    profiler::get_instance().register_begin_point(p);
+  } else if(k == progress_point::kind::end) {
+    profiler::get_instance().register_end_point(p);
   }
 }
 
