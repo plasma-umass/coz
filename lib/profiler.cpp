@@ -220,11 +220,15 @@ void profiler::profiler_thread(spinlock& l) {
           size_t queue_len = _begin_point.load()->get_count() - _end_point.load()->get_count();
           float latency = period * queue_len;
           
-          output << "latency-point\t"
+          // "Period" is computed as duration / delta. latency is just this time queue length,
+          // so fake a "delta" to produce the right output by dividing by queue length
+          float fake_delta = (float)delta / queue_len;
+          
+          output << "progress-point\t"
                  << "name=latency\t"
                  << "type=latency\t"
-                 << "latency=" << latency << "\t"
-                 << "delta=" << delta << "\n";
+                 //<< "latency=" << latency << "\t"
+                 << "delta=" << fake_delta << "\n";
         }
     
         output.flush();

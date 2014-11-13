@@ -59,7 +59,7 @@ l <- levels(dat$Location)
 # Reorder the line factor by slope
 dat$Location <- factor(dat$Location, levels=l[rev(order(slopes))], ordered=TRUE)
 
-dat <- subset(dat, slopes[dat$Location] > 0.0)
+#dat <- subset(dat, slopes[dat$Location] > 0.0)
 
 # Graph it
 ggplot(dat, aes(x=Speedup, y=Progress.Speedup, color=Location, shape=Progress.Point, weight=Progress.Count, size=Progress.Count)) +

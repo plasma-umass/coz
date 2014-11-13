@@ -208,7 +208,7 @@ def read_profile(filename):
       elif command == 'progress-point':
         # Log a performance change for a single progress point during the current experiment
         if current_exp:
-          m = measurement(data['name'], data['type'], int(data['delta']), current_exp)
+          m = measurement(data['name'], data['type'], float(data['delta']), current_exp)
           buffered_profile.add_measurement(m)
       
       elif command == 'samples':
