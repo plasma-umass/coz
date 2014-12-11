@@ -36,7 +36,7 @@ To build Coz, just clone this repository and run `make`.
 ## Using Coz
 Before running your program with Coz, you will need to identify one or more progress points. These are points in your program that you would like to happen more frequently. For example, in the `pbzip2` program under `benchmarks/pbzip2` we have inserted a progress point after the code that compresses a block of data.
 
-To add a progress point, add the `CAUSAL_PROGRESS` macro to the line you would like to execute more frequently. This macro is defined in `include/causal.h`.
+To add a progress point, add the `CAUSAL_PROGRESS` macro to the line you would like to execute more frequently. This macro is defined in `include/causal.h`. You can also mark transaction boundaries using the `CAUSAL_BEGIN` and `CAUSAL_END` macros. Coz will measure the average latency between these points, which allows you to evaluate potential optimizations by their impact on latency rather than throughput.
 
 To run a program with Coz, just type `coz run --- <your program and arguments>` on the command line. You can specify profiling options befor the `---`. Run `coz run -h` for a description of the available options. Profiling output is placed in the file `profile.coz` by default.
 
