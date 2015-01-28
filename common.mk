@@ -39,6 +39,8 @@ clean::
 	done
 	@rm -rf $(TARGETS) obj
 
+test::
+
 # Prevent errors if files named all, clean, bench, or test exist
 .PHONY: all clean bench test
 

@@ -6,7 +6,6 @@ require(plyr)
 args <- commandArgs(trailingOnly = TRUE)
 
 check_valid_data <- function(dat) {
-  #print(dat)
   if(length(dat$Location) == 0) {
     print("There are no samples left to plot. You need more runs to collect a usable profile. Make sure your progress points are being executed.")
     q()
@@ -40,18 +39,6 @@ slopes <- daply(dat, .(Location), function(x) {
   model <- lm(Progress.Speedup~Speedup, data=x, weight=Progress.Count)
   return(coef(model)[2])
 })
-
-#maxes <- daply(dat, .(Location), function(x) {
-#  q <- quantile(x$Progress.Speedup, probs = c(0.9))
-#  return(q[1])
-#})
-
-#mins <- daply(dat, .(Location), function(x) {
-#  q <- quantile(x$Progress.Speedup, probs = c(0.1))
-#  return(q[1])
-#})
-
-#dat <- subset(dat, maxes[Location] > 0.3 || mins[Location] < 0.3)
 
 # Save the initial line factor order
 l <- levels(dat$Location)

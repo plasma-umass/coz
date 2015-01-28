@@ -29,3 +29,9 @@ benchmarks/pbzip2/data
 benchmarks/pbzip2/bzip2-1.0.6
 benchmarks/string_match/string_match_datafiles
 benchmarks/word_count/word_count_datafiles
+
+tests/gtest-1.7.0
+tests/libgtest.a
+tests/libgtest_main.a
+tests/tester
+tests/obj

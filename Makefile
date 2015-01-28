@@ -1,4 +1,4 @@
 ROOT := .
-DIRS := lib benchmarks
+DIRS := lib bin tests
 
 include $(ROOT)/common.mk
