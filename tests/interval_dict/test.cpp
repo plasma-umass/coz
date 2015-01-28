@@ -13,6 +13,8 @@
 TEST(IntervalDict, Simple) {
   interval_dict<int, char> d;
   
+  // TODO: Try all permutations of insertion order
+  
   d.insert(4, 10, 'a');
   d.insert(1, 5, 'b');
   d.insert(8, 12, 'c');
@@ -20,19 +22,18 @@ TEST(IntervalDict, Simple) {
   d.insert(2, 12, 'e');
   d.insert(5, 9, 'f');
   
-  EXPECT_TRUE(d.find(0)  == set<char>({}));
-  EXPECT_TRUE(d.find(1)  == set<char>({'b'}));
-  EXPECT_TRUE(d.find(2)  == set<char>({'b', 'e'}));
-  EXPECT_TRUE(d.find(3)  == set<char>({'b', 'e'}));
-  EXPECT_TRUE(d.find(4)  == set<char>({'a', 'b', 'd', 'e'}));
-  EXPECT_TRUE(d.find(5)  == set<char>({'a', 'd', 'e', 'f'}));
-  EXPECT_TRUE(d.find(6)  == set<char>({'a', 'd', 'e', 'f'}));
-  EXPECT_TRUE(d.find(7)  == set<char>({'a', 'd', 'e', 'f'}));
-  EXPECT_TRUE(d.find(8)  == set<char>({'a', 'c', 'd', 'e', 'f'}));
-  EXPECT_TRUE(d.find(9)  == set<char>({'a', 'c', 'd', 'e'}));
-  EXPECT_TRUE(d.find(10) == set<char>({'c', 'e'}));
-  EXPECT_EQ(d.find(11), set<char>({'c', 'e'}));
-  EXPECT_TRUE(d.find(11) == set<char>({'c', 'e'}));
-  EXPECT_TRUE(d.find(12) == set<char>({}));
-  EXPECT_TRUE(d.find(13) == set<char>({}));
+  EXPECT_EQ(set<char>({}), d.find(0));
+  EXPECT_EQ(set<char>({'b'}), d.find(1));
+  EXPECT_EQ(set<char>({'b', 'e'}), d.find(2));
+  EXPECT_EQ(set<char>({'b', 'e'}), d.find(3));
+  EXPECT_EQ(set<char>({'a', 'b', 'd', 'e'}), d.find(4));
+  EXPECT_EQ(set<char>({'a', 'd', 'e', 'f'}), d.find(5));
+  EXPECT_EQ(set<char>({'a', 'd', 'e', 'f'}), d.find(6));
+  EXPECT_EQ(set<char>({'a', 'd', 'e', 'f'}), d.find(7));
+  EXPECT_EQ(set<char>({'a', 'c', 'd', 'e', 'f'}), d.find(8));
+  EXPECT_EQ(set<char>({'a', 'c', 'd', 'e'}), d.find(9));
+  EXPECT_EQ(set<char>({'c', 'e'}), d.find(10));
+  EXPECT_EQ(set<char>({'c', 'e'}), d.find(11));
+  EXPECT_EQ(set<char>({}), d.find(12));
+  EXPECT_EQ(set<char>({}), d.find(13));
 }
