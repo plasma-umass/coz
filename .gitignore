@@ -33,5 +33,8 @@ benchmarks/word_count/word_count_datafiles
 tests/gtest-1.7.0
 tests/libgtest.a
 tests/libgtest_main.a
-tests/tester
-tests/obj
+tests/*/tester
+tests/*/obj
+
+bin/inspect/obj
+bin/inspect/inspect
