@@ -3,9 +3,9 @@ ROOT := $(TEST_ROOT)/..
 TARGETS := tester
 GTEST_VERSION := gtest-1.7.0
 GTEST_DIR := $(TEST_ROOT)/$(GTEST_VERSION)
-CXXFLAGS := -I$(GTEST_DIR)/include -I$(ROOT)/bin/inspect --std=c++11
-LDFLAGS := -L$(TEST_ROOT) -lgtest_main -lgtest -lpthread
-PREREQS := $(TEST_ROOT)/libgtest.a
+CXXFLAGS += -I$(GTEST_DIR)/include --std=c++11
+LDFLAGS += -L$(TEST_ROOT) -lgtest_main -lgtest -lpthread
+PREREQS += $(TEST_ROOT)/libgtest.a
 
 include $(ROOT)/common.mk
 

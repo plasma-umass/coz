@@ -30,10 +30,17 @@ TEST(Interval, LessThan) {
   interval<int> a(3, 5);
   interval<int> b(4, 6);
   interval<int> c(5, 7);
+  interval<int> d(6, 8);
   
   EXPECT_TRUE(a < 5);
   EXPECT_FALSE(b < 5);
   EXPECT_FALSE(c < 5);
+  EXPECT_FALSE(d < 5);
+  
+  EXPECT_TRUE(6 > a);
+  EXPECT_TRUE(6 > b);
+  EXPECT_FALSE(6 > c);
+  EXPECT_FALSE(6 > d);
 }
 
 TEST(Interval, GreaterThan) {
@@ -46,6 +53,11 @@ TEST(Interval, GreaterThan) {
   EXPECT_FALSE(b > 5);
   EXPECT_FALSE(c > 5);
   EXPECT_TRUE(d > 5);
+  
+  EXPECT_FALSE(5 < a);
+  EXPECT_FALSE(5 < b);
+  EXPECT_FALSE(5 < c);
+  EXPECT_TRUE(5 < d);
 }
 
 // |----- a -----|
