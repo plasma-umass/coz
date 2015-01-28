@@ -61,6 +61,10 @@ $(SHARED_LIB_TARGETS): $(OBJS)
 	@echo $(LOG_PREFIX) Linking $@ $(LOG_SUFFIX)
 	@$(CXX) -shared $(LDFLAGS) -o $@ $^
 
+$(STATIC_LIB_TARGETS): $(OBJS)
+	@echo $(LOG_PREFIX) Linking $@ $(LOG_SUFFIX)
+	@ar rs $@ $^
+
 # Link binary targets
 $(OTHER_TARGETS): $(OBJS)
 	@echo $(LOG_PREFIX) Linking $@ $(LOG_SUFFIX)
