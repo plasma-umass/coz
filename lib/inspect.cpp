@@ -478,11 +478,13 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
       // Walk through the line instructions in the DWARF line table
       for(auto& line_info : unit.get_line_table()) {
         // Insert an entry if this isn't the first line command in the sequence
-        if(prev_address != 0 && in_scope(prev_filename, source_scope)) {
-          included_files.insert(prev_filename);
-          add_range(prev_filename,
-                    prev_line,
-                    interval(prev_address, line_info.address) + load_address);
+        if(in_scope(prev_filename, source_scope)) {
+          if(prev_address != 0) {
+            included_files.insert(prev_filename);
+            add_range(prev_filename,
+                      prev_line,
+                      interval(prev_address, line_info.address) + load_address);
+          }
         }
 
         if(line_info.end_sequence) {
@@ -498,6 +500,7 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
       for(const string& filename : included_files) {
         INFO << "Included source file " << filename;
       }
+      
     } catch(dwarf::format_error e) {
       WARNING << "Ignoring DWARF format error when reading line table: " << e.what();
     }
