@@ -30,9 +30,9 @@ enum {
   SampleBatchSize = 10,   //< Samples to batch together for one processing run
   SpeedupDivisions = 20,  //< How many different speedups to try (20 = 5% increments)
   ZeroSpeedupWeight = 7,  //< Weight of speedup=0 versus other speedup values (7 = ~25% of experiments run with zero speedup)
-  ExperimentMinTime = SamplePeriod * SampleBatchSize * 10,  //< Minimum experiment length
+  ExperimentMinTime = SamplePeriod * SampleBatchSize * 50,  //< Minimum experiment length
   ExperimentCoolOffTime = SamplePeriod * SampleBatchSize,   //< Time to wait after an experiment
-  ExperimentMinCounterChange = 5  //< Minimum change in progres points before experiment can end 
+  ExperimentTargetDelta = 5 //< Target minimum number of visits to a progress point during an experiment
 };
 
 class profiler {

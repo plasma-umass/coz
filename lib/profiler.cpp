@@ -89,6 +89,10 @@ void profiler::profiler_thread(spinlock& l) {
   default_random_engine generator(get_time());
   uniform_int_distribution<size_t> delay_dist(0, ZeroSpeedupWeight + SpeedupDivisions);
   
+  // Initialize the experiment duration
+  size_t experiment_length = ExperimentMinTime;
+  
+  // Get the starting time for the profiler
   size_t start_time = get_time();
   
   // Log the start of this execution
@@ -174,24 +178,9 @@ void profiler::profiler_thread(spinlock& l) {
   
       // Tell threads to start the experiment
       _experiment_active.store(true);
-  
-      bool experiment_finished = false;
-      size_t wait_time = ExperimentMinTime;
-  
-      do {
-        // Wait for the experiment to run
-        wait(wait_time);
-    
-        // End unless we find a progress point that hasn't changed
-        experiment_finished = true;
-    
-        // Check if progress points have changed enough to finish
-        for(const auto& s : saved) {
-          experiment_finished &= s->changed(ExperimentMinCounterChange);
-        }
-    
-        // Could increase wait time here, but that might delay exiting
-      } while(_running && !experiment_finished);
+      
+      // Wait for the experiment duration to elapse
+      wait(experiment_length);
   
       // Compute experiment parameters
       float speedup = (float)delay_size / (float)SamplePeriod;
@@ -206,9 +195,23 @@ void profiler::profiler_thread(spinlock& l) {
              << "duration=" << duration << "\t"
              << "selected-samples=" << selected_samples << "\n";
   
-      // Log progress point changes
+      // Log progress point deltas and find the minimum delta
+      size_t min_delta = ExperimentTargetDelta;
       for(const auto& s : saved) {
+        size_t delta = s->get_change();
+        
+        if(delta < min_delta) {
+          min_delta = delta;
+        }
+        
         s->log(output);
+      }
+      
+      // Lengthen the experiment if the min_delta is too small
+      if(min_delta < ExperimentTargetDelta) {
+        experiment_length *= 2;
+      } else if(min_delta > ExperimentTargetDelta*2 && experiment_length >= ExperimentMinTime*2) {
+        experiment_length /= 2;
       }
       
       // Log latency info
@@ -242,7 +245,9 @@ void profiler::profiler_thread(spinlock& l) {
       // Log samples after a while, then double the countdown
       if(--sample_log_countdown == 0) {
         log_samples(output, start_time);
-        sample_log_interval *= 2;
+        if(sample_log_interval < 20) {
+          sample_log_interval *= 2;
+        }
         sample_log_countdown = sample_log_interval;
       }
   
@@ -540,7 +545,6 @@ void profiler::process_samples(thread_state* state) {
       line* sampled_line = find_line(r);
       if(sampled_line) {
         sampled_line->add_sample();
-        _next_line.store(sampled_line);
       }
       
       if(_experiment_active) {
