@@ -89,6 +89,10 @@ void profiler::profiler_thread(spinlock& l) {
   default_random_engine generator(get_time());
   uniform_int_distribution<size_t> delay_dist(0, ZeroSpeedupWeight + SpeedupDivisions);
   
+  // Initialize the experiment duration
+  size_t experiment_length = ExperimentMinTime;
+  
+  // Get the starting time for the profiler
   size_t start_time = get_time();
   
   // Log the start of this execution
@@ -124,8 +128,7 @@ void profiler::profiler_thread(spinlock& l) {
       line* selected;
       if(_fixed_line) {   // If this run has a fixed line, use it
         selected = _fixed_line;
-      } else {
-        // Otherwise, wait for the next line to be selected
+      } else {            // Otherwise, wait for the next line to be selected
         selected = _next_line.load();
         while(_running && selected == nullptr) {
           wait(SamplePeriod * SampleBatchSize);
@@ -136,119 +139,120 @@ void profiler::profiler_thread(spinlock& l) {
         if(!_running) break;
         
         _selected_line.store(selected);
-        
-        // Choose a delay size
-        size_t delay_size;
-        if(_fixed_delay_size >= 0) {
-          delay_size = _fixed_delay_size;
-        } else {
-          size_t r = delay_dist(generator);
-          if(r <= ZeroSpeedupWeight) {
-            delay_size = 0;
-          } else {
-            delay_size = (r - ZeroSpeedupWeight) * SamplePeriod / SpeedupDivisions;
-          }
-        }
-    
-        _delay_size.store(delay_size);
-        
-        // Save the starting time and sample count
-        size_t start_time = get_time();
-        size_t starting_samples = selected->get_samples();
-        size_t starting_delays = _delays.load();
-        
-        // Save progress point values at the start of the experiment
-        vector<unique_ptr<progress_point::saved>> saved;
-        _progress_points_lock.lock();
-        for(progress_point* p : _progress_points) {
-          saved.emplace_back(p->save());
-        }
-        _progress_points_lock.unlock();
-    
-        // Is latency begin monitored?
-        bool latency = _begin_point.load() != nullptr && _end_point.load() != nullptr;
-        unique_ptr<progress_point::saved> saved_begin_point;
-        if(latency) {
-          saved_begin_point = unique_ptr<progress_point::saved>(_begin_point.load()->save());
-        }
-    
-        // Tell threads to start the experiment
-        _experiment_active.store(true);
-    
-        bool experiment_finished = false;
-        size_t wait_time = ExperimentMinTime;
-    
-        do {
-          // Wait for the experiment to run
-          wait(wait_time);
-      
-          // End unless we find a progress point that hasn't changed
-          experiment_finished = true;
-      
-          // Check if progress points have changed enough to finish
-          for(const auto& s : saved) {
-            experiment_finished &= s->changed(ExperimentMinCounterChange);
-          }
-      
-          // Could increase wait time here, but that might delay exiting
-        } while(_running && !experiment_finished);
-    
-        // Compute experiment parameters
-        float speedup = (float)delay_size / (float)SamplePeriod;
-        size_t total_delay = (_delays.load() - starting_delays) * delay_size;
-        size_t duration = get_time() - start_time - total_delay;
-        size_t selected_samples = selected->get_samples() - starting_samples;
-    
-        // Log the experiment parameters
-        output << "experiment\t"
-               << "selected=" << selected << "\t"
-               << "speedup=" << speedup << "\t"
-               << "duration=" << duration << "\t"
-               << "selected-samples=" << selected_samples << "\n";
-    
-        // Log progress point changes
-        for(const auto& s : saved) {
-          s->log(output);
-        }
-        
-        // Log latency info
-        if(latency) {
-          // queue_len = arrival_rate * latency
-          // latency = queue_len * arrival_period
-          size_t delta = saved_begin_point->get_change();
-          float period = ((float)duration) / delta;
-          size_t queue_len = _begin_point.load()->get_count() - _end_point.load()->get_count();
-          float latency = period * queue_len;
-          
-          // "Period" is computed as duration / delta. latency is just this time queue length,
-          // so fake a "delta" to produce the right output by dividing by queue length
-          float fake_delta = (float)delta / queue_len;
-          
-          output << "progress-point\t"
-                 << "name=latency\t"
-                 << "type=latency\t"
-                 //<< "latency=" << latency << "\t"
-                 << "delta=" << fake_delta << "\n";
-        }
-    
-        output.flush();
-    
-        // Clear the next line, so threads will select one
-        _next_line.store(nullptr);
-    
-        // End the experiment
-        _experiment_active.store(false);
-        
-        // Log samples after a while, then double the countdown
-        if(--sample_log_countdown == 0) {
-          log_samples(output, start_time);
-          sample_log_interval *= 2;
-          sample_log_countdown = sample_log_interval;
-        }
-    
-        // Cool off before starting a new experiment, unless the program is exiting
-        if(_running) wait(ExperimentCoolOffTime);
       }
+
+      // Choose a delay size
+      size_t delay_size;
+      if(_fixed_delay_size >= 0) {
+        delay_size = _fixed_delay_size;
+      } else {
+        size_t r = delay_dist(generator);
+        if(r <= ZeroSpeedupWeight) {
+          delay_size = 0;
+        } else {
+          delay_size = (r - ZeroSpeedupWeight) * SamplePeriod / SpeedupDivisions;
+        }
+      }
+    
+      _delay_size.store(delay_size);
+        
+      // Save the starting time and sample count
+      size_t start_time = get_time();
+      size_t starting_samples = selected->get_samples();
+      size_t starting_delays = _delays.load();
+        
+      // Save progress point values at the start of the experiment
+      vector<unique_ptr<progress_point::saved>> saved;
+      _progress_points_lock.lock();
+      for(progress_point* p : _progress_points) {
+        saved.emplace_back(p->save());
+      }
+      _progress_points_lock.unlock();
+  
+      // Is latency begin monitored?
+      bool latency = _begin_point.load() != nullptr && _end_point.load() != nullptr;
+      unique_ptr<progress_point::saved> saved_begin_point;
+      if(latency) {
+        saved_begin_point = unique_ptr<progress_point::saved>(_begin_point.load()->save());
+      }
+  
+      // Tell threads to start the experiment
+      _experiment_active.store(true);
+      
+      // Wait for the experiment duration to elapse
+      wait(experiment_length);
+  
+      // Compute experiment parameters
+      float speedup = (float)delay_size / (float)SamplePeriod;
+      size_t total_delay = (_delays.load() - starting_delays) * delay_size;
+      size_t duration = get_time() - start_time - total_delay;
+      size_t selected_samples = selected->get_samples() - starting_samples;
+  
+      // Log the experiment parameters
+      output << "experiment\t"
+             << "selected=" << selected << "\t"
+             << "speedup=" << speedup << "\t"
+             << "duration=" << duration << "\t"
+             << "selected-samples=" << selected_samples << "\n";
+  
+      // Log progress point deltas and find the minimum delta
+      size_t min_delta = ExperimentTargetDelta;
+      for(const auto& s : saved) {
+        size_t delta = s->get_change();
+        
+        if(delta < min_delta) {
+          min_delta = delta;
+        }
+        
+        s->log(output);
+      }
+      
+      // Lengthen the experiment if the min_delta is too small
+      if(min_delta < ExperimentTargetDelta) {
+        experiment_length *= 2;
+      } else if(min_delta > ExperimentTargetDelta*2 && experiment_length >= ExperimentMinTime*2) {
+        experiment_length /= 2;
+      }
+      
+      // Log latency info
+      if(latency) {
+        // queue_len = arrival_rate * latency
+        // latency = queue_len * arrival_period
+        size_t delta = saved_begin_point->get_change();
+        float period = ((float)duration) / delta;
+        size_t queue_len = _begin_point.load()->get_count() - _end_point.load()->get_count();
+        float latency = period * queue_len;
+        
+        // "Period" is computed as duration / delta. latency is just this time queue length,
+        // so fake a "delta" to produce the right output by dividing by queue length
+        float fake_delta = (float)delta / queue_len;
+        
+        output << "progress-point\t"
+               << "name=latency\t"
+               << "type=latency\t"
+               //<< "latency=" << latency << "\t"
+               << "delta=" << fake_delta << "\n";
+      }
+  
+      output.flush();
+  
+      // Clear the next line, so threads will select one
+      _next_line.store(nullptr);
+  
+      // End the experiment
+      _experiment_active.store(false);
+      
+      // Log samples after a while, then double the countdown
+      if(--sample_log_countdown == 0) {
+        log_samples(output, start_time);
+        if(sample_log_interval < 20) {
+          sample_log_interval *= 2;
+        }
+        sample_log_countdown = sample_log_interval;
+      }
+  
+      // Cool off before starting a new experiment, unless the program is exiting
+      if(_running) wait(ExperimentCoolOffTime);
     }
   }
   
@@ -541,7 +545,6 @@ void profiler::process_samples(thread_state* state) {
       line* sampled_line = find_line(r);
       if(sampled_line) {
         sampled_line->add_sample();
-        _next_line.store(sampled_line);
       }
       
       if(_experiment_active) {
