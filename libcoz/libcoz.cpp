@@ -8,11 +8,11 @@
 #include <string>
 #include <unordered_set>
 
-#include "causal/inspect.h"
-#include "causal/profiler.h"
-#include "causal/progress_point.h"
-#include "causal/real.h"
-#include "causal/util.h"
+#include "inspect.h"
+#include "profiler.h"
+#include "progress_point.h"
+#include "real.h"
+#include "util.h"
 
 #include "ccutil/log.h"
 
@@ -49,18 +49,18 @@ extern "C" void __causal_register_counter(progress_point::kind k,
 static string readlink_str(const char* path) {
   size_t exe_size = 1024;
   ssize_t exe_used;
-  
+
   while(true) {
     char exe_path[exe_size];
-    
+
     exe_used = readlink(path, exe_path, exe_size - 1);
     REQUIRE(exe_used > 0) << "Unable to read link";
-    
+
     if(exe_used < exe_size - 1) {
       exe_path[exe_used] = '\0';
       return string(exe_path);
     }
-    
+
     exe_size += 1024;
   }
 }
@@ -75,16 +75,16 @@ int wrapped_main(int argc, char** argv, char** env) {
 
   // Read settings out of environment variables
   string output_file = getenv_safe("COZ_OUTPUT", "profile.coz");
-  
+
   vector<string> binary_scope_v = split(getenv_safe("COZ_BINARY_SCOPE"), '\t');
   unordered_set<string> binary_scope(binary_scope_v.begin(), binary_scope_v.end());
-  
+
   vector<string> source_scope_v = split(getenv_safe("COZ_SOURCE_SCOPE"), '\t');
   unordered_set<string> source_scope(source_scope_v.begin(), source_scope_v.end());
-  
+
   vector<string> progress_points_v = split(getenv_safe("COZ_PROGRESS_POINTS"), '\t');
   unordered_set<string> progress_points(progress_points_v.begin(), progress_points_v.end());
-  
+
   bool end_to_end = getenv("COZ_END_TO_END");
   bool sample_only = getenv("COZ_SAMPLE_ONLY");
   string fixed_line_name = getenv_safe("COZ_FIXED_LINE", "");

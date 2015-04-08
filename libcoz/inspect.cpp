@@ -1,4 +1,4 @@
-#include "causal/inspect.h"
+#include "inspect.h"
 
 #include <elf.h>
 #include <fcntl.h>
@@ -22,7 +22,8 @@
 #include <libelfin/dwarf/dwarf++.hh>
 #include <libelfin/elf/elf++.hh>
 
-#include "causal/util.h"
+#include "util.h"
+
 #include "ccutil/log.h"
 
 using namespace std;
@@ -63,16 +64,16 @@ static string find_build_id(elf::elf& f) {
 
 static string absolute_path(const string filename) {
   if(filename[0] == '/') return filename;
-  
+
   char* cwd = getcwd(NULL, 0);
   REQUIRE(cwd != NULL) << "Failed to get current directory";
-  
+
   return string(cwd) + '/' + filename;
 }
 
 static string canonicalize_path(const string filename) {
   vector<string> parts = split(absolute_path(filename), '/');
-  
+
   // Iterate over the path parts to produce a reduced list of path sections
   vector<string> reduced;
   for(string part : parts) {
@@ -84,13 +85,13 @@ static string canonicalize_path(const string filename) {
       reduced.push_back(part);
     }
   }
-  
+
   // Join path sections into a single string
   string result;
   for(string part : reduced) {
     result += "/" + part;
   }
-  
+
   return result;
 }
 
@@ -108,7 +109,7 @@ static bool file_exists(const string& filename) {
 static const string get_full_path(const string filename) {
   if(filename.find('/') != string::npos) {
     return canonicalize_path(filename);
-    
+
   } else {
     // Search the environment's path for the first match
     const string path_env = getenv("PATH");
@@ -301,7 +302,7 @@ bool in_scope(const string& name, const unordered_set<string>& scope) {
 void memory_map::build(const unordered_set<string>& binary_scope,
                        const unordered_set<string>& source_scope) {
   //REQUIRE(wildcard_match("/abc/def/ghij", "/abc/def/ghij")) << "ohshit";
-  
+
   for(const auto& f : get_loaded_files()) {
     if(in_scope(f.first, binary_scope)) {
       try {
@@ -360,7 +361,7 @@ void memory_map::process_inlines(const dwarf::die& d,
                                  uintptr_t load_address) {
   if(!d.valid())
     return;
-  
+
   try {
     if(d.tag == dwarf::DW_TAG::inlined_subroutine) {
       string name;
@@ -500,7 +501,7 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
       for(const string& filename : included_files) {
         INFO << "Included source file " << filename;
       }
-      
+
     } catch(dwarf::format_error e) {
       WARNING << "Ignoring DWARF format error when reading line table: " << e.what();
     }

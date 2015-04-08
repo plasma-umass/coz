@@ -1,4 +1,4 @@
 ROOT := .
-DIRS := lib bin tests
+DIRS := inspect libcoz tests
 
 include $(ROOT)/common.mk

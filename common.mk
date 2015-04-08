@@ -56,7 +56,7 @@ obj/%.o: %.c $(PREREQS)
 	@mkdir -p obj
 	@$(CC) $(CFLAGS) -MMD -MP -o $@ -c $<
 
-# Link a shared library 
+# Link a shared library
 $(SHARED_LIB_TARGETS): $(OBJS)
 	@echo $(LOG_PREFIX) Linking $@ $(LOG_SUFFIX)
 	@$(CXX) -shared $(LDFLAGS) -o $@ $^
@@ -73,7 +73,7 @@ $(OTHER_TARGETS): $(OBJS)
 # Set up build targets for benchmarking
 ifneq ($(BENCHMARK),)
 bench_inputs:
-	
+
 test_inputs:
 
 bench:: $(OTHER_TARGETS) bench_inputs
@@ -91,3 +91,5 @@ $(RECURSIVE_TARGETS)::
 	@for dir in $(DIRS); do \
 	$(MAKE) -C $$dir --no-print-directory $@ MAKEPATH="$(MAKEPATH)/$$dir"; \
 	done
+
+include $(ROOT)/deps.mk

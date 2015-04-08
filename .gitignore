@@ -1,8 +1,9 @@
-lib/include/ccutil
-lib/libcausal.so
-lib/obj
-
-bin/pycoz/*.pyc
+deps
+inspect/inspect
+inspect/obj
+libcoz/libcoz.so
+libcoz/obj
+pycoz/*.pyc
 
 benchmarks/*/obj
 benchmarks/*/profile.coz

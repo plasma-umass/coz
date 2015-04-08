@@ -1,4 +1,4 @@
-#include "causal/perf.h"
+#include "perf.h"
 
 #include <asm/unistd.h>
 #include <fcntl.h>
@@ -15,7 +15,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "causal/util.h"
+#include "util.h"
 
 #include "ccutil/log.h"
 #include "ccutil/spinlock.h"
@@ -45,16 +45,16 @@ perf_event::perf_event(struct perf_event_attr& pe, pid_t pid, int cpu) :
   // Set some mandatory fields
   pe.size = sizeof(struct perf_event_attr);
   pe.disabled = 1;
-  
+
   // Open the file
   _fd = perf_event_open(&pe, pid, cpu, -1, 0);
   REQUIRE(_fd != -1) << "Failed to open perf event";
-  
+
   // If sampling, map the perf event file
   if(pe.sample_type != 0 && pe.sample_period != 0) {
     void* ring_buffer = mmap(NULL, MmapSize, PROT_READ | PROT_WRITE, MAP_SHARED, _fd, 0);
     REQUIRE(ring_buffer != MAP_FAILED) << "Failed to mmap perf event file";
-    
+
     _mapping = reinterpret_cast<struct perf_event_mmap_page*>(ring_buffer);
   }
 }
@@ -66,18 +66,18 @@ perf_event::perf_event(perf_event&& other) {
     ::close(_fd);
     INFO << "Closed perf event fd " << _fd;
   }
-  
+
   if(_mapping != nullptr && _mapping != other._mapping)
     munmap(_mapping, MmapSize);
-  
+
   // take other perf event's file descriptor and replace it with -1
   _fd = other._fd;
   other._fd = -1;
-  
+
   // take other perf_event's mapping and replace it with nullptr
   _mapping = other._mapping;
   other._mapping = nullptr;
-  
+
   // Copy over the sample type and read format
   _sample_type = other._sample_type;
   _read_format = other._read_format;
@@ -95,15 +95,15 @@ void perf_event::operator=(perf_event&& other) {
     ::close(_fd);
   if(_mapping != nullptr && _mapping != other._mapping)
     munmap(_mapping, MmapSize);
-  
+
   // take other perf event's file descriptor and replace it with -1
   _fd = other._fd;
   other._fd = -1;
-  
+
   // take other perf_event's mapping and replace it with nullptr
   _mapping = other._mapping;
   other._mapping = nullptr;
-  
+
   // Copy over the sample type and read format
   _sample_type = other._sample_type;
   _read_format = other._read_format;
@@ -137,7 +137,7 @@ void perf_event::close() {
     ::close(_fd);
     _fd = -1;
   }
-  
+
   if(_mapping != nullptr) {
     munmap(_mapping, MmapSize);
     _mapping = nullptr;
@@ -148,11 +148,11 @@ void perf_event::set_ready_signal(int sig) {
   // Set the perf_event file to async
   REQUIRE(fcntl(_fd, F_SETFL, fcntl(_fd, F_GETFL, 0) | O_ASYNC) != -1)
       << "failed to set perf_event file to async mode";
-  
+
   // Set the notification signal for the perf file
   REQUIRE(fcntl(_fd, F_SETSIG, sig) != -1)
       << "failed to set perf_event file signal";
-  
+
   // Set the current thread as the owner of the file (to target signal delivery)
   REQUIRE(fcntl(_fd, F_SETOWN, gettid()) != -1)
       << "failed to set the owner of the perf_event file";
@@ -160,10 +160,10 @@ void perf_event::set_ready_signal(int sig) {
 
 void perf_event::iterator::next() {
   struct perf_event_header hdr;
-  
+
   // Copy out the record header
   perf_event::copy_from_ring_buffer(_mapping, _index, &hdr, sizeof(struct perf_event_header));
-  
+
   // Advance to the next record
   _index += hdr.size;
 }
@@ -171,13 +171,13 @@ void perf_event::iterator::next() {
 perf_event::record perf_event::iterator::get() {
   // Copy out the record header
   perf_event::copy_from_ring_buffer(_mapping, _index, _buf, sizeof(struct perf_event_header));
-  
+
   // Get a pointer to the header
   struct perf_event_header* header = reinterpret_cast<struct perf_event_header*>(_buf);
-  
+
   // Copy out the entire record
   perf_event::copy_from_ring_buffer(_mapping, _index, _buf, header->size);
-  
+
   return perf_event::record(_source, header);
 }
 
@@ -186,20 +186,20 @@ bool perf_event::iterator::has_data() const {
   if(_mapping == nullptr) {
     return false;
   }
-  
+
   // If there isn't enough data in the ring buffer to hold a header, there is no data
   if(_index + sizeof(struct perf_event_header) >= _head) {
     return false;
   }
-  
+
   struct perf_event_header hdr;
   perf_event::copy_from_ring_buffer(_mapping, _index, &hdr, sizeof(struct perf_event_header));
-  
+
   // If the first record is larger than the available data, nothing can be read
   if(_index + hdr.size > _head) {
     return false;
   }
-  
+
   return true;
 }
 
@@ -208,15 +208,15 @@ void perf_event::copy_from_ring_buffer(struct perf_event_mmap_page* mapping,
   uintptr_t base = reinterpret_cast<uintptr_t>(mapping) + PageSize;
   size_t start_index = index % DataSize;
   size_t end_index = start_index + bytes;
-  
+
   if(end_index <= DataSize) {
     memcpy(dest, reinterpret_cast<void*>(base + start_index), bytes);
   } else {
     size_t chunk2_size = end_index - DataSize;
     size_t chunk1_size = bytes - chunk2_size;
-    
+
     void* chunk2_dest = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(dest) + chunk1_size);
-    
+
     memcpy(dest, reinterpret_cast<void*>(base + start_index), chunk1_size);
     memcpy(chunk2_dest, reinterpret_cast<void*>(base), chunk2_size);
   }
@@ -255,7 +255,7 @@ uint32_t perf_event::record::get_cpu() const {
 wrapped_array<uint64_t> perf_event::record::get_callchain() const {
   ASSERT(is_sample() && _source.is_sampling(sample::callchain))
       << "Record does not have a callchain field";
-  
+
   uint64_t* base = locate_field<sample::callchain, uint64_t*>();
   uint64_t size = *base;
   // Advance the callchain array pointer past the size
@@ -266,58 +266,58 @@ wrapped_array<uint64_t> perf_event::record::get_callchain() const {
 template<perf_event::sample s, typename T>
 T perf_event::record::locate_field() const {
   uintptr_t p = reinterpret_cast<uintptr_t>(_header) + sizeof(struct perf_event_header);
-  
+
   // Walk through the fields in the sample structure. Once the requested field is reached, return.
   // Skip past any unrequested fields that are included in the sample type
-    
+
   /** ip **/
   if(s == sample::ip)
     return reinterpret_cast<T>(p);
   if(_source.is_sampling(sample::ip))
     p += sizeof(uint64_t);
-  
+
   /** pid, tid **/
   if(s == sample::pid_tid)
     return reinterpret_cast<T>(p);
   if(_source.is_sampling(sample::pid_tid))
     p += sizeof(uint32_t) + sizeof(uint32_t);
-  
+
   /** time **/
   if(s == sample::time)
     return reinterpret_cast<T>(p);
   if(_source.is_sampling(sample::time))
     p += sizeof(uint64_t);
-  
+
   /** addr **/
   if(s == sample::addr)
     return reinterpret_cast<T>(p);
   if(_source.is_sampling(sample::addr))
     p += sizeof(uint64_t);
-  
+
   /** id **/
   if(s == sample::id)
     return reinterpret_cast<T>(p);
   if(_source.is_sampling(sample::id))
     p += sizeof(uint64_t);
-  
+
   /** stream_id **/
   if(s == sample::stream_id)
     return reinterpret_cast<T>(p);
   if(_source.is_sampling(sample::stream_id))
     p += sizeof(uint64_t);
-  
+
   /** cpu **/
   if(s == sample::cpu)
     return reinterpret_cast<T>(p);
   if(_source.is_sampling(sample::cpu))
     p += sizeof(uint32_t) + sizeof(uint32_t);
-  
+
   /** period **/
   if(s == sample::period)
     return reinterpret_cast<T>(p);
   if(_source.is_sampling(sample::period))
     p += sizeof(uint64_t);
-  
+
   /** value **/
   if(s == sample::read)
     return reinterpret_cast<T>(p);
@@ -333,7 +333,7 @@ T perf_event::record::locate_field() const {
         sz += sizeof(uint64_t);
       // Skip over the entry count, and each entry
       p += sizeof(uint64_t) + nr * sz;
-      
+
     } else {
       // Skip over the value
       p += sizeof(uint64_t);
@@ -341,7 +341,7 @@ T perf_event::record::locate_field() const {
       if(read_format & PERF_FORMAT_ID)
         p += sizeof(uint64_t);
     }
-    
+
     // Skip over the time_enabled field
     if(read_format & PERF_FORMAT_TOTAL_TIME_ENABLED)
       p += sizeof(uint64_t);
@@ -349,7 +349,7 @@ T perf_event::record::locate_field() const {
     if(read_format & PERF_FORMAT_TOTAL_TIME_RUNNING)
       p += sizeof(uint64_t);
   }
-  
+
   /** callchain **/
   if(s == sample::callchain)
     return reinterpret_cast<T>(p);
@@ -357,7 +357,7 @@ T perf_event::record::locate_field() const {
     uint64_t nr = *reinterpret_cast<uint64_t*>(p);
     p += sizeof(uint64_t) + nr * sizeof(uint64_t);
   }
-  
+
   /** raw **/
   if(s == sample::raw)
     return reinterpret_cast<T>(p);
@@ -365,28 +365,28 @@ T perf_event::record::locate_field() const {
     uint32_t raw_size = *reinterpret_cast<uint32_t*>(p);
     p += sizeof(uint32_t) + raw_size;
   }
-  
+
   /** branch_stack **/
   if(s == sample::branch_stack)
     return reinterpret_cast<T>(p);
   if(_source.is_sampling(sample::branch_stack))
     FATAL << "Branch stack sampling is not supported";
-  
+
   /** regs **/
   if(s == sample::regs)
     return reinterpret_cast<T>(p);
   if(_source.is_sampling(sample::regs))
     FATAL << "Register sampling is not supported";
-  
+
   /** stack **/
   if(s == sample::stack)
     return reinterpret_cast<T>(p);
   if(_source.is_sampling(sample::stack))
     FATAL << "Stack sampling is not supported";
-  
+
   /** end **/
   if(s == sample::_end)
     return reinterpret_cast<T>(p);
-  
+
   FATAL << "Unsupported sample field requested!";
 }

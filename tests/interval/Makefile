@@ -1,5 +1,5 @@
 ROOT := ../..
 TEST_ROOT := ..
-CXXFLAGS := -I$(ROOT)/bin/inspect
+CXXFLAGS := -I$(ROOT)/inspect
 
 include $(TEST_ROOT)/test.mk
