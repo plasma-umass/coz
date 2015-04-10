@@ -20,7 +20,7 @@ $(ROOT)/deps/libelfin:
 	@cd $(ROOT)/deps/libelfin; make MAKEFLAGS="-j1"
 
 # Update build settings to include libelfin libraries
-ifneq (,$(findstring $(ROOT)/deps/libelfin,$(PREREQS)))
+ifneq (,$(findstring libelfin,$(PREREQS)))
 LDFLAGS += -L$(ROOT)/deps/libelfin/elf \
 					 -L$(ROOT)/deps/libelfin/dwarf \
 					 -Wl,--whole-archive -lelf++ -ldwarf++ -Wl,--no-whole-archive
