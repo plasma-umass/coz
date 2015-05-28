@@ -16,7 +16,7 @@ test_inputs: linear_regression_datafiles/key_file_50MB.txt
 
 linear_regression_datafiles/%:
 	@echo $(LOG_PREFIX) Downloading linear_regression inputs $(LOG_SUFFIX)
-	@wget -c http://mapreduce.stanford.edu/datafiles/linear_regression.tar.gz
+	@wget -c http://csl.stanford.edu/~christos/data/linear_regression.tar.gz
 	@echo $(LOG_PREFIX) Unpacking linear_regression inputs $(LOG_SUFFIX)
 	@tar xzf linear_regression.tar.gz
 	@rm linear_regression.tar.gz

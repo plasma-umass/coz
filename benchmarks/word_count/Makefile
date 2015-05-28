@@ -16,7 +16,7 @@ test_inputs: word_count_datafiles/word_10MB.txt
 
 word_count_datafiles/%:
 	@echo $(LOG_PREFIX) Downloading word_count inputs $(LOG_SUFFIX)
-	@wget -c http://mapreduce.stanford.edu/datafiles/word_count.tar.gz
+	@wget -c http://csl.stanford.edu/~christos/data/word_count.tar.gz
 	@echo $(LOG_PREFIX) Unpacking word_count inputs $(LOG_SUFFIX)
 	@tar xzf word_count.tar.gz
 	@rm word_count.tar.gz

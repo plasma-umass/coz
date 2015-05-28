@@ -30,7 +30,7 @@ test_inputs: data/key_file_50MB.txt
 
 data/%:
 	@echo $(LOG_PREFIX) Downloading pbzip2 inputs $(LOG_SUFFIX)
-	@wget -c http://mapreduce.stanford.edu/datafiles/linear_regression.tar.gz
+	@wget -c http://csl.stanford.edu/~christos/data/linear_regression.tar.gz
 	@echo $(LOG_PREFIX) Unpacking pbzip2 inputs $(LOG_SUFFIX)
 	@tar xzf linear_regression.tar.gz
 	@rm linear_regression.tar.gz
