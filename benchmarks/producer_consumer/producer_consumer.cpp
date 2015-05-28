@@ -6,7 +6,7 @@
 
 #include <queue>
 
-#include <causal.h>
+#include <coz.h>
 
 enum {
 	Items = 1000000,

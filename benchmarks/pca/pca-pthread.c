@@ -36,7 +36,7 @@
 #include <pthread.h>
 #include "stddefines.h"
 
-#include "causal.h"
+#include "coz.h"
 
 #define DEF_GRID_SIZE 1000  // all values in the matrix are from 0 to this value 
 #define DEF_NUM_ROWS 3000
