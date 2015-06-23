@@ -8,7 +8,8 @@
     <title>coz plot</title>
 
     <link rel="stylesheet" type="text/css" href="lib/bootstrap/bootstrap.min.css">
-    <link rel="stylesheet" href="lib/font-awesome/css/font-awesome.css">
+    <link rel="stylesheet" type="text/css" href="lib/font-awesome/css/font-awesome.css">
+    <link rel="stylesheet" type="text/css" href="lib/bootstrap-slider/bootstrap-slider.css">
     <link rel="stylesheet" type="text/css" href="jsplot.css">
   </head>
   <body>
@@ -36,10 +37,12 @@
     <div class="container-fluid">
       <div class="row">
         <div id="sidebar" class="col-sm-3 col-md-3 col-lg-2 sidebar">
+          
           <div id="legend">
             <h4>Progress Points</h4>
             <p class="legend-entry noseries">None</p>
           </div> <!-- /legend -->
+          
           <div id="sortby">
             <h4 id="sortby_label">Sort By</h4>
             <select id="sortby_field" class="form-control" disabled aria-labelledby="sortby_label">
@@ -49,6 +52,12 @@
               <option value="min_speedup" title"Sort source lines by the smallest observed program speedup (may be negative)">Min Speedup</option>
             </select>
           </div> <!-- /sortby -->
+          
+          <div id="minpoints">
+            <h4>Minimum Points</h4>
+            <input id="minpoints_field" class="form-control" type="number" />
+          </div> <!-- /minpoint -->
+          
         </div> <!-- /sidebar -->
         
         <div class="col-sm-9 col-sm-offset-3 col-md-9 col-md-offset-3 col-lg-10 col-lg-offset-2">
@@ -94,6 +103,7 @@
     <script src="lib/d3/d3.min.js"></script>
     <script src="lib/d3-tip/d3-tip.min.js"></script>
     <script src="lib/science/science.v1.min.js"></script>
+    <script src="lib/bootstrap-slider/bootstrap-slider.js"></script>
     <script src="jsplot.js"></script>
   </body>
 </html>

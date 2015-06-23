@@ -3,6 +3,16 @@ if (!window.File || !window.FileReader) {
   alert('The File APIs are not fully supported in this browser.');
 }
 
+// Create the minpoints slider
+var minpoints_slider = new Slider('#minpoints_field', {
+  min: 0,
+  max: 20,
+  step: 1,
+  value: 10,
+  ticks: [0, 5, 10, 15, 20],
+  ticks_labels: [0, 5, 10, 15, 20]
+});
+
 function Profile(container) {
   // map from sped up location -> progress point -> speedup amount -> (progress delta, duration)
   this.data = {};
@@ -187,15 +197,50 @@ function Profile(container) {
     }
   };
   
-  this.draw = function() {
+  this.draw = function(resize) {
     /****** Add or update divs to hold each plot ******/
     var plot_div_sel = container.selectAll('div')
-      .data(this.getSpeedupData(12), function(d) { return d.name; });
-    plot_div_sel.enter().append('div')
-                        .attr('class', 'col-sm-6 col-md-6 col-lg-6');
-    plot_div_sel.exit().remove();
+      .data(this.getSpeedupData(minpoints_slider.getValue()), function(d) { return d.name; });
     
+    var cols = 2;
+    if(parseInt(d3.select('body').style('width'), 10) >= 1200) {
+      cols = 3;
+    }
+    
+    var plot_x_pos = function(d, i) {
+      var col = i % cols;
+      var plot_width = parseInt(plot_div_sel.style('width'), 10);
+      return (col * plot_width) + 'px';
+    }
+    
+    var plot_y_pos = function(d, i) {
+      var row = (i - (i % cols)) / cols;
+      return (row * 200) + 'px';
+    }
+    
+    // First, remove divs that are disappearing
+    plot_div_sel.exit().transition().duration(200)
+      .style('opacity', 0).remove();
+    
+    // Insert new divs with zero opacity
+    plot_div_sel.enter().append('div')
+      .attr('class', 'col-xs-6 col-sm-6 col-md-6 col-lg-4')
+      .style('margin-bottom', '-200px')
+      .style('opacity', 0);
+    
+    // Sort plots by the chosen sorting function
     plot_div_sel.sort(sort_functions[d3.select('#sortby_field').node().value]);
+    
+    // Move divs into place. Only animate if we are not on a resizing redraw
+    if(!resize) {
+      plot_div_sel.transition().duration(400).delay(200)
+        .style('top', plot_y_pos)
+        .style('left', plot_x_pos)
+        .style('opacity', 1);
+    } else {
+      plot_div_sel.style('left', plot_x_pos)
+                  .style('top', plot_y_pos);
+    }
     
     /****** Insert and remove plot titles ******/
     var plot_title_sel = plot_div_sel.selectAll('.plot-title').data([1]);
@@ -347,9 +392,12 @@ function Profile(container) {
       var measurements = d.measurements.filter(function(e) { return e.progress_speedup >= -1 && e.progress_speedup < 1; });
       var xvals = measurements.map(function(e) { return e.speedup; });
       var yvals = measurements.map(function(e) { return e.progress_speedup; });
-      return [d3.zip(xvals, loess(xvals, yvals))];
+      
+      if(xvals.length > 5) return [d3.zip(xvals, loess(xvals, yvals))];
+      else return [d3.zip(xvals, yvals)];
     });
-    lines_sel.enter().append('path').attr('d', line);
+    lines_sel.enter().append('path');
+    lines_sel.attr('d', line);
     lines_sel.exit().remove();
   
     /****** Add or update points ******/
@@ -488,12 +536,16 @@ d3.select('#load-profile-file').on('change', function() {
     });
 });
 
+minpoints_slider.on('slideStop', function() {
+  if(current_profile) current_profile.draw();
+});
+
 d3.select('#sortby_field').on('change', function() {
   if(current_profile) current_profile.draw();
 });
 
 d3.select(window).on('resize', function() {
-  if(current_profile) current_profile.draw();
+  if(current_profile) current_profile.draw(true);
 });
 
 /*var files = {
