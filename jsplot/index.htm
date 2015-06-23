@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>coz plot</title>
+
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.4/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+    <link rel="stylesheet" type="text/css" href="jsplot.css">
+  </head>
+  <body>
+    <nav class="navbar navbar-inverse navbar-fixed-top">
+      <div class="container-fluid">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          
+          <span class="navbar-brand" href="#">Causal Profile</span>
+        </div> <!-- /navbar header -->
+        
+        <div id="navbar" class="navbar-collapse collapse">
+          <button type="button" id="load-profile-btn" class="btn btn-primary navbar-btn" data-toggle="modal" data-target="#load-profile-dlg">
+            <i class="fa fa-folder-open"></i> Load a Profile
+          </button>
+          
+          <span class="navbar-right">
+            <form class="navbar-form">
+              <div class="form-group">
+                <span id="sortby_label" class="label">Sort By</span>
+                <select id="sortby_field" class="form-control" disabled area-labelledby="sortby_label">
+                  <option value="alphabetical" title="Sort source lines alphabetically">Alphabetical</option>
+                  <option value="impact" title="Sort source lines by their potential return on effort: the maximum area under the curve divided by the required line speedup" selected>Impact</option>
+                  <option value="max_speedup" title="Sort source lines by the largest observed program speedup">Max Speedup</option>
+                  <option value="min_speedup" title"Sort source lines by the smallest observed program speedup (may be negative)">Min Speedup</option>
+                </select>
+              </div> <!-- /form-group -->
+            </form>
+          </span> <!-- /navbar-right -->
+        </div> <!-- /navbar -->
+      </div> <!-- /container-fluid -->
+    </nav>
+    
+    <div class="container-fluid">
+      <div class="row">
+        
+        <div id="sidebar" class="col-sm-3 col-md-3 col-lg-2 sidebar">
+        </div> <!-- /sidebar -->
+        
+        <div class="col-sm-9 col-sm-offset-3 col-md-9 col-md-offset-3 col-lg-10 col-lg-offset-2">
+          <div id="plot-area"></div>
+        </div> <!-- /main content -->
+        
+      </div> <!-- /row -->
+    </div> <!-- /container-fluid -->
+    
+    <!-- File open dialog (hidden) -->
+    <div class="modal fade" id="load-profile-dlg" tabindex="-1" role="dialog" aria-labelledby="load-profile-dlg-title" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            <h4 class="modal-title" id="load-profile-dlg-title">Select a Causal Profile</h4>
+          </div> <!-- /modal-header -->
+          <div class="modal-body">
+            <form id="load-profile-form">
+              <input type="file" id="load-profile-file" accept=".coz" style="display: none" />
+              <div class="input-group">
+                <span class="input-group-addon"><i class="fa fa-file-text-o"></i></span>
+                <input type="text" class="form-control" id="load-profile-filename" disabled placeholder="Select a profile">
+                <span class="input-group-btn">
+                  <button class="browse btn btn-primary" id="load-profile-browse-btn" type="button">
+                    <i class="fa fa-search"></i>
+                    Browse
+                  </button>
+                </span>
+              </div> <!-- /input-group -->
+            </form>
+          </div> <!-- /modal-body -->
+          <div class="modal-footer">
+            <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+            <button id="load-profile-open-btn" type="button" data-dismiss="modal" class="btn btn-primary disabled">Open</button>
+          </div> <!-- /modal-footer -->
+        </div> <!-- /modal-content -->
+      </div> <!-- /modal-dialog -->
+    </div> <!-- /modal -->
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.4/js/bootstrap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-tip/0.6.3/d3-tip.min.js"></script>
+    <script src="jsplot.js"></script>
+  </body>
+</html>
