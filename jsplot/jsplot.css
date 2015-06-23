@@ -114,27 +114,27 @@ line.yzero {
 
 /* Colors from colorbrewer.org */
 .series0 circle { fill: rgba(31,120,180,1); }
-.series0 path { stroke: rgba(31,120,180,0.5); }
+.series0 path { stroke: rgba(31,120,180,1); }
 .series0 circle.highlight { stroke: rgba(31,120,180,1); }
 i.series0 { color: rgba(31,120,180,1); }
 
 .series1 circle { fill: rgba(51,160,44,1); }
-.series1 path { stroke: rgba(51,160,44,0.5); }
+.series1 path { stroke: rgba(51,160,44,1); }
 .series1 circle.highlight { stroke: rgba(51,160,44,1); }
 i.series1 { color: rgba(51,160,44,1); }
 
 .series2 circle { fill: rgba(227,26,28,1); }
-.series2 path { stroke: rgba(227,26,28,0.5); }
+.series2 path { stroke: rgba(227,26,28,1); }
 .series2 circle.highlight { stroke: rgba(227,26,28,1); }
 i.series2 { color: rgba(227,26,28,1); }
 
 .series3 circle { fill: rgba(255,127,0,1); }
-.series3 path { stroke: rgba(255,127,0,0.5); }
+.series3 path { stroke: rgba(255,127,0,1); }
 .series3 circle.highlight { stroke: rgba(255,127,0,1); }
 i.series3 { color: rgba(255,127,0,1); }
 
 .series4 circle { fill: rgba(106,61,154,1); }
-.series4 path { stroke: rgba(106,61,154,0.5); }
+.series4 path { stroke: rgba(106,61,154,1); }
 .series4 circle.highlight { stroke: rgba(106,61,154,1); }
 i.series4 { color: rgba(106,61,154,1); }
 

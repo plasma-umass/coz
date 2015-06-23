@@ -190,10 +190,9 @@ function Profile(container) {
   this.draw = function() {
     /****** Add or update divs to hold each plot ******/
     var plot_div_sel = container.selectAll('div')
-      .data(this.getSpeedupData(10), function(d) { return d.name; });
+      .data(this.getSpeedupData(12), function(d) { return d.name; });
     plot_div_sel.enter().append('div')
                         .attr('class', 'col-sm-6 col-md-6 col-lg-6');
-                        //.attr('class', 'col-md-12');
     plot_div_sel.exit().remove();
     
     plot_div_sel.sort(sort_functions[d3.select('#sortby_field').node().value]);
@@ -333,16 +332,25 @@ function Profile(container) {
     series_sel.exit().remove();
   
     /****** Add or update trendlines ******/
-    /*var trendline = d3.svg.line()
-      .x(function(d) { return xscale(d.speedup); })
-      .y(function(d) { return yscale(d.progress_speedup); })
-      .interpolate('linear');
-      
-    var lines_sel = series_sel.selectAll('path').data([0]);
-    lines_sel.enter().append('path');
-    lines_sel.exit().remove();
+    // Configure a loess smoother
+    var loess = science.stats.loess()
+      .bandwidth(0.4)
+      .robustnessIterations(5);
     
-    series_sel.select('path').attr('d', function(d) { return trendline(d.measurements); });*/
+    // Create an svg line to draw the loess curve
+    var line = d3.svg.line().x(function(d) { return xscale(d[0]); })
+                            .y(function(d) { return yscale(d[1]); })
+                            .interpolate('basis');
+  
+    // Apply the loess smoothing to each series, then draw the lines
+    var lines_sel = series_sel.selectAll('path').data(function(d) {
+      var measurements = d.measurements.filter(function(e) { return e.progress_speedup >= -1 && e.progress_speedup < 1; });
+      var xvals = measurements.map(function(e) { return e.speedup; });
+      var yvals = measurements.map(function(e) { return e.progress_speedup; });
+      return [d3.zip(xvals, loess(xvals, yvals))];
+    });
+    lines_sel.enter().append('path').attr('d', line);
+    lines_sel.exit().remove();
   
     /****** Add or update points ******/
     var points_sel = series_sel.selectAll('circle').data(function(d) { return d.measurements; });
@@ -479,6 +487,9 @@ d3.select('#load-profile-file').on('change', function() {
       
       // Read the profile
       reader.readAsText(file_browser.files[0]);
+      
+      // Clear the file browser value
+      file_browser.value = '';
     });
 });
 
