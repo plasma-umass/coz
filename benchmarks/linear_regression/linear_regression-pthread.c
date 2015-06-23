@@ -40,7 +40,7 @@
 
 #include "stddefines.h"
 
-#include "causal.h"
+#include "coz.h"
 
 typedef struct {
    char x;

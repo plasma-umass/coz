@@ -10,7 +10,7 @@ optimizations. This allows the profiler to establish causality:
 "optimizing function X will have effect Y," exactly the measurement
 developers had assumed they were getting all along.
 
-More details are available in our [Tech Report (pdf)](https://web.cs.umass.edu/publication/docs/2014/UM-CS-2014-018.pdf).
+More details are available in our [Tech Report (pdf)](https://web.cs.umass.edu/publication/docs/2015/UM-CS-2015-008.pdf).
 
 ## Requirements
 Coz, our prototype causal profiler, runs with unmodified Linux executables. Coz requires:

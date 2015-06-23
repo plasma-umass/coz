@@ -41,7 +41,7 @@
 #include "stddefines.h"
 #include "sort-pthread.h"
 
-#include "causal.h"
+#include "coz.h"
 
 #define DEFAULT_DISP_NUM 10
 #define START_ARRAY_SIZE 2000

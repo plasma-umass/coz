@@ -43,7 +43,7 @@
 #include "map_reduce.h"
 #include "stddefines.h"
 
-#include "causal.h"
+#include "coz.h"
 
 #define DEFAULT_UNIT_SIZE 5
 #define SALT_SIZE 2

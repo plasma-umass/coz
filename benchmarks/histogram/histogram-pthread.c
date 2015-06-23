@@ -39,7 +39,7 @@
 
 #include "stddefines.h"
 
-#include "causal.h"
+#include "coz.h"
 
 #define IMG_DATA_OFFSET_POS 10
 #define BITS_PER_PIXEL_POS 28

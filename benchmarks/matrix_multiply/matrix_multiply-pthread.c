@@ -43,7 +43,7 @@
 #include "map_reduce.h"
 #include "stddefines.h"
 
-#include "causal.h"
+#include "coz.h"
 
 typedef struct {
     int row_num;

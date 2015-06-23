@@ -37,7 +37,7 @@
 
 #include "stddefines.h"
 
-#include "causal.h"
+#include "coz.h"
 
 #define DEF_NUM_POINTS 100000
 #define DEF_NUM_MEANS 100

@@ -77,10 +77,10 @@ bench_inputs:
 test_inputs:
 
 bench:: $(OTHER_TARGETS) bench_inputs
-	$(ROOT)/bin/coz run $(COZ_ARGS) --- ./$< $(BENCH_ARGS)
+	$(ROOT)/coz run $(COZ_ARGS) --- ./$< $(BENCH_ARGS)
 
 test:: $(OTHER_TARGETS) test_inputs
-	$(ROOT)/bin/coz run $(COZ_ARGS) --- ./$< $(TEST_ARGS)
+	$(ROOT)/coz run $(COZ_ARGS) --- ./$< $(TEST_ARGS)
 endif
 
 # Include dependency rules for all objects
