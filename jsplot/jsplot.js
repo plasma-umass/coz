@@ -368,19 +368,14 @@ function Profile(container) {
     points_sel.exit().remove();
     
     /****** Add or update legend ******/
-    var sidebar = d3.select('#sidebar');
-    
-    var legend_sel = sidebar.selectAll('#legend').data([0]);
-    legend_sel.enter().append('div').attr('id', 'legend');
-    
-    var legend_title_sel = legend_sel.selectAll('h4').data([0]);
-    legend_title_sel.enter().append('h4').text('Progress Points');
+    var legend_sel = d3.select('#legend');
     
     var legend_entries_sel = legend_sel.selectAll('p.legend-entry').data(this.getProgressPoints());
     legend_entries_sel.enter().append('p').attr('class', 'legend-entry');
-    legend_entries_sel.html(function(d, i) { 
-      return '<i class="fa fa-circle series' + (i % 4) + '"></i> <span class="smartpath">' + d + '</span>';
-    });
+    legend_entries_sel.classed('noseries', false)
+      .html(function(d, i) { 
+        return '<i class="fa fa-circle series' + (i % 4) + '"></i> <span class="smartpath">' + d + '</span>';
+      });
     legend_entries_sel.exit().remove();
     
     /****** Shorten paths ******/

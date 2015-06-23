@@ -29,28 +29,26 @@
           <button type="button" id="load-profile-btn" class="btn btn-primary navbar-btn" data-toggle="modal" data-target="#load-profile-dlg">
             <i class="fa fa-folder-open"></i> Load a Profile
           </button>
-          
-          <span class="navbar-right">
-            <form class="navbar-form">
-              <div class="form-group">
-                <span id="sortby_label" class="label">Sort By</span>
-                <select id="sortby_field" class="form-control" disabled area-labelledby="sortby_label">
-                  <option value="alphabetical" title="Sort source lines alphabetically">Alphabetical</option>
-                  <option value="impact" title="Sort source lines by their potential return on effort: the maximum area under the curve divided by the required line speedup" selected>Impact</option>
-                  <option value="max_speedup" title="Sort source lines by the largest observed program speedup">Max Speedup</option>
-                  <option value="min_speedup" title"Sort source lines by the smallest observed program speedup (may be negative)">Min Speedup</option>
-                </select>
-              </div> <!-- /form-group -->
-            </form>
-          </span> <!-- /navbar-right -->
         </div> <!-- /navbar -->
       </div> <!-- /container-fluid -->
     </nav>
     
     <div class="container-fluid">
       <div class="row">
-        
         <div id="sidebar" class="col-sm-3 col-md-3 col-lg-2 sidebar">
+          <div id="legend">
+            <h4>Progress Points</h4>
+            <p class="legend-entry noseries">None</p>
+          </div> <!-- /legend -->
+          <div id="sortby">
+            <h4 id="sortby_label">Sort By</h4>
+            <select id="sortby_field" class="form-control" disabled aria-labelledby="sortby_label">
+              <option value="alphabetical" title="Sort source lines alphabetically">Alphabetical</option>
+              <option value="impact" title="Sort source lines by their potential return on effort: the maximum area under the curve divided by the required line speedup" selected>Impact</option>
+              <option value="max_speedup" title="Sort source lines by the largest observed program speedup">Max Speedup</option>
+              <option value="min_speedup" title"Sort source lines by the smallest observed program speedup (may be negative)">Min Speedup</option>
+            </select>
+          </div> <!-- /sortby -->
         </div> <!-- /sidebar -->
         
         <div class="col-sm-9 col-sm-offset-3 col-md-9 col-md-offset-3 col-lg-10 col-lg-offset-2">
