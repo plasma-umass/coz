@@ -29,7 +29,7 @@ function update(resize) {
          var filename = parts[parts.length-1];
          if(parts.length > 3) {
            current.attr('title', parts.join('/'));
-           return '&hellip;/'+filename;
+           return filename;
          } else {
            return parts.join('/');
          }

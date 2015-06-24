@@ -314,7 +314,9 @@ Profile.prototype.drawPlots = function(container, min_points, resize) {
   
   /****** Insert and remove plot titles ******/
   var plot_title_sel = plot_div_sel.selectAll('.plot-title').data([1]);
-  plot_title_sel.enter().append('span').attr('class', 'plot-title');
+  plot_title_sel.enter().append('span')
+    .attr('class', 'plot-title')
+    .attr('style', 'width: ' + svg_width + 'px; text-align: right;');
   plot_title_sel.exit().remove();
   
   /****** Update scales ******/
