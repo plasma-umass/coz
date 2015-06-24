@@ -57,6 +57,8 @@ button.sample-profile {
 
 .plot-title {
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
   margin-top: 0.75em;
   font-size: 18px;
   font-weight: bold;
