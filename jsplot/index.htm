@@ -13,30 +13,14 @@
     <link rel="stylesheet" type="text/css" href="jsplot.css">
   </head>
   <body>
-    <nav class="navbar navbar-inverse navbar-fixed-top">
-      <div class="container-fluid">
-        <div class="navbar-header">
-          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
-            <span class="sr-only">Toggle navigation</span>
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-          </button>
-          
-          <span class="navbar-brand" href="#">Causal Profile</span>
-        </div> <!-- /navbar header -->
-        
-        <div id="navbar" class="navbar-collapse collapse">
-          <button type="button" id="load-profile-btn" class="btn btn-primary navbar-btn" data-toggle="modal" data-target="#load-profile-dlg">
-            <i class="fa fa-folder-open"></i> Load a Profile
-          </button>
-        </div> <!-- /navbar -->
-      </div> <!-- /container-fluid -->
-    </nav>
-    
     <div class="container-fluid">
       <div class="row">
         <div id="sidebar" class="col-sm-3 col-md-3 col-lg-2 sidebar">
+          
+          <h3 class="">Causal Profile</h3>
+          <button type="button" id="load-profile-btn" class="btn btn-primary btn-block" data-toggle="modal" data-target="#load-profile-dlg">
+            <i class="fa fa-folder-open"></i> Load a Profile
+          </button>
           
           <div id="legend">
             <h4>Progress Points</h4>
@@ -54,8 +38,17 @@
           </div> <!-- /sortby -->
           
           <div id="minpoints">
-            <h4>Minimum Points</h4>
-            <input id="minpoints_field" class="form-control" type="number" />
+            <h4 id="minpoints_label">Minimum Points</h4>
+            <!--<input id="minpoints_field" class="form-control" type="number" />-->
+            <input type="range" id="minpoints_field" min="0" max="20" step="1" value="10" list="ticks" aria-labeledby="minpoints_label">
+            <datalist id="ticks">
+              <option value="0">
+              <option value="5">
+              <option value="10">
+              <option value="15">
+              <option value="20">
+            </datalist>
+            <p id="minpoints_display" class="text-center">10</p>
           </div> <!-- /minpoint -->
           
         </div> <!-- /sidebar -->
@@ -76,19 +69,25 @@
             <h4 class="modal-title" id="load-profile-dlg-title">Select a Causal Profile</h4>
           </div> <!-- /modal-header -->
           <div class="modal-body">
-            <form id="load-profile-form">
-              <input type="file" id="load-profile-file" accept=".coz" style="display: none" />
-              <div class="input-group">
-                <span class="input-group-addon"><i class="fa fa-file-text-o"></i></span>
-                <input type="text" class="form-control" id="load-profile-filename" disabled placeholder="Select a profile">
-                <span class="input-group-btn">
-                  <button class="browse btn btn-primary" id="load-profile-browse-btn" type="button">
-                    <i class="fa fa-search"></i>
-                    Browse
-                  </button>
-                </span>
-              </div> <!-- /input-group -->
-            </form>
+            <div class="text-center">
+              <label for="load-profile-form">Load Profile</label>
+              <form id="load-profile-form">
+                <input type="file" id="load-profile-file" accept=".coz" style="display: none" />
+                <div class="input-group">
+                  <span class="input-group-addon"><i class="fa fa-file-text-o"></i></span>
+                  <input type="text" class="form-control" id="load-profile-filename" disabled placeholder="Select a profile">
+                  <span class="input-group-btn">
+                    <button class="browse btn btn-primary" id="load-profile-browse-btn" type="button">
+                      <i class="fa fa-search"></i>
+                      Browse
+                    </button>
+                  </span>
+                </div> <!-- /input-group -->
+              </form>
+              <br>
+              <label for="samples">Sample Profiles</label>
+              <div id="samples"></div>
+            </div> <!-- /text-center -->
           </div> <!-- /modal-body -->
           <div class="modal-footer">
             <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
@@ -104,6 +103,7 @@
     <script src="lib/d3-tip/d3-tip.min.js"></script>
     <script src="lib/science/science.v1.min.js"></script>
     <script src="lib/bootstrap-slider/bootstrap-slider.js"></script>
+    <script src="profile.js"></script>
     <script src="jsplot.js"></script>
   </body>
 </html>
