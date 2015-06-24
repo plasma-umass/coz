@@ -73,80 +73,36 @@ d3.select('#load-profile-file').on('change', function() {
     });
 });
 
-d3.select('#minpoints_field').on('mousemove', function() {
+// Update the plots and minpoints display when dragged or clicked
+d3.select('#minpoints_field').on('input', function() {
   d3.select('#minpoints_display').text(this.value);
+  update();
 });
-
-d3.select('#minpoints_field').on('change', update);
 
 d3.select('#sortby_field').on('change', update);
 
 d3.select(window).on('resize', function() { update(true); });
 
-var samples = [
-  'blackscholes',
-  'dedup',
-  'ferret',
-  'fluidanimate',
-  'sqlite',
-  'swaptions'
-];
+var sample_profiles = ['blackscholes', 'dedup', 'ferret', 'fluidanimate', 'sqlite', 'swaptions'];
 
-var samples_sel = d3.select('#samples').selectAll('.sample-profile').data(samples)
+var samples_sel = d3.select('#samples').selectAll('.sample-profile').data(sample_profiles)
   .enter().append('button')
     .attr('class', 'btn btn-sm btn-default sample-profile')
     .attr('data-dismiss', 'modal')
+    .attr('loaded', 'no')
     .text(function(d) { return d; })
-    .on('click', function() {
-      var filename = 'profiles/' + d3.select(this).datum() + '.coz';
-      d3.text(filename, 'text/plain', function(e, txt) {
-        if(e) {
-          console.warn(e);
-          return;
-        }
-        current_profile = new Profile(txt);
+    .on('click', function(d) {
+      var sel = d3.select(this);
+      if(sel.attr('loaded') != 'yes') {
+        d3.select('body').append('script')
+          .attr('src', 'profiles/' + d + '.coz.js')
+          .on('load', function() {
+            sel.attr('loaded', 'yes');
+            current_profile = eval(d + '_profile');
+            update();
+          });
+      } else {
+        current_profile = eval(d + '_profile');
         update();
-      });
+      }
     });
-
-/*var files = {
-  name: '/',
-  children: [
-    { name: 'I',
-      children: [
-        { name: 'A' },
-        { name: 'B' },
-        { name: 'C',
-          children: [
-            { name: 'i' },
-            { name: 'ii' }
-          ]
-        }
-      ]
-    },
-    { name: 'II',
-      children: [
-        { name: 'D' },
-        { name: 'E',
-          children: [
-            { name: 'iii' },
-            { name: 'iv' }
-          ]
-        }
-      ]
-    }
-  ]
-};
-
-d3.select('#file-area').selectAll('ul').data([files])
-  .enter().append('ul').call(recurse);
-
-function recurse(sel) {
-  sel.text(function(d) { return d.name; });
-  sel.each(function(d) {
-    if(d.children) {
-      d3.select(this).append('ul').selectAll('li').data(d.children)
-        .enter().append('li').call(recurse);
-    }
-  });
-}*/

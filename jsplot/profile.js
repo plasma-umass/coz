@@ -219,7 +219,11 @@ Profile.prototype.drawLegend = function(container) {
 Profile.prototype.drawPlots = function(container, min_points, resize) {
   /****** Compute dimensions ******/
   var container_width = parseInt(container.style('width'));
-  var cols = (container_width >= 1000) ? 3 : 2;
+  
+  // Add columns while maintaining a target width
+  var cols = 1;
+  while(container_width / cols >= 300) cols++;
+  
   var div_width = container_width / cols;
   var svg_width = div_width - 10;
   var svg_height = 150;
@@ -276,8 +280,7 @@ Profile.prototype.drawPlots = function(container, min_points, resize) {
   
   var plot_x_pos = function(d, i) {
     var col = i % cols;
-    var plot_width = parseInt(plot_div_sel.style('width'), 10);
-    return (col * plot_width) + 'px';
+    return (col * div_width) + 'px';
   }
   
   var plot_y_pos = function(d, i) {
