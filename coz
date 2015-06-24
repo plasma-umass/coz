@@ -1,5 +1,0 @@
-#!/usr/bin/env python
-
-import pycoz
-
-pycoz.run_command_line()
