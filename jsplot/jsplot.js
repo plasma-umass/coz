@@ -8,9 +8,16 @@ var current_profile = undefined;
 function update(resize) {
   if(current_profile == undefined) return;
   
+  // Enable the sortby field
+  d3.select('#sortby_field').attr('disabled', null);
+  
+  // Get the minimum points setting
   var min_points = d3.select('#minpoints_field').node().value;
   
+  // Draw plots
   current_profile.drawPlots(d3.select('#plot-area'), min_points, resize);
+  
+  // Draw the legend
   current_profile.drawLegend(d3.select('#legend'));
   
   // Shorten path strings
@@ -49,8 +56,6 @@ d3.select('#load-profile-file').on('change', function() {
   var open_button = d3.select('#load-profile-open-btn');
   
   d3.select('#load-profile-filename').attr('value', file_browser.value.replace(/C:\\fakepath\\/i, ''));
-  
-  d3.select('#sortby_field').attr('disabled', null);
   
   open_button.classed('disabled', false)
     .on('click', function() {
