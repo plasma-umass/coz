@@ -10,7 +10,7 @@ optimizations. This allows the profiler to establish causality:
 "optimizing function X will have effect Y," exactly the measurement
 developers had assumed they were getting all along.
 
-More details are available in our [Tech Report (pdf)](https://web.cs.umass.edu/publication/docs/2015/UM-CS-2015-008.pdf).
+More details are available in our [Tech Report (pdf)](https://web.cs.umass.edu/publication/docs/2015/UM-CS-2015-008.pdf). A version of this paper will appear at SOSP 2015 in October.
 
 ## Requirements
 Coz, our prototype causal profiler, runs with unmodified Linux executables. Coz requires:
@@ -18,12 +18,6 @@ Coz, our prototype causal profiler, runs with unmodified Linux executables. Coz 
 - [Python](http://www.python.org)
 - [Clang 3.1 or newer](http://clang.llvm.org) or another compiler with C++11 support
 - [Linux](http://kernel.org) version 2.6.32 or newer (must support the `perf_event_open` system call)
-
-On debian or ubuntu, you can install all build dependencies with the following lines:
-
-```
-sudo apt-get install clang linux-tools
-```
 
 ## Building
 To build Coz, just clone this repository and run `make`. The build system will check out other build dependencies and install them locally in the `deps` directory.
@@ -36,11 +30,7 @@ To add a progress point, add the `COZ_PROGRESS` macro to the line you would like
 To run a program with Coz, just type `coz run --- <your program and arguments>` on the command line. You can specify profiling options befor the `---`. Run `coz run -h` for a description of the available options. Profiling output is placed in the file `profile.coz` by default.
 
 ## Processing Results
-There is a new experiment javascript plotting interface available in `jsplot/index.htm`. Just open this file in your browser and load the profiler output to plot. Legacy python plotting is still enabled for now, but requires the `ggplot` python package. Details for legacy plotting are included below:
-
-To plot the results from a causal profile, run `coz plot`. This will generate an image from the `profile.coz` file in the current directory. This functionality requires the Python `ggplot` package. You can install this package with the command `pip install ggplot`.
-
-If you do not have `ggplot` installed, you can generate a CSV from the causal profile results using the `coz process` command. The output file `profile.csv` can be used with most spreadsheet programs.
+To plot profile results, go to [plasma-umass.github.io/coz/](http://plasma-umass.github.io/coz/) and load your profile.
 
 ## License
 All source code is licensed under the GPLv2 unless otherwise indicated. Copyright (C) 2015 University of Massachusetts Amherst
