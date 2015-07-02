@@ -23,16 +23,33 @@ Coz, our prototype causal profiler, runs with unmodified Linux executables. Coz 
 To build Coz, just clone this repository and run `make`. The build system will check out other build dependencies and install them locally in the `deps` directory.
 
 ## Using Coz
-Before running your program with Coz, you will need to identify one or more progress points. These are points in your program that you would like to happen more frequently. For example, in the `pbzip2` program under `benchmarks/pbzip2` we have inserted a progress point after the code that compresses a block of data.
+Using coz requires a small amount of setup, but you can jump ahead to the section on the included [sample applications](#sample-applications) in this repository if you want to try coz right away.
 
-To add a progress point, add the `COZ_PROGRESS` macro to the line you would like to execute more frequently. This macro is defined in `include/coz.h`. You can also mark transaction boundaries using the `COZ_BEGIN` and `COZ_END` macros. Coz will measure the average latency between these points, which allows you to evaluate potential optimizations by their impact on latency rather than throughput.
+To run your program with coz, you will need to build it with debug information. You do not need to include debug symbols in the main executable: coz uses the same procedure as `gdb` to locate debug information for stripped binaries.
 
-The `benchmarks` directory in this repository includes several small benchmarks with progress points added at appropriate locations. To build and run one of these benchmarks with `coz`, just browse to `benchmarks/{bench name}` and type `make bench` (or `make test` for a smaller input size). Note that most of these applications will download large input datasets before they can be run. These programs may require several runs before coz has enough measurements to generate a useful profile. Benchmarks include several [PHOENIX](https://github.com/kozyraki/phoenix) applications and [pbzip2](http://compression.ca/pbzip2/), which are licensed separately and included with this release for convenience.
+Once you have your program built with debug information, you can run it with coz using the command `coz run {coz options} --- {program name and arguments}`. But, to produce a useful profile you need to decide which part(s) of the application you want to speed up by specifying one or more progress points.
 
-To run an arbitrary program with Coz, just type `coz run --- <your program and arguments>` on the command line. You can specify profiling options befor the `---`. Run `coz run -h` for a description of the available options. By default, profiling output is appended to a file named `profile.coz` in the current directory.
+### Progress Points
+A progress point is a line of code in your program that you would like to execute more frequently. For example, we have included a version of pbzip2 with a progress point inserted just after the code that compresses a block of data. Coz will evaluate any hypothetical optimizations based on how they impact the rate of visits to this line of code. There are three ways to specify progress points in your program: end-to-end, source-level, or sampling based.
 
-## Processing Results
-To plot profile results, go to [plasma-umass.github.io/coz/](http://plasma-umass.github.io/coz/) and load your profile. This page also includes several sample profiles from PARSEC benchmarks.
+#### End-to-End Progress Points
+If you run your program with `coz run --end-to-end --- {program name and arguments}`, coz does not require you to specify any progress points. Instead, it will take the full execution of the program to run a single experiment, which tests the effect of speeding up one line by a specific amount on the program's total runtime. Because coz is limited to a single experiment per-run, this method will take a very long time to build a useful profile.
+
+#### Source-Level Progress Points
+This is the preferred method of specifying progress points in your application. Just include `coz.h` (under the `include` directory in this repository) and add the `COZ_PROGRESS` macro to at least one line you would like to execute more frequently.
+
+Source-level progress points also allow you to measure the effect of optimizations on latency. Just mark the beginning of a transaction with the `COZ_BEGIN` macro, and the end with the `COZ_END` macro. When coz tests a hypothetical optimization it will report the effect of that optimization on the average latency between these two points. Coz can track this information with any knowledge of individual tranactions thanks to [Little's Law](https://en.wikipedia.org/wiki/Little%27s_law).
+
+#### Sampling-Based Progress Points
+You can also specify progress points on the command line using the `--progress {source file}:{line number}` argument to `coz run`. This method uses sampling to estimate the rate of visits to the specified progress point. Choosing an appropriate line can be difficult because of inconsistencies in hardware performance counter results and debug information (especially for optimized executables). The best way to select a line is to run your program with `coz run` using the `--end-to-end` argument, then use the profile results to identify a frequency executed line
+
+### Processing Results
+To plot profile results, go to http://plasma-umass.github.io/coz/ and load your profile. This page also includes several sample profiles from PARSEC benchmarks.
+
+## Sample Applications
+The `benchmarks` directory in this repository includes several small benchmarks with progress points added at appropriate locations. To build and run one of these benchmarks with `coz`, just browse to `benchmarks/{bench name}` and type `make bench` (or `make test` for a smaller input size). These programs may require several runs before coz has enough measurements to generate a useful profile. Once you have profiled these programs for several minutes, go to http://plasma-umass.github.io/coz/ to load and plot your profile.
 
 ## License
 All source code is licensed under the GPLv2 unless otherwise indicated. Copyright (C) 2015 University of Massachusetts Amherst
+
+Sample applications include several [PHOENIX](https://github.com/kozyraki/phoenix) programs and [pbzip2](http://compression.ca/pbzip2/), which are licensed separately and included with this release for convenience.
