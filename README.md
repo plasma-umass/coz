@@ -27,10 +27,12 @@ Before running your program with Coz, you will need to identify one or more prog
 
 To add a progress point, add the `COZ_PROGRESS` macro to the line you would like to execute more frequently. This macro is defined in `include/coz.h`. You can also mark transaction boundaries using the `COZ_BEGIN` and `COZ_END` macros. Coz will measure the average latency between these points, which allows you to evaluate potential optimizations by their impact on latency rather than throughput.
 
-To run a program with Coz, just type `coz run --- <your program and arguments>` on the command line. You can specify profiling options befor the `---`. Run `coz run -h` for a description of the available options. Profiling output is placed in the file `profile.coz` by default.
+The `benchmarks` directory in this repository includes several small benchmarks with progress points added at appropriate locations. To build and run one of these benchmarks with `coz`, just browse to `benchmarks/{bench name}` and type `make bench` (or `make test` for a smaller input size). Note that most of these applications will download large input datasets before they can be run. These programs may require several runs before coz has enough measurements to generate a useful profile. Benchmarks include several [PHOENIX](https://github.com/kozyraki/phoenix) applications and [pbzip2](http://compression.ca/pbzip2/), which are licensed separately and included with this release for convenience.
+
+To run an arbitrary program with Coz, just type `coz run --- <your program and arguments>` on the command line. You can specify profiling options befor the `---`. Run `coz run -h` for a description of the available options. By default, profiling output is appended to a file named `profile.coz` in the current directory.
 
 ## Processing Results
-To plot profile results, go to [plasma-umass.github.io/coz/](http://plasma-umass.github.io/coz/) and load your profile.
+To plot profile results, go to [plasma-umass.github.io/coz/](http://plasma-umass.github.io/coz/) and load your profile. This page also includes several sample profiles from PARSEC benchmarks.
 
 ## License
 All source code is licensed under the GPLv2 unless otherwise indicated. Copyright (C) 2015 University of Massachusetts Amherst
