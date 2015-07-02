@@ -9,9 +9,8 @@
 
     <link rel="stylesheet" type="text/css" href="lib/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="lib/font-awesome/css/font-awesome.css">
-    <link rel="stylesheet" type="text/css" href="lib/bootstrap-slider/bootstrap-slider.css">
-    <link rel="stylesheet" type="text/css" href="jsplot.css">
-    <link rel="stylesheet" type="text/css" href="slider.css">
+    <link rel="stylesheet" type="text/css" href="ui.css">
+    <link rel="stylesheet" type="text/css" href="plot.css">
   </head>
   <body>
     <div class="container-fluid">
@@ -31,16 +30,15 @@
           <div id="sortby">
             <h4 id="sortby_label">Sort By</h4>
             <select id="sortby_field" class="form-control" disabled aria-labelledby="sortby_label">
-              <option value="alphabetical" title="Sort source lines alphabetically">Alphabetical</option>
-              <option value="impact" title="Sort source lines by their potential return on effort: the maximum area under the curve divided by the required line speedup" selected>Impact</option>
-              <option value="max_speedup" title="Sort source lines by the largest observed program speedup">Max Speedup</option>
-              <option value="min_speedup" title"Sort source lines by the smallest observed program speedup (may be negative)">Min Speedup</option>
+              <option value="alphabetical">Alphabetical</option>
+              <option value="impact" selected>Impact</option>
+              <option value="max_speedup">Max Speedup</option>
+              <option value="min_speedup">Min Speedup</option>
             </select>
           </div> <!-- /sortby -->
           
           <div id="minpoints">
             <h4 id="minpoints_label">Minimum Points</h4>
-            <!--<input id="minpoints_field" class="form-control" type="number" />-->
             <input type="range" id="minpoints_field" min="0" max="20" step="1" value="10" list="ticks" aria-labeledby="minpoints_label">
             <datalist id="ticks">
               <option value="0">
@@ -55,7 +53,7 @@
         </div> <!-- /sidebar -->
         
         <div class="col-sm-9 col-sm-offset-3 col-md-9 col-md-offset-3 col-lg-10 col-lg-offset-2">
-          <div id="plot-area"></div>
+          <div id="plot-area" class="col-md-12"></div>
         </div> <!-- /main content -->
         
       </div> <!-- /row -->
@@ -103,12 +101,11 @@
     <script src="lib/d3/d3.min.js"></script>
     <script src="lib/d3-tip/d3-tip.min.js"></script>
     <script src="lib/science/science.v1.min.js"></script>
-    <script src="lib/bootstrap-slider/bootstrap-slider.js"></script>
     
     <!-- Causal profile loading and plotting code -->
     <script src="profile.js"></script>
     
     <!-- The UI code -->
-    <script src="jsplot.js"></script>
+    <script src="ui.js"></script>
   </body>
 </html>

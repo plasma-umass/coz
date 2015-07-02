@@ -20,20 +20,20 @@ function update(resize) {
   // Draw the legend
   current_profile.drawLegend(d3.select('#legend'));
   
+  var tooltip = d3.select("body")
+  	.append("div")
+  	.style("position", "absolute")
+  	.style("z-index", "10")
+  	.style("visibility", "hidden");
+  
   // Shorten path strings
-  var paths = d3.selectAll('.path');
-  paths.attr('class', 'shortpath')
-       .html(function() {
-         var current = d3.select(this);
-         var parts = current.text().split('/');
-         var filename = parts[parts.length-1];
-         if(parts.length > 3) {
-           current.attr('title', parts.join('/'));
-           return filename;
-         } else {
-           return parts.join('/');
-         }
-       });
+  var paths = d3.selectAll('.path')
+    .classed('path', false).classed('shortpath', true)
+    .text(function(d) {
+      var parts = d.split('/');
+      var filename = parts[parts.length-1];
+      return filename;
+    });
 }
 
 // Set a handler for the load profile button
