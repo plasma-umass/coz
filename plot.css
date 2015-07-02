@@ -1,68 +1,18 @@
-h1 { font-size: 2.0em; }
-h2 { font-size: 1.8em; }
-h3 { font-size: 1.5em; }
 
-#sidebar row {
-  padding-top: -2em;
+div.plot {
+  position: absolute;
 }
 
-#sidebar h4 {
-  margin-top: 1em;
-}
-
-.navbar-fixed-top {
-  border: 0;
-}
-
-@media (min-width: 768px) {
-  .sidebar {
-    position: fixed;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    z-index: 1000;
-    display: block;
-    overflow-x: hidden;
-    overflow-y: auto; /* Scrollable contents if viewport is shorter than content. */
-    background-color: #f5f5f5;
-    border-right: 1px solid #eee;
-  }
-}
-
-button.sample-profile {
-  margin: 0.5em;
-} 
-
-/* Sidebar navigation */
-.nav-sidebar {
-  margin-right: -21px; /* 20px padding + 1px border */
-  margin-bottom: 20px;
-  margin-left: -20px;
-}
-.nav-sidebar > li > a {
-  padding-right: 20px;
-  padding-left: 20px;
-}
-.nav-sidebar > .active > a,
-.nav-sidebar > .active > a:hover,
-.nav-sidebar > .active > a:focus {
-  color: #fff;
-  background-color: #428bca;
-}
-
-.plot_area .bg {
-  stroke: none;
-  fill: #f8f8f8;
-}
-
-.plot-title {
-  display: block;
+div.plot-title {
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-top: 0.75em;
-  font-size: 18px;
+  font-size: 12px;
+  text-align: center;
+  white-space: nowrap;
+  margin: 0.75em 0 0 0;
   font-weight: bold;
   color: black;
+  z-index: 0;
 }
 
 .xaxis path,
@@ -86,10 +36,10 @@ button.sample-profile {
   stroke-width: 0;
 }
 
-.xtitle text,
-.ytitle text {
+text.xtitle,
+text.ytitle {
   font-family: sans-serif;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .xgrid .tick,
@@ -121,39 +71,45 @@ line.yzero {
   stroke-width: 2;
 }
 
-/* Colors from colorbrewer.org */
+/* Series colors from colorbrewer.org */
 .series0 circle { fill: rgba(31,120,180,1); }
-.series0 path { stroke: rgba(31,120,180,1); }
+.series0 path { stroke: rgba(31,120,180,0.75); }
 .series0 circle.highlight { stroke: rgba(31,120,180,1); }
 i.series0 { color: rgba(31,120,180,1); }
 
 .series1 circle { fill: rgba(51,160,44,1); }
-.series1 path { stroke: rgba(51,160,44,1); }
+.series1 path { stroke: rgba(51,160,44,0.75); }
 .series1 circle.highlight { stroke: rgba(51,160,44,1); }
 i.series1 { color: rgba(51,160,44,1); }
 
 .series2 circle { fill: rgba(227,26,28,1); }
-.series2 path { stroke: rgba(227,26,28,1); }
+.series2 path { stroke: rgba(227,26,28,0.75); }
 .series2 circle.highlight { stroke: rgba(227,26,28,1); }
 i.series2 { color: rgba(227,26,28,1); }
 
 .series3 circle { fill: rgba(255,127,0,1); }
-.series3 path { stroke: rgba(255,127,0,1); }
+.series3 path { stroke: rgba(255,127,0,0.75); }
 .series3 circle.highlight { stroke: rgba(255,127,0,1); }
 i.series3 { color: rgba(255,127,0,1); }
 
 .series4 circle { fill: rgba(106,61,154,1); }
-.series4 path { stroke: rgba(106,61,154,1); }
+.series4 path { stroke: rgba(106,61,154,0.75); }
 .series4 circle.highlight { stroke: rgba(106,61,154,1); }
 i.series4 { color: rgba(106,61,154,1); }
 
+/* Additional legend styles */
+p.legend-entry i {
+  margin-right: 0.5em;
+}
+
 p.noseries { color: gray; }
 
-/* Tooltips */
+/* Tooltips displayed on points */
 .d3-tip {
   font-size: 12px;
   padding: 6px;
   background: rgba(0, 0, 0, 0.8);
   color: #fff;
   border-radius: 3px;
+  z-index: 100;
 }

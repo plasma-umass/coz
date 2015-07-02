@@ -1,4 +1,3 @@
-
 function parseLine(s) {
   if(s[0] == '{') {
     return JSON.parse(s);
@@ -207,10 +206,12 @@ Profile.prototype.drawLegend = function(container) {
   legend_entries_sel.enter().append('p').attr('class', 'legend-entry');
   
   // Remove the noseries class from legend entries
-  legend_entries_sel.classed('noseries', false)
-    .html(function(d, i) {
-      return '<i class="fa fa-circle series' + (i % 4) + '"></i> <span class="path">' + d + '</span>';
-    });
+  legend_entries_sel.classed('noseries', false).text('');
+  legend_entries_sel.append('i')
+    .attr('class', function(d, i) { return 'fa fa-circle series'+(i%4); });
+  legend_entries_sel.append('span')
+    .attr('class', 'path')
+    .text(function(d) { return d; });
     
   // Remove defunct legend entries
   legend_entries_sel.exit().remove();
@@ -222,11 +223,12 @@ Profile.prototype.drawPlots = function(container, min_points, resize) {
   
   // Add columns while maintaining a target width
   var cols = 1;
-  while(container_width / cols >= 300) cols++;
+  while(container_width / (cols+1) >= 300) cols++;
   
   var div_width = container_width / cols;
+  var div_height = 190;
   var svg_width = div_width - 10;
-  var svg_height = 150;
+  var svg_height = div_height - 40;
   var margins = {left: 55, right: 20, top: 10, bottom: 35};
   var plot_width = svg_width - margins.left - margins.right;
   var plot_height = svg_height - margins.top - margins.bottom;
@@ -275,7 +277,7 @@ Profile.prototype.drawPlots = function(container, min_points, resize) {
   
   /****** Add or update divs to hold each plot ******/
   var speedup_data = this.getSpeedupData(min_points)
-  var plot_div_sel = container.selectAll('div')
+  var plot_div_sel = container.selectAll('div.plot')
     .data(speedup_data, function(d) { return d.name; });
   
   var plot_x_pos = function(d, i) {
@@ -285,7 +287,7 @@ Profile.prototype.drawPlots = function(container, min_points, resize) {
   
   var plot_y_pos = function(d, i) {
     var row = (i - (i % cols)) / cols;
-    return (row * 200) + 'px';
+    return (row * div_height) + 'px';
   }
   
   // First, remove divs that are disappearing
@@ -294,9 +296,10 @@ Profile.prototype.drawPlots = function(container, min_points, resize) {
   
   // Insert new divs with zero opacity
   plot_div_sel.enter().append('div')
-    .attr('class', 'col-xs-6 col-sm-6 col-md-6 col-lg-4')
-    .style('margin-bottom', '-200px')
-    .style('opacity', 0);
+    .attr('class', 'plot')
+    .style('margin-bottom', -div_height+'px')
+    .style('opacity', 0)
+    .style('width', div_width);
   
   // Sort plots by the chosen sorting function
   plot_div_sel.sort(sort_functions[d3.select('#sortby_field').node().value]);
@@ -312,11 +315,12 @@ Profile.prototype.drawPlots = function(container, min_points, resize) {
                 .style('top', plot_y_pos);
   }
   
-  /****** Insert and remove plot titles ******/
-  var plot_title_sel = plot_div_sel.selectAll('.plot-title').data([1]);
-  plot_title_sel.enter().append('span')
-    .attr('class', 'plot-title')
-    .attr('style', 'width: ' + svg_width + 'px; text-align: right;');
+  /****** Insert, remove, and update plot titles ******/
+  var plot_title_sel = plot_div_sel.selectAll('div.plot-title').data(function(d) { return [d.name]; });
+  plot_title_sel.enter().append('div').attr('class', 'plot-title');
+  plot_title_sel.text(function(d) { return d; })
+                .classed('path', true)
+                .style('width', div_width+'px');
   plot_title_sel.exit().remove();
   
   /****** Update scales ******/
@@ -334,11 +338,6 @@ Profile.prototype.drawPlots = function(container, min_points, resize) {
               .attr('height', svg_height)
               .call(tip);
   plot_svg_sel.exit().remove();
-  
-  /****** Update plot titles ******/
-  plot_div_sel.select('.plot-title').html(function(d) {
-    return '<span class="path">' + d.name + '</span>';
-  });
   
   /****** Add or update plot areas ******/
   var plot_area_sel = plot_svg_sel.selectAll('g.plot_area').data([0]);
@@ -450,8 +449,10 @@ Profile.prototype.drawPlots = function(container, min_points, resize) {
   var lines_sel = series_sel.selectAll('path').data(function(d) {
     var xvals = d.measurements.map(function(e) { return e.speedup; });
     var yvals = d.measurements.map(function(e) { return e.progress_speedup; });
-    
-    if(xvals.length > 5) return [d3.zip(xvals, loess(xvals, yvals))];
+    var smoothed_y = loess(xvals, yvals);
+    // Speedup is always zero for a line speedup of zero
+    smoothed_y[0] = 0;
+    if(xvals.length > 5) return [d3.zip(xvals, smoothed_y)];
     else return [d3.zip(xvals, yvals)];
   });
   lines_sel.enter().append('path');

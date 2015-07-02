@@ -1,0 +1,62 @@
+/* Reduce heading sizes */
+h1 { font-size: 2.0em; }
+h2 { font-size: 1.8em; }
+h3 { font-size: 1.5em; }
+
+/* Show sidebar on left up to bootstrap md size */
+@media (min-width: 768px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background-color: #f5f5f5;
+    border-right: 1px solid #eee;
+  }
+}
+
+/* Margin on sidebar headings */
+.sidebar h4 {
+  margin-top: 1em;
+}
+
+/* Padding around sample profile buttons */
+button.sample-profile {
+  margin: 0.5em;
+}
+
+/* Use larger, styled slider for mobile devices */
+@media (max-width: 767px) {
+  input[type=range] {
+    -webkit-appearance: none;
+    margin: 10px 0;
+    width: 100%;
+  }
+  
+  input[type=range]:focus {
+    outline: none;
+  }
+    
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #f8f8f8;
+    border: 0.5px solid #010101;
+    box-shadow: 1px 1px 1px #000000, 0px 0px 0.5px #0d0d0d;
+    margin-top: -9px;
+  }
+  
+  input[type=range]::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 6px;
+    cursor: pointer;
+    background: #444;
+    border-radius: 3px;
+  }
+}
