@@ -12,7 +12,8 @@ developers had assumed they were getting all along.
 
 Full details of Coz are available in our paper, [Coz: Finding Code
 that Counts with Causal Profiling
-(pdf)](Coz-Curtsinger-Berger-SOSP2015.pdf), SOSP 2015, October 2015.
+(pdf)](Coz-Curtsinger-Berger-SOSP2015.pdf), SOSP 2015, October 2015
+(recipient of a Best Paper Award).
 
 ## Requirements
 Coz, our prototype causal profiler, runs with unmodified Linux executables. Coz requires:
