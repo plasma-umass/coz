@@ -1,6 +1,6 @@
 # Coz: Finding Code that Counts with Causal Profiling
 
-Coz is a new kind of profiler that unlocks optimization opportunities missed by traditional profilers. Coz employs a novel technique we call \emph{causal profiling} which measures optimization potential.
+Coz is a new kind of profiler that unlocks optimization opportunities missed by traditional profilers. Coz employs a novel technique we call *causal profiling* that measures optimization potential.
 This measurement matches developers' assumptions about profilers: that
 optimizing highly-ranked code will have the greatest impact on
 performance. Causal profiling measures optimization potential for serial,
