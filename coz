@@ -39,8 +39,6 @@ def _coz_run(args):
 
   if 'LD_PRELOAD' in env:
     env['LD_PRELOAD'] += ':' + coz_runtime
-  else:
-    env['LD_PRELOAD'] = coz_runtime
 
   if len(args.binary_scope) > 0:
     env['COZ_BINARY_SCOPE'] = '\t'.join(args.binary_scope)
