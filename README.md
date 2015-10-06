@@ -1,5 +1,6 @@
-# Coz: Causal Profiling
-Causal profiling is a novel technique to measure optimization potential.
+# Coz: Finding Code that Counts with Causal Profiling
+
+Coz is a new kind of profiler that unlocks optimization opportunities missed by traditional profilers. Coz employs a novel technique we call *causal profiling* that measures optimization potential.
 This measurement matches developers' assumptions about profilers: that
 optimizing highly-ranked code will have the greatest impact on
 performance. Causal profiling measures optimization potential for serial,
@@ -12,7 +13,8 @@ developers had assumed they were getting all along.
 
 Full details of Coz are available in our paper, [Coz: Finding Code
 that Counts with Causal Profiling
-(pdf)](Coz-Curtsinger-Berger-SOSP2015.pdf), SOSP 2015, October 2015.
+(pdf)](Coz-Curtsinger-Berger-SOSP2015.pdf), SOSP 2015, October 2015
+(recipient of a Best Paper Award).
 
 ## Requirements
 Coz, our prototype causal profiler, runs with unmodified Linux executables. Coz requires:
