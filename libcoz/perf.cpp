@@ -2,7 +2,6 @@
 
 #include <asm/unistd.h>
 #include <fcntl.h>
-#include <linux/hw_breakpoint.h>
 #include <linux/perf_event.h>
 #include <poll.h>
 #include <signal.h>

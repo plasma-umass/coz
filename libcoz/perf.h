@@ -1,7 +1,6 @@
 #if !defined(CAUSAL_RUNTIME_PERF_H)
 #define CAUSAL_RUNTIME_PERF_H
 
-#include <linux/hw_breakpoint.h>
 #include <linux/perf_event.h>
 #include <sys/types.h>
 
@@ -10,6 +9,11 @@
 
 #include "ccutil/log.h"
 #include "ccutil/wrapped_array.h"
+
+// Workaround for missing hw_breakpoint.h include file:
+//   This include file just defines constants used to configure watchpoint registers.
+//   This will be constant across x86 systems.
+enum { HW_BREAKPOINT_X = 4};
 
 class perf_event {
 public:
