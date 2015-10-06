@@ -103,7 +103,7 @@ _run_parser = _subparsers.add_parser('run',
 _run_parser.add_argument('--binary-scope', '-b',
                          metavar='<file pattern>',
                          default=[], action='append',
-                         help='Profile matching executables. The \'%%\' as a wildcard, or \'MAIN\' to include the main executable (default=MAIN)')
+                         help='Profile matching executables. Use \'%%\' as a wildcard, or \'MAIN\' to include the main executable (default=MAIN)')
 
 _run_parser.add_argument('--source-scope', '-s',
                          metavar='<file pattern>',
