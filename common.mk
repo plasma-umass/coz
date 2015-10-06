@@ -26,8 +26,8 @@ OTHER_TARGETS      := $(filter-out %.so, $(filter-out %.a, $(TARGETS)))
 MAKEPATH ?= `basename $(PWD)`
 
 # Log the build path in gray, following by a log message in bold green
-LOG_PREFIX := "\033[37;0m[$(MAKEPATH)]\033[0m\033[32;1m"
-LOG_SUFFIX := "\033[0m"
+LOG_PREFIX := "$(shell tput setaf 7)[$(MAKEPATH)]$(shell tput sgr0)$(shell tput setaf 2)"
+LOG_SUFFIX := "$(shell tput sgr0)"
 
 # Build all targets by default
 all:: $(TARGETS)
