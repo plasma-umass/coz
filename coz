@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 
-from os.path import abspath, curdir, dirname, sep as path_sep
+from os.path import abspath, realpath, curdir, dirname, sep as path_sep
 
 # Entry point
 def run_command_line():
@@ -39,8 +39,8 @@ def _coz_run(args):
     sys.exit(1)
 
   env = copy.deepcopy(os.environ)
-  coz_prefix = dirname(dirname(abspath(sys.argv[0])))
-  coz_runtime = coz_prefix + path_sep + 'coz' + path_sep + 'libcoz' + path_sep + 'libcoz.so'
+  coz_prefix = dirname(realpath(sys.argv[0]))
+  coz_runtime = coz_prefix + path_sep + 'libcoz' + path_sep + 'libcoz.so'
 
   if 'LD_PRELOAD' in env:
     env['LD_PRELOAD'] += ':' + coz_runtime
