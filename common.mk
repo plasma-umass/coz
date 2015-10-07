@@ -2,6 +2,9 @@
 CC  := clang
 CXX := clang++
 
+# Use coz in development directory by default
+COZ ?= $(ROOT)/coz
+
 # Default flags
 CFLAGS   ?= -g -O2
 CXXFLAGS ?= $(CFLAGS)
@@ -77,10 +80,10 @@ bench_inputs:
 test_inputs:
 
 bench:: $(OTHER_TARGETS) bench_inputs
-	$(ROOT)/coz run $(COZ_ARGS) --- ./$< $(BENCH_ARGS)
+	$(COZ) run $(COZ_ARGS) --- ./$< $(BENCH_ARGS)
 
 test:: $(OTHER_TARGETS) test_inputs
-	$(ROOT)/coz run $(COZ_ARGS) --- ./$< $(TEST_ARGS)
+	$(COZ) run $(COZ_ARGS) --- ./$< $(TEST_ARGS)
 endif
 
 # Include dependency rules for all objects
