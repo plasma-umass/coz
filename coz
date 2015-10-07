@@ -22,6 +22,11 @@ def run_command_line():
   _parser.set_defaults(remaining_args=remaining_args)
   # Parse it
   args = _parser.parse_args(parsed_args)
+  if not hasattr(args, 'func'):
+    sys.stderr.write('error: pass a command before ---, such as `coz run --- $CMD`\n')
+    _parser.print_help()
+    sys.exit(1)
+
   # Call the parser's handler (set by the subcommand parser using defaults)
   args.func(args)
 
@@ -29,9 +34,9 @@ def run_command_line():
 def _coz_run(args):
   # Ensure the user specified a command after the '---' separator
   if len(args.remaining_args) == 0:
-    print 'error: specify a command to profile after `---`\n'
+    sys.stderr.write('error: specify a command to profile after `---`\n')
     args.parser.print_help()
-    exit(1)
+    sys.exit(1)
 
   env = copy.deepcopy(os.environ)
   coz_prefix = dirname(dirname(abspath(sys.argv[0])))
@@ -78,7 +83,7 @@ def _coz_run(args):
   exit(result)
 
 def _coz_plot(args):
-  print 'Plot your profile at http://plasma-umass.github.io/coz.'
+  sys.stdout.write('Plot your profile at http://plasma-umass.github.io/coz.\n')
 
 # Special format handler for line reference arguments
 def line_ref(val):
