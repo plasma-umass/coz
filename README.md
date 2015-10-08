@@ -54,6 +54,6 @@ To plot profile results, go to http://plasma-umass.github.io/coz/ and load your 
 The `benchmarks` directory in this repository includes several small benchmarks with progress points added at appropriate locations. To build and run one of these benchmarks with `coz`, just browse to `benchmarks/{bench name}` and type `make bench` (or `make test` for a smaller input size). These programs may require several runs before coz has enough measurements to generate a useful profile. Once you have profiled these programs for several minutes, go to http://plasma-umass.github.io/coz/ to load and plot your profile.
 
 ## License
-All source code is licensed under the BSD 2-clause license unless otherwise indicated. Copyright (C) 2015 University of Massachusetts Amherst
+All source code is licensed under the BSD 2-clause license unless otherwise indicated. Copyright (C) 2015 Charlie Curtsinger
 
-Sample applications include several [PHOENIX](https://github.com/kozyraki/phoenix) programs and [pbzip2](http://compression.ca/pbzip2/), which are licensed separately and included with this release for convenience.
+Sample applications (in the `benchmarks` directory) include several [PHOENIX](https://github.com/kozyraki/phoenix) programs and [pbzip2](http://compression.ca/pbzip2/), which are licensed separately and included with this release for convenience.
