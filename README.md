@@ -55,6 +55,7 @@ The `benchmarks` directory in this repository includes several small benchmarks 
 
 ## License
 All source code is licensed under the BSD 2-clause license unless otherwise indicated.
-Copyright (C) 2015 Charlie Curtsinger, University of Massachusetts Amherst
+
+Copyright (C) 2015 Charlie Curtsinger and Emery Berger, University of Massachusetts Amherst
 
 Sample applications (in the `benchmarks` directory) include several [PHOENIX](https://github.com/kozyraki/phoenix) programs and [pbzip2](http://compression.ca/pbzip2/), which are licensed separately and included with this release for convenience.
