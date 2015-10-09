@@ -126,7 +126,7 @@ void *calc_hist(void *arg) {
       val = &(thread_arg->data[i+2]);
       red[*val]++;   
 			
-			CAUSAL_PROGRESS;
+			COZ_PROGRESS;
    }
    /*
    thread_arg->red = red;

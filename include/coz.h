@@ -1,5 +1,5 @@
-#if !defined(CAUSAL_H)
-#define CAUSAL_H
+#if !defined(COZ_H)
+#define COZ_H
 
 #ifndef __USE_GNU
 #  define __USE_GNU
@@ -31,7 +31,7 @@ static void _causal_init_counter(int kind,
     reg(kind, ctr, backoff, name);
 }
 
-#define CAUSAL_INCREMENT_COUNTER(kind, name) \
+#define COZ_INCREMENT_COUNTER(kind, name) \
   if(1) { \
     static unsigned char _initialized = 0; \
     static unsigned long _global_counter = 0; \
@@ -55,13 +55,13 @@ static void _causal_init_counter(int kind,
 #define STR2(x) #x 
 #define STR(x) STR2(x)
 
-#define CAUSAL_PROGRESS CAUSAL_INCREMENT_COUNTER(PROGRESS_COUNTER, __FILE__ ":" STR(__LINE__))
-#define CAUSAL_BEGIN CAUSAL_INCREMENT_COUNTER(BEGIN_COUNTER, __FILE__ ":" STR(__LINE__))
-#define CAUSAL_END CAUSAL_INCREMENT_COUNTER(END_COUNTER, __FILE__ ":" STR(__LINE__))
+#define COZ_PROGRESS COZ_INCREMENT_COUNTER(PROGRESS_COUNTER, __FILE__ ":" STR(__LINE__))
+#define COZ_BEGIN COZ_INCREMENT_COUNTER(BEGIN_COUNTER, __FILE__ ":" STR(__LINE__))
+#define COZ_END COZ_INCREMENT_COUNTER(END_COUNTER, __FILE__ ":" STR(__LINE__))
 
-#define COZ_PROGRESS CAUSAL_INCREMENT_COUNTER(PROGRESS_COUNTER, __FILE__ ":" STR(__LINE__))
-#define COZ_BEGIN CAUSAL_INCREMENT_COUNTER(BEGIN_COUNTER, __FILE__ ":" STR(__LINE__))
-#define COZ_END CAUSAL_INCREMENT_COUNTER(END_COUNTER, __FILE__ ":" STR(__LINE__))
+#define COZ_PROGRESS COZ_INCREMENT_COUNTER(PROGRESS_COUNTER, __FILE__ ":" STR(__LINE__))
+#define COZ_BEGIN COZ_INCREMENT_COUNTER(BEGIN_COUNTER, __FILE__ ":" STR(__LINE__))
+#define COZ_END COZ_INCREMENT_COUNTER(END_COUNTER, __FILE__ ":" STR(__LINE__))
 
 #if defined(__cplusplus)
 }

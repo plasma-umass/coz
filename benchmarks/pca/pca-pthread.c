@@ -147,7 +147,7 @@ void *calc_mean(void *arg) {
          sum += matrix[i][j];
       }
       mean[i] = sum / num_cols;   
-			CAUSAL_PROGRESS;
+			COZ_PROGRESS;
    }
    
    return (void *)0;
@@ -178,7 +178,7 @@ void *calc_cov(void *arg) {
       i = next_row;
       next_row++;
       pthread_mutex_unlock(&row_lock);
-			CAUSAL_PROGRESS;
+			COZ_PROGRESS;
    }
    
    return (void *)0;   

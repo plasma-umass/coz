@@ -269,7 +269,7 @@ void *wordcount_map(void *args_in)
          break;
       }
 			
-			CAUSAL_PROGRESS;
+			COZ_PROGRESS;
    }
 
    // Add the last word
@@ -381,7 +381,7 @@ void *merge_sections(void *args_in)
          curr2++;
       }
 			
-			CAUSAL_PROGRESS;
+			COZ_PROGRESS;
    }
    
    // copy the remaining elements

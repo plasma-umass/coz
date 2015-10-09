@@ -83,7 +83,7 @@ void *linear_regression_pthread(void *args_in)
       args->SYY += args->points[i].y*args->points[i].y;
       args->SXY += args->points[i].x*args->points[i].y;
 			
-			CAUSAL_PROGRESS;
+			COZ_PROGRESS;
    }
 
    return (void *)0;

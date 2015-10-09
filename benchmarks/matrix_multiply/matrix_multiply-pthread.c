@@ -155,7 +155,7 @@ void *matrixmult_map(void *args_in)
 		    //printf("THe location is %d %d, value is %d\n",x_loc, y_loc, value);
 		    data->output[x_loc*data->matrix_len + i] = value;
 				
-				CAUSAL_PROGRESS;
+				COZ_PROGRESS;
 	    }
 	    row_count++;	
     }

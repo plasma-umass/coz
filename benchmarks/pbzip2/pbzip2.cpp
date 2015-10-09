@@ -546,7 +546,7 @@ ssize_t do_write(int fd, const void *buf, size_t count)
 	{
 		bytesRemaining -= nbytes;
 		pbuf += nbytes;
-		CAUSAL_PROGRESS;
+		COZ_PROGRESS;
 	}
 
 	if (nbytes < 0)

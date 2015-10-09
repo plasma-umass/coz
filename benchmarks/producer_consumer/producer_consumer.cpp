@@ -53,7 +53,7 @@ void* consumer(void* arg) {
 		consumed++;
 		pthread_mutex_unlock(&queue_lock);
 		pthread_cond_signal(&producer_condvar);
-		CAUSAL_PROGRESS;
+		COZ_PROGRESS;
 	}
 }
 

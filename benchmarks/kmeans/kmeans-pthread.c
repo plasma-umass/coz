@@ -203,7 +203,7 @@ void *find_clusters(void *arg)
          modified = true;
       }
 			
-			CAUSAL_PROGRESS;
+			COZ_PROGRESS;
    }
    
    return (void *)0;   
@@ -243,10 +243,7 @@ void *calc_means(void *arg)
          { 
             means[i][j] = sum[j] / grp_size;
          }
-      }   
-      
-      //CAUSAL_PROGRESS;
-      // WTF: Why does enabling this progress point distort other thread runtimes?    
+      }
    }
    free(sum);
    return (void *)0;
