@@ -211,7 +211,7 @@ unordered_map<string, uintptr_t> get_loaded_files() {
     char perms[5];
     size_t offset;
     size_t dev_major, dev_minor;
-    int inode;
+    uintptr_t inode;
     string path;
 
     // Skip over whitespace
