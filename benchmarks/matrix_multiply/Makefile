@@ -1,7 +1,11 @@
-ROOT 	  := ../..
+ROOT    := ../..
 TARGETS := matrix_multiply
 LIBS    := pthread dl
-CFLAGS  := -g -O2 -I$(ROOT)/include -Wno-format
+CFLAGS  := -g -O2 -Wno-format
+
+ifeq ($(USE_SYSTEM_COZ),)
+CFLAGS += -I$(ROOT)/include
+endif
 
 BENCHMARK := 1
 

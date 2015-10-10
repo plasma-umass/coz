@@ -1,4 +1,4 @@
 ROOT := .
-DIRS := libcoz
+DIRS := libcoz benchmarks
 
 include $(ROOT)/common.mk

@@ -1,7 +1,11 @@
-ROOT 	   := ../..
+ROOT     := ../..
 TARGETS  := producer_consumer
 LIBS     := dl pthread
-CXXFLAGS := -g -O2 -I$(ROOT)/include
+CXXFLAGS := -g -O2
+
+ifeq ($(USE_SYSTEM_COZ),)
+CXXFLAGS += -I$(ROOT)/include
+endif
 
 BENCHMARK := 1
 

@@ -1,8 +1,12 @@
-ROOT 	   := ../..
+ROOT     := ../..
 TARGETS  := pbzip2
 LIBS     := bz2 pthread dl
-CXXFLAGS := -g -O2 -Wno-format -I$(ROOT)/include -Ibzip2-1.0.6
+CXXFLAGS := -g -O2 -Wno-format -Ibzip2-1.0.6
 LDFLAGS  := -Lbzip2-1.0.6
+
+ifeq ($(USE_SYSTEM_COZ),)
+CXXFLAGS += -I$(ROOT)/include
+endif
 
 BENCHMARK := 1
 

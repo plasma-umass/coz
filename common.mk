@@ -2,8 +2,12 @@
 CC  := clang
 CXX := clang++
 
-# Use coz in development directory by default
-COZ ?= $(ROOT)/coz
+# Set coz and include path for coz
+ifeq ($(USE_SYSTEM_COZ),1)
+COZ = $(shell which coz)
+else
+COZ = $(ROOT)/coz
+endif
 
 # Default flags
 CFLAGS   ?= -g -O2

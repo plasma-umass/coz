@@ -1,7 +1,11 @@
-ROOT 	  := ../..
+ROOT    := ../..
 TARGETS := word_count
 LIBS    := pthread dl
-CFLAGS  := -g -O2 -I$(ROOT)/include
+CFLAGS  := -g -O2
+
+ifeq ($(USE_SYSTEM_COZ),)
+CFLAGS += -I$(ROOT)/include
+endif
 
 BENCHMARK := 1
 
