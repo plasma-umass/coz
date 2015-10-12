@@ -117,7 +117,8 @@ Profile.prototype.ensureDataEntry = function(selected, point, speedup, initial_v
 Profile.prototype.addThroughputMeasurement = function(experiment, point) {
   var entry = this.ensureDataEntry(experiment.selected, point.name, experiment.speedup, {
     delta: 0,
-    duration: 0
+    duration: 0,
+    type: 'throughput'
   });
   
   // Add new delta and duration to data
@@ -130,7 +131,8 @@ Profile.prototype.addLatencyMeasurement = function(experiment, point) {
     arrivals: 0,
     departures: 0,
     difference: 0,
-    duration: 0
+    duration: 0,
+    type: 'latency'
   });
   
   entry.arrivals += point.arrivals;
