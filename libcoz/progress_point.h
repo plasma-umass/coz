@@ -12,159 +12,166 @@
 
 #include "ccutil/log.h"
 
+/// Enum wrapper around defines for progress point types
+enum class progress_point_type {
+  throughput = COZ_COUNTER_TYPE_THROUGHPUT,
+  begin = COZ_COUNTER_TYPE_BEGIN,
+  end = COZ_COUNTER_TYPE_END
+};
+
 /**
- * Abstract class that represents a progress point of some kind.
+ * A progress point to measure throughput
  */
-class progress_point {
+class throughput_point {
 public:
-  enum class kind {
-    progress = PROGRESS_COUNTER,
-    begin = BEGIN_COUNTER,
-    end = END_COUNTER
-  };
+  class saved;
+  
+  /// Create a throughput progress point with a given name
+  throughput_point(const std::string& name) : _name(name) {}
+  
+  /// Save the state of this progress point
+  saved* save() const {
+    return new saved(this);
+  }
 
-  /**
-   * Default implementation of a saved progress point state. This will work for any simple
-   * counting-based progress point. Latency tracking will require a custom implementation.
-   */
-  class saved {
-  public:
-    saved() {}
+  /// Add one to the number of visits to this progress point
+  void visit(size_t visits=1) {
+    __atomic_add_fetch(&_counter.count, visits, __ATOMIC_RELAXED);
+  }
 
-    /// Save the state of a progress point
-    saved(const progress_point* origin) : _origin(origin), _start_count(origin->get_count()) {}
-
-    /// Check if the progress point has changed by a minimum threshold
-    virtual bool changed(size_t threshold) const {
-      return _origin->get_count() - _start_count > threshold;
-    }
-
-    /// Log the change in this progress point since it was saved
-    virtual void log(std::ostream& os) const {
-      os << "progress-point\t"
-         << "name=" << _origin->get_name() << "\t"
-         << "type=" << _origin->get_type() << "\t"
-         << "delta=" << (_origin->get_count() - _start_count) << "\n";
-    }
-
-    virtual size_t get_change() const {
-      return _origin->get_count() - _start_count;
-    }
-
-  protected:
-    const progress_point* _origin;
-    size_t _start_count;
-  };
-
-  /// Create a progress point with a given name
-  progress_point(const std::string& name) : _name(name) {}
-
-  /// Virtual destructor
-  virtual ~progress_point() {}
-
-  /// Implementation-dependent count access
-  virtual size_t get_count() const = 0;
-
-  /// Implementation-dependent type
-  virtual const std::string get_type() const = 0;
+  /// Get the number of visits to this progress point
+  size_t get_count() const {
+    return __atomic_load_n(&_counter.count, __ATOMIC_RELAXED);
+  }
+  
+  /// Get a pointer to the counter struct (used by source progress points)
+  coz_counter_t* get_counter_struct() {
+    return &_counter;
+  }
 
   /// Get the name of this progress point
   const std::string& get_name() const {
     return _name;
   }
 
-  /// Take a snapshot of the progress point for later logging
-  virtual saved* save() const {
-    return new saved(this);
-  }
+  class saved {
+  public:
+    saved() {}
+  
+    /// Save the state of a throughput point
+    saved(const throughput_point* origin) : _origin(origin), _start_count(origin->get_count()) {}
+
+    /// Log the change in this progress point since it was saved
+    void log(std::ostream& os) const {
+      os << "throughput-point\t"
+         << "name=" << _origin->get_name() << "\t"
+         << "delta=" << get_delta() << "\n";
+    }
+
+    size_t get_delta() const {
+      return _origin->get_count() - _start_count;
+    }
+
+  protected:
+    const throughput_point* _origin;
+    size_t _start_count;
+  };
 
 private:
   const std::string _name;
+  coz_counter_t _counter;
 };
 
-/// Progress point that uses the CAUSAL_PROGRESS macro inserted in the program's source code
-class source_progress_point : public progress_point {
+/**
+ * A progress point to measure latency with two counters
+ */
+class latency_point {
 public:
-  source_progress_point(const std::string& name, size_t* var) : progress_point(name), _var(var) {}
-
-  virtual size_t get_count() const {
-    return __atomic_load_n(_var, __ATOMIC_RELAXED);
+  class saved;
+  
+  /// Create a latency progress point with a given name
+  latency_point(const std::string& name) : _name(name) {}
+  
+  /// Save the state of this progress point
+  saved* save() const {
+    return new saved(this);
   }
 
-  virtual const std::string get_type() const {
-    return "source";
+  /// Add one visit to the begin progress point
+  void visit_begin(size_t visits=1) {
+    __atomic_add_fetch(&_begin_counter.count, visits, __ATOMIC_RELAXED);
   }
+  
+  /// Add one visit to the end progress point
+  void visit_end(size_t visits=1) {
+    __atomic_add_fetch(&_end_counter.count, visits, __ATOMIC_RELAXED);
+  }
+
+  /// Get the number of visits to the begin progress point
+  size_t get_begin_count() const {
+    return __atomic_load_n(&_begin_counter.count, __ATOMIC_RELAXED);
+  }
+  
+  /// Get the number of visits to the end progress point
+  size_t get_end_count() const {
+    return __atomic_load_n(&_end_counter.count, __ATOMIC_RELAXED);
+  }
+  
+  /// Get a pointer to the begin point's counter struct (used by source progress points)
+  coz_counter_t* get_begin_counter_struct() {
+    return &_begin_counter;
+  }
+  
+  /// Get a pointer to the end point's counter struct (used by source progress points)
+  coz_counter_t* get_end_counter_struct() {
+    return &_end_counter;
+  }
+
+  /// Get the name of this progress point
+  const std::string& get_name() const {
+    return _name;
+  }
+
+  class saved {
+  public:
+    saved() {}
+  
+    /// Save the state of a throughput point
+    saved(const latency_point* origin) : _origin(origin),
+                                         _begin_start_count(origin->get_begin_count()),
+                                         _end_start_count(origin->get_end_count()) {}
+
+    /// Log the change in this progress point since it was saved
+    virtual void log(std::ostream& os) const {
+      os << "latency-point\t"
+         << "name=" << _origin->get_name() << "\t"
+         << "begin_delta=" << get_begin_delta() << "\t"
+         << "end_delta=" << get_end_delta() << "\t"
+         << "difference=" << get_difference() << "\n";
+    }
+
+    virtual size_t get_begin_delta() const {
+      return _origin->get_begin_count() - _begin_start_count;
+    }
+  
+    virtual size_t get_end_delta() const {
+      return _origin->get_end_count() - _end_start_count;
+    }
+  
+    virtual size_t get_difference() const {
+      return _origin->get_end_count() - _origin->get_begin_count();
+    }
+
+  protected:
+    const latency_point* _origin;
+    size_t _begin_start_count;
+    size_t _end_start_count;
+  };
 
 private:
-  size_t* _var;
-};
-
-/// Progress point that uses samples in a selected line
-class sampling_progress_point : public progress_point {
-public:
-  sampling_progress_point(const std::string& name, std::shared_ptr<line> l) :
-      progress_point(name), _line(l) {}
-
-  virtual size_t get_count() const {
-    return _line->get_samples();
-  }
-
-  virtual const std::string get_type() const {
-    return "sampling";
-  }
-
-private:
-  std::shared_ptr<line> _line;
-};
-
-/// Progress point that increments one time only, at the end of the execution
-class end_progress_point : public progress_point {
-public:
-  end_progress_point() : progress_point("complete execution"), _count(0) {}
-
-  virtual size_t get_count() const {
-    return _count;
-  }
-
-  virtual const std::string get_type() const {
-    return "end-to-end";
-  }
-
-  void done() {
-    _count = 1;
-  }
-
-private:
-  size_t _count;
-};
-
-/// Progress point that uses a perf_event breakpoint to count trips
-class breakpoint_progress_point : public progress_point {
-public:
-  breakpoint_progress_point(const std::string& name, uintptr_t address) :
-      progress_point(name),
-      _pe({
-        .type = PERF_TYPE_BREAKPOINT,
-        .bp_type = HW_BREAKPOINT_X,
-        .bp_addr = (uint64_t)address,
-        .bp_len = sizeof(long),
-        .inherit = 1
-      }),
-      _event(_pe) {
-    _event.start();
-  }
-
-  virtual size_t get_count() const {
-    return _event.get_count();
-  }
-
-  virtual const std::string get_type() const {
-    return "breakpoint";
-  }
-
-private:
-  struct perf_event_attr _pe;
-  perf_event _event;
+  const std::string _name;
+  coz_counter_t _begin_counter;
+  coz_counter_t _end_counter;
 };
 
 #endif

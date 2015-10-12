@@ -16,6 +16,9 @@
 
 #include "ccutil/log.h"
 
+// Include the client header file
+#include "coz.h"
+
 using namespace std;
 
 /// The type of a main function
@@ -27,19 +30,27 @@ main_fn_t real_main;
 bool initialized = false;
 
 /**
- * Called by the application to register a progress point
+ * Called by the application to get/create a progress point
  */
-extern "C" void __causal_register_counter(progress_point::kind k,
-                                          size_t* counter,
-                                          size_t* backoff,
-                                          const char* name) {
-  progress_point* p = new source_progress_point(name, counter);
-  if(k == progress_point::kind::progress) {
-    profiler::get_instance().register_progress_point(p);
-  } else if(k == progress_point::kind::begin) {
-    profiler::get_instance().register_begin_point(p);
-  } else if(k == progress_point::kind::end) {
-    profiler::get_instance().register_end_point(p);
+extern "C" coz_counter_t* _coz_get_counter(progress_point_type t, const char* name) {
+  if(t == progress_point_type::throughput) {
+    throughput_point* p = profiler::get_instance().get_throughput_point(name);
+    if(p) return p->get_counter_struct();
+    else return nullptr;
+    
+  } else if(t == progress_point_type::begin) {
+    latency_point* p = profiler::get_instance().get_latency_point(name);
+    if(p) return p->get_begin_counter_struct();
+    else return nullptr;
+    
+  } else if(t == progress_point_type::end) {
+    latency_point* p = profiler::get_instance().get_latency_point(name);
+    if(p) return p->get_end_counter_struct();
+    else return nullptr;
+    
+  } else {
+    WARNING << "Unknown progress point type " << ((int)t) << " named " << name;
+    return nullptr;
   }
 }
 
@@ -104,13 +115,14 @@ int wrapped_main(int argc, char** argv, char** env) {
 
   // Register any sampling progress points
   for(const string& line_name : progress_points) {
-    shared_ptr<line> l = memory_map::get_instance().find_line(line_name);
+    /*shared_ptr<line> l = memory_map::get_instance().find_line(line_name);
     if(l) {
       progress_point* p = new sampling_progress_point(line_name, l);
-      profiler::get_instance().register_progress_point(p);
+      profiler::get_instance().sampling_progress_point(p);
     } else {
       WARNING << "Progress line \"" << line_name << "\" was not found.";
-    }
+    }*/
+    FATAL << "Sampling-based progress points are temporarily unsupported";
   }
 
   shared_ptr<line> fixed_line;
@@ -120,9 +132,9 @@ int wrapped_main(int argc, char** argv, char** env) {
   }
 
   // Create an end-to-end progress point and register it if running in end-to-end mode
-  end_progress_point* end_point = new end_progress_point();
+  throughput_point* end_point = nullptr;
   if(end_to_end) {
-    profiler::get_instance().register_progress_point(end_point);
+    end_point = profiler::get_instance().get_throughput_point("end-to-end");
   }
 
   // Start the profiler
@@ -135,7 +147,9 @@ int wrapped_main(int argc, char** argv, char** env) {
   int result = real_main(argc, argv, env);
 
   // Increment the end-to-end progress point just before shutdown
-  end_point->done();
+  if(end_point) {
+    end_point->visit();
+  }
 
   // Shut down the profiler
   profiler::get_instance().shutdown();

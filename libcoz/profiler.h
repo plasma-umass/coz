@@ -46,12 +46,11 @@ public:
   /// Shut down the profiler
   void shutdown();
 
-  /// Register a progress point
-  void register_progress_point(progress_point* c);
-
-  /// Register begin and end points for latency profiling
-  void register_begin_point(progress_point* c);
-  void register_end_point(progress_point* c);
+  /// Get or create a progress point to measure throughput
+  throughput_point* get_throughput_point(const std::string& name);
+  
+  /// Get or create a progress point to measure latency
+  latency_point* get_latency_point(const std::string& name);
 
   /// Pass local delay counts and excess delay time to the child thread
   int handle_pthread_create(pthread_t*, const pthread_attr_t*, thread_fn_t, void*);
@@ -107,8 +106,13 @@ private:
   static void samples_ready(int, siginfo_t*, void*);  //< Signal handler for sample processing
   static void on_error(int, siginfo_t*, void*);       //< Handle errors
 
-  std::vector<progress_point*> _progress_points;    //< All the progress points
-  spinlock _progress_points_lock;                   //< Spinlock to protect the progress points list
+  /// A map from name to throughput monitoring progress points
+  std::unordered_map<std::string, throughput_point*> _throughput_points;
+  spinlock _throughput_points_lock; //< Spinlock protecting throughput points map
+  
+  /// A map from name to latency monitoring progress points
+  std::unordered_map<std::string, latency_point*> _latency_points;
+  spinlock _latency_points_lock;  //< Spinlock protecting latency points map
 
   static_map<pid_t, thread_state> _thread_states;   //< Map from thread IDs to thread-local state
 
@@ -128,9 +132,6 @@ private:
   std::atomic<size_t> _samples;       //< Total number of samples collected
   std::atomic<bool> _running;         //< Clear to signal the profiler thread to quit
   std::atomic_flag _shutdown_run = ATOMIC_FLAG_INIT;  //< Used to ensure shutdown only runs once
-
-  std::atomic<progress_point*> _begin_point;
-  std::atomic<progress_point*> _end_point;
 };
 
 #endif

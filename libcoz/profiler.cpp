@@ -9,6 +9,7 @@
 #include <atomic>
 #include <cstdint>
 #include <fstream>
+#include <limits>
 #include <random>
 #include <string>
 #include <vector>
@@ -110,13 +111,17 @@ void profiler::profiler_thread(spinlock& l) {
 
   } else {
     // Wait until there is at least one progress point
-    _progress_points_lock.lock();
-    while(_progress_points.size() == 0 && _running) {
-      _progress_points_lock.unlock();
+    _throughput_points_lock.lock();
+    _latency_points_lock.lock();
+    while(_throughput_points.size() == 0 && _latency_points.size() == 0 && _running) {
+      _throughput_points_lock.unlock();
+      _latency_points_lock.unlock();
       wait(ExperimentCoolOffTime);
-      _progress_points_lock.lock();
+      _throughput_points_lock.lock();
+      _latency_points_lock.lock();
     }
-    _progress_points_lock.unlock();
+    _throughput_points_lock.unlock();
+    _latency_points_lock.unlock();
 
     // Log sample counts after this many experiments (doubles each time)
     size_t sample_log_interval = 32;
@@ -161,20 +166,21 @@ void profiler::profiler_thread(spinlock& l) {
       size_t starting_samples = selected->get_samples();
       size_t starting_delays = _delays.load();
 
-      // Save progress point values at the start of the experiment
-      vector<unique_ptr<progress_point::saved>> saved;
-      _progress_points_lock.lock();
-      for(progress_point* p : _progress_points) {
-        saved.emplace_back(p->save());
+      // Save throughput point values at the start of the experiment
+      vector<unique_ptr<throughput_point::saved>> saved_throughput_points;
+      _throughput_points_lock.lock();
+      for(pair<const std::string, throughput_point*>& p : _throughput_points) {
+        saved_throughput_points.emplace_back(p.second->save());
       }
-      _progress_points_lock.unlock();
-
-      // Is latency begin monitored?
-      bool latency = _begin_point.load() != nullptr && _end_point.load() != nullptr;
-      unique_ptr<progress_point::saved> saved_begin_point;
-      if(latency) {
-        saved_begin_point = unique_ptr<progress_point::saved>(_begin_point.load()->save());
+      _throughput_points_lock.unlock();
+      
+      // Save latency point values at the start of the experiment
+      vector<unique_ptr<latency_point::saved>> saved_latency_points;
+      _latency_points_lock.lock();
+      for(pair<const std::string, latency_point*>& p : _latency_points) {
+        saved_latency_points.emplace_back(p.second->save());
       }
+      _latency_points_lock.unlock();
 
       // Tell threads to start the experiment
       _experiment_active.store(true);
@@ -195,15 +201,22 @@ void profiler::profiler_thread(spinlock& l) {
              << "duration=" << duration << "\t"
              << "selected-samples=" << selected_samples << "\n";
 
-      // Log progress point deltas and find the minimum delta
-      size_t min_delta = ExperimentTargetDelta;
-      for(const auto& s : saved) {
-        size_t delta = s->get_change();
-
-        if(delta < min_delta) {
-          min_delta = delta;
-        }
-
+      // Keep a running count of the minimum delta over all progress points
+      size_t min_delta = std::numeric_limits<size_t>::max();
+      
+      // Log throughput point measurements and update the minimum delta
+      for(const auto& s : saved_throughput_points) {
+        size_t delta = s->get_delta();
+        if(delta < min_delta) min_delta = delta;
+        s->log(output);
+      }
+      
+      // Log latency point measurements and update the minimum delta
+      for(const auto& s : saved_latency_points) {
+        size_t begin_delta = s->get_begin_delta();
+        size_t end_delta = s->get_end_delta();
+        if(begin_delta < min_delta) min_delta = begin_delta;
+        if(end_delta < min_delta) min_delta = end_delta;
         s->log(output);
       }
 
@@ -212,26 +225,6 @@ void profiler::profiler_thread(spinlock& l) {
         experiment_length *= 2;
       } else if(min_delta > ExperimentTargetDelta*2 && experiment_length >= ExperimentMinTime*2) {
         experiment_length /= 2;
-      }
-
-      // Log latency info
-      if(latency) {
-        // queue_len = arrival_rate * latency
-        // latency = queue_len * arrival_period
-        size_t delta = saved_begin_point->get_change();
-        float period = ((float)duration) / delta;
-        size_t queue_len = _begin_point.load()->get_count() - _end_point.load()->get_count();
-        float latency = period * queue_len;
-
-        // "Period" is computed as duration / delta. latency is just this time queue length,
-        // so fake a "delta" to produce the right output by dividing by queue length
-        float fake_delta = (float)delta / queue_len;
-
-        output << "progress-point\t"
-               << "name=latency\t"
-               << "type=latency\t"
-               //<< "latency=" << latency << "\t"
-               << "delta=" << fake_delta << "\n";
       }
 
       output.flush();
@@ -314,21 +307,44 @@ void profiler::remove_thread() {
   _thread_states.remove(gettid());
 }
 
-/**
- * Register a new progress point
- */
-void profiler::register_progress_point(progress_point* p) {
-  _progress_points_lock.lock();
-  _progress_points.push_back(p);
-  _progress_points_lock.unlock();
-};
-
-void profiler::register_begin_point(progress_point* c) {
-  _begin_point.store(c);
+throughput_point* profiler::get_throughput_point(const std::string& name) {
+  // Lock the map of throughput points
+  _throughput_points_lock.lock();
+  
+  // Search for a matching point
+  auto search = _throughput_points.find(name);
+  
+  // If there is no match, add a new throughput point
+  if(search == _throughput_points.end()) {
+    search = _throughput_points.emplace_hint(search, name, new throughput_point(name));
+  }
+  
+  // Get the matching or inserted value
+  throughput_point* result = search->second;
+  
+  // Unlock the map and return the result
+  _throughput_points_lock.unlock();
+  return result;
 }
 
-void profiler::register_end_point(progress_point* c) {
-  _end_point.store(c);
+latency_point* profiler::get_latency_point(const std::string& name) {
+  // Lock the map of latency points
+  _latency_points_lock.lock();
+  
+  // Search for a matching point
+  auto search = _latency_points.find(name);
+  
+  // If there is no match, add a new latency point
+  if(search == _latency_points.end()) {
+    search = _latency_points.emplace_hint(search, name, new latency_point(name));
+  }
+  
+  // Get the matching or inserted value
+  latency_point* result = search->second;
+  
+  // Unlock the map and return the result
+  _latency_points_lock.unlock();
+  return result;
 }
 
 /**
