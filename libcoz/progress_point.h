@@ -145,8 +145,8 @@ public:
     virtual void log(std::ostream& os) const {
       os << "latency-point\t"
          << "name=" << _origin->get_name() << "\t"
-         << "begin-delta=" << get_begin_delta() << "\t"
-         << "end-delta=" << get_end_delta() << "\t"
+         << "arrivals=" << get_begin_delta() << "\t"
+         << "departures=" << get_end_delta() << "\t"
          << "difference=" << get_difference() << "\n";
     }
 
@@ -159,7 +159,7 @@ public:
     }
   
     virtual size_t get_difference() const {
-      return _origin->get_end_count() - _origin->get_begin_count();
+      return _origin->get_begin_count() - _origin->get_end_count();
     }
 
   protected:
