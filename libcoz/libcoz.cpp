@@ -97,7 +97,6 @@ int wrapped_main(int argc, char** argv, char** env) {
   unordered_set<string> progress_points(progress_points_v.begin(), progress_points_v.end());
 
   bool end_to_end = getenv("COZ_END_TO_END");
-  bool sample_only = getenv("COZ_SAMPLE_ONLY");
   string fixed_line_name = getenv_safe("COZ_FIXED_LINE", "");
   int fixed_speedup;
   stringstream(getenv_safe("COZ_FIXED_SPEEDUP", "-1")) >> fixed_speedup;
@@ -138,7 +137,7 @@ int wrapped_main(int argc, char** argv, char** env) {
   }
 
   // Start the profiler
-  profiler::get_instance().startup(output_file, fixed_line.get(), fixed_speedup, sample_only);
+  profiler::get_instance().startup(output_file, fixed_line.get(), fixed_speedup);
 
   // Synchronizations can be intercepted once the profiler has been initialized
   initialized = true;

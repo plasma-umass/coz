@@ -28,7 +28,7 @@ using namespace std;
 /**
  * Start the profiler
  */
-void profiler::startup(const string& outfile, line* fixed_line, int fixed_speedup, bool sample_only) {
+void profiler::startup(const string& outfile, line* fixed_line, int fixed_speedup) {
   // Set up the sampling signal handler
   struct sigaction sa = {
     .sa_sigaction = profiler::samples_ready,
@@ -54,8 +54,6 @@ void profiler::startup(const string& outfile, line* fixed_line, int fixed_speedu
   // If the speedup amount is in bounds, set a fixed delay size
   if(fixed_speedup >= 0 && fixed_speedup <= 100)
     _fixed_delay_size = SamplePeriod * fixed_speedup / 100;
-
-  _sample_only = sample_only;
 
   // Use a spinlock to wait for the profiler thread to finish intialization
   spinlock l;
@@ -103,150 +101,142 @@ void profiler::profiler_thread(spinlock& l) {
   // Unblock the main thread
   l.unlock();
 
-  if(_sample_only) {
-    // In sample-only mode, just wait for _running to be set to false
-    while(_running) {
-      wait(SamplePeriod * SampleBatchSize);
-    }
-
-  } else {
-    // Wait until there is at least one progress point
-    _throughput_points_lock.lock();
-    _latency_points_lock.lock();
-    while(_throughput_points.size() == 0 && _latency_points.size() == 0 && _running) {
-      _throughput_points_lock.unlock();
-      _latency_points_lock.unlock();
-      wait(ExperimentCoolOffTime);
-      _throughput_points_lock.lock();
-      _latency_points_lock.lock();
-    }
+  // Wait until there is at least one progress point
+  _throughput_points_lock.lock();
+  _latency_points_lock.lock();
+  while(_throughput_points.size() == 0 && _latency_points.size() == 0 && _running) {
     _throughput_points_lock.unlock();
     _latency_points_lock.unlock();
+    wait(ExperimentCoolOffTime);
+    _throughput_points_lock.lock();
+    _latency_points_lock.lock();
+  }
+  _throughput_points_lock.unlock();
+  _latency_points_lock.unlock();
 
-    // Log sample counts after this many experiments (doubles each time)
-    size_t sample_log_interval = 32;
-    size_t sample_log_countdown = sample_log_interval;
+  // Log sample counts after this many experiments (doubles each time)
+  size_t sample_log_interval = 32;
+  size_t sample_log_countdown = sample_log_interval;
 
-    // Main experiment loop
-    while(_running) {
-      // Select a line
-      line* selected;
-      if(_fixed_line) {   // If this run has a fixed line, use it
-        selected = _fixed_line;
-      } else {            // Otherwise, wait for the next line to be selected
+  // Main experiment loop
+  while(_running) {
+    // Select a line
+    line* selected;
+    if(_fixed_line) {   // If this run has a fixed line, use it
+      selected = _fixed_line;
+    } else {            // Otherwise, wait for the next line to be selected
+      selected = _next_line.load();
+      while(_running && selected == nullptr) {
+        wait(SamplePeriod * SampleBatchSize);
         selected = _next_line.load();
-        while(_running && selected == nullptr) {
-          wait(SamplePeriod * SampleBatchSize);
-          selected = _next_line.load();
-        }
-
-        // If we're no longer running, exit the experiment loop
-        if(!_running) break;
-
-        _selected_line.store(selected);
       }
 
-      // Choose a delay size
-      size_t delay_size;
-      if(_fixed_delay_size >= 0) {
-        delay_size = _fixed_delay_size;
-      } else {
-        size_t r = delay_dist(generator);
-        if(r <= ZeroSpeedupWeight) {
-          delay_size = 0;
-        } else {
-          delay_size = (r - ZeroSpeedupWeight) * SamplePeriod / SpeedupDivisions;
-        }
-      }
+      // If we're no longer running, exit the experiment loop
+      if(!_running) break;
 
-      _delay_size.store(delay_size);
-
-      // Save the starting time and sample count
-      size_t start_time = get_time();
-      size_t starting_samples = selected->get_samples();
-      size_t starting_delays = _delays.load();
-
-      // Save throughput point values at the start of the experiment
-      vector<unique_ptr<throughput_point::saved>> saved_throughput_points;
-      _throughput_points_lock.lock();
-      for(pair<const std::string, throughput_point*>& p : _throughput_points) {
-        saved_throughput_points.emplace_back(p.second->save());
-      }
-      _throughput_points_lock.unlock();
-      
-      // Save latency point values at the start of the experiment
-      vector<unique_ptr<latency_point::saved>> saved_latency_points;
-      _latency_points_lock.lock();
-      for(pair<const std::string, latency_point*>& p : _latency_points) {
-        saved_latency_points.emplace_back(p.second->save());
-      }
-      _latency_points_lock.unlock();
-
-      // Tell threads to start the experiment
-      _experiment_active.store(true);
-
-      // Wait for the experiment duration to elapse
-      wait(experiment_length);
-
-      // Compute experiment parameters
-      float speedup = (float)delay_size / (float)SamplePeriod;
-      size_t total_delay = (_delays.load() - starting_delays) * delay_size;
-      size_t duration = get_time() - start_time - total_delay;
-      size_t selected_samples = selected->get_samples() - starting_samples;
-
-      // Log the experiment parameters
-      output << "experiment\t"
-             << "selected=" << selected << "\t"
-             << "speedup=" << speedup << "\t"
-             << "duration=" << duration << "\t"
-             << "selected-samples=" << selected_samples << "\n";
-
-      // Keep a running count of the minimum delta over all progress points
-      size_t min_delta = std::numeric_limits<size_t>::max();
-      
-      // Log throughput point measurements and update the minimum delta
-      for(const auto& s : saved_throughput_points) {
-        size_t delta = s->get_delta();
-        if(delta < min_delta) min_delta = delta;
-        s->log(output);
-      }
-      
-      // Log latency point measurements and update the minimum delta
-      for(const auto& s : saved_latency_points) {
-        size_t begin_delta = s->get_begin_delta();
-        size_t end_delta = s->get_end_delta();
-        if(begin_delta < min_delta) min_delta = begin_delta;
-        if(end_delta < min_delta) min_delta = end_delta;
-        s->log(output);
-      }
-
-      // Lengthen the experiment if the min_delta is too small
-      if(min_delta < ExperimentTargetDelta) {
-        experiment_length *= 2;
-      } else if(min_delta > ExperimentTargetDelta*2 && experiment_length >= ExperimentMinTime*2) {
-        experiment_length /= 2;
-      }
-
-      output.flush();
-
-      // Clear the next line, so threads will select one
-      _next_line.store(nullptr);
-
-      // End the experiment
-      _experiment_active.store(false);
-
-      // Log samples after a while, then double the countdown
-      if(--sample_log_countdown == 0) {
-        log_samples(output, start_time);
-        if(sample_log_interval < 20) {
-          sample_log_interval *= 2;
-        }
-        sample_log_countdown = sample_log_interval;
-      }
-
-      // Cool off before starting a new experiment, unless the program is exiting
-      if(_running) wait(ExperimentCoolOffTime);
+      _selected_line.store(selected);
     }
+
+    // Choose a delay size
+    size_t delay_size;
+    if(_fixed_delay_size >= 0) {
+      delay_size = _fixed_delay_size;
+    } else {
+      size_t r = delay_dist(generator);
+      if(r <= ZeroSpeedupWeight) {
+        delay_size = 0;
+      } else {
+        delay_size = (r - ZeroSpeedupWeight) * SamplePeriod / SpeedupDivisions;
+      }
+    }
+
+    _delay_size.store(delay_size);
+
+    // Save the starting time and sample count
+    size_t start_time = get_time();
+    size_t starting_samples = selected->get_samples();
+    size_t starting_delays = _delays.load();
+
+    // Save throughput point values at the start of the experiment
+    vector<unique_ptr<throughput_point::saved>> saved_throughput_points;
+    _throughput_points_lock.lock();
+    for(pair<const std::string, throughput_point*>& p : _throughput_points) {
+      saved_throughput_points.emplace_back(p.second->save());
+    }
+    _throughput_points_lock.unlock();
+    
+    // Save latency point values at the start of the experiment
+    vector<unique_ptr<latency_point::saved>> saved_latency_points;
+    _latency_points_lock.lock();
+    for(pair<const std::string, latency_point*>& p : _latency_points) {
+      saved_latency_points.emplace_back(p.second->save());
+    }
+    _latency_points_lock.unlock();
+
+    // Tell threads to start the experiment
+    _experiment_active.store(true);
+
+    // Wait for the experiment duration to elapse
+    wait(experiment_length);
+
+    // Compute experiment parameters
+    float speedup = (float)delay_size / (float)SamplePeriod;
+    size_t total_delay = (_delays.load() - starting_delays) * delay_size;
+    size_t duration = get_time() - start_time - total_delay;
+    size_t selected_samples = selected->get_samples() - starting_samples;
+
+    // Log the experiment parameters
+    output << "experiment\t"
+           << "selected=" << selected << "\t"
+           << "speedup=" << speedup << "\t"
+           << "duration=" << duration << "\t"
+           << "selected-samples=" << selected_samples << "\n";
+
+    // Keep a running count of the minimum delta over all progress points
+    size_t min_delta = std::numeric_limits<size_t>::max();
+    
+    // Log throughput point measurements and update the minimum delta
+    for(const auto& s : saved_throughput_points) {
+      size_t delta = s->get_delta();
+      if(delta < min_delta) min_delta = delta;
+      s->log(output);
+    }
+    
+    // Log latency point measurements and update the minimum delta
+    for(const auto& s : saved_latency_points) {
+      size_t begin_delta = s->get_begin_delta();
+      size_t end_delta = s->get_end_delta();
+      if(begin_delta < min_delta) min_delta = begin_delta;
+      if(end_delta < min_delta) min_delta = end_delta;
+      s->log(output);
+    }
+
+    // Lengthen the experiment if the min_delta is too small
+    if(min_delta < ExperimentTargetDelta) {
+      experiment_length *= 2;
+    } else if(min_delta > ExperimentTargetDelta*2 && experiment_length >= ExperimentMinTime*2) {
+      experiment_length /= 2;
+    }
+
+    output.flush();
+
+    // Clear the next line, so threads will select one
+    _next_line.store(nullptr);
+
+    // End the experiment
+    _experiment_active.store(false);
+
+    // Log samples after a while, then double the countdown
+    if(--sample_log_countdown == 0) {
+      log_samples(output, start_time);
+      if(sample_log_interval < 20) {
+        sample_log_interval *= 2;
+      }
+      sample_log_countdown = sample_log_interval;
+    }
+
+    // Cool off before starting a new experiment, unless the program is exiting
+    if(_running) wait(ExperimentCoolOffTime);
   }
 
   output << "shutdown\t"

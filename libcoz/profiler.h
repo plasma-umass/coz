@@ -40,8 +40,7 @@ public:
   /// Start the profiler
   void startup(const std::string& outfile,
                line* fixed_line,
-               int fixed_speedup,
-               bool sample_only);
+               int fixed_speedup);
 
   /// Shut down the profiler
   void shutdown();
@@ -128,7 +127,6 @@ private:
 
   pthread_t _profiler_thread;         //< Handle for the profiler thread
   size_t _end_time;                   //< Time that shutdown was called
-  bool _sample_only;                  //< Profiler should only collect samples, not insert delays
   std::atomic<size_t> _samples;       //< Total number of samples collected
   std::atomic<bool> _running;         //< Clear to signal the profiler thread to quit
   std::atomic_flag _shutdown_run = ATOMIC_FLAG_INIT;  //< Used to ensure shutdown only runs once
