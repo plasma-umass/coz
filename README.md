@@ -34,18 +34,16 @@ To run your program with coz, you will need to build it with debug information. 
 Once you have your program built with debug information, you can run it with coz using the command `coz run {coz options} --- {program name and arguments}`. But, to produce a useful profile you need to decide which part(s) of the application you want to speed up by specifying one or more progress points.
 
 ### Progress Points
-A progress point is a line of code in your program that you would like to execute more frequently. For example, we have included a version of pbzip2 with a progress point inserted just after the code that compresses a block of data. Coz will evaluate any hypothetical optimizations based on how they impact the rate of visits to this line of code. There are three ways to specify progress points in your program: end-to-end, source-level, or sampling based.
+A progress point is a line of code in your program that you would like to execute more frequently. For example, we have included a version of pbzip2 with a progress point inserted just after the code that compresses a block of data. Coz will evaluate any hypothetical optimizations based on how they impact the rate of visits to this line of code.
 
-#### End-to-End Progress Points
-If you run your program with `coz run --end-to-end --- {program name and arguments}`, coz does not require you to specify any progress points. Instead, it will take the full execution of the program to run a single experiment, which tests the effect of speeding up one line by a specific amount on the program's total runtime. Because coz is limited to a single experiment per-run, this method will take a very long time to build a useful profile.
+To place a progress point, include `coz.h` (under the `include` directory in this repository) and add the `COZ_PROGRESS` macro to at least one line you would like to execute more frequently.
 
-#### Source-Level Progress Points
-This is the preferred method of specifying progress points in your application. Just include `coz.h` (under the `include` directory in this repository) and add the `COZ_PROGRESS` macro to at least one line you would like to execute more frequently.
+By default, Coz uses the source file and line number as the name for your progress points. If you use `COZ_PROGRESS_NAMED("name for progress point")` instead, you can provide an informative name for your progress points. This also allows you to mark multiple source locations that correspond to the same progress point.
 
-Source-level progress points also allow you to measure the effect of optimizations on latency. Just mark the beginning of a transaction with the `COZ_BEGIN` macro, and the end with the `COZ_END` macro. When coz tests a hypothetical optimization it will report the effect of that optimization on the average latency between these two points. Coz can track this information with any knowledge of individual tranactions thanks to [Little's Law](https://en.wikipedia.org/wiki/Little%27s_law).
+#### Latency Progress Points
+Coz also allows you to measure the effect of optimizations on latency. Just mark the beginning of a transaction with the `COZ_BEGIN("transaction name")` macro, and the end with the `COZ_END("transaction name")` macro. Unlike regular progress points, you always need to specify a name for your latency progress points.
 
-#### Sampling-Based Progress Points
-You can also specify progress points on the command line using the `--progress {source file}:{line number}` argument to `coz run`. This method uses sampling to estimate the rate of visits to the specified progress point. Choosing an appropriate line can be difficult because of inconsistencies in hardware performance counter results and debug information (especially for optimized executables). The best way to select a line is to run your program with `coz run` using the `--end-to-end` argument, then use the profile results to identify a frequency executed line
+When coz tests a hypothetical optimization it will report the effect of that optimization on the average latency between these two points. Coz can track this information with any knowledge of individual tranactions thanks to [Little's Law](https://en.wikipedia.org/wiki/Little%27s_law).
 
 ### Processing Results
 To plot profile results, go to http://plasma-umass.github.io/coz/ and load your profile. This page also includes several sample profiles from PARSEC benchmarks.

@@ -203,7 +203,7 @@ void *find_clusters(void *arg)
          modified = true;
       }
 			
-			COZ_PROGRESS;
+			COZ_PROGRESS_NAMED("clusters found");
    }
    
    return (void *)0;   
