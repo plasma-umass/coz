@@ -118,7 +118,7 @@ _run_parser.add_argument('--source-scope', '-s',
 _run_parser.add_argument('--progress', '-p',
                          metavar='<source file>:<line number>',
                          type=line_ref, action='append', default=[],
-                         help='Add a sampling-based progress point')
+                         help='[NOT SUPPORTED] Add a sampling-based progress point')
 
 _run_parser.add_argument('--output', '-o',
                          metavar='<profile output>',
@@ -127,7 +127,7 @@ _run_parser.add_argument('--output', '-o',
 
 _run_parser.add_argument('--end-to-end',
                          action='store_true', default=False,
-                         help='Run a single performance experiment per-execution')
+                         help='[NOT SUPPORTED] Run a single performance experiment per-execution')
 
 _run_parser.add_argument('--sample-only',
                          action='store_true', default=False,
