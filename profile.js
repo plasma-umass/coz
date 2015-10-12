@@ -99,30 +99,57 @@ var Profile = function(profile_text) {
 
     if(entry.type == 'experiment') {
       experiment = entry;
-    } else if(entry.type == 'progress-point') {
-      this.addProgressMeasurement(experiment.selected, entry.name, experiment.speedup, entry.delta, experiment.duration);
+    } else if(entry.type == 'throughput-point' || entry.type == 'progress-point') {
+      this.addThroughputMeasurement(experiment, entry);
+    } else if(entry.type == 'latency-point') {
+      this.addLatencyMeasurement(experiment, entry);
     }
   }
 }
 
-Profile.prototype.addProgressMeasurement = function(selected, point, speedup, delta, duration) {
-  // Add entry for selected line if needed
+Profile.prototype.ensureDataEntry = function(selected, point, speedup, initial_value) {
   if(!this._data[selected]) this._data[selected] = {};
-  
-  // Add entry for progress point if needed
   if(!this._data[selected][point]) this._data[selected][point] = {};
-  
-  // Add entry for progress point if needed
-  if(!this._data[selected][point][speedup]) {
-    this._data[selected][point][speedup] = {
-      delta: 0,
-      duration: 0
-    };
-  }
+  if(!this._data[selected][point][speedup]) this._data[selected][point][speedup] = initial_value;
+  return this._data[selected][point][speedup];
+}
+
+Profile.prototype.addThroughputMeasurement = function(experiment, point) {
+  var entry = this.ensureDataEntry(experiment.selected, point.name, experiment.speedup, {
+    delta: 0,
+    duration: 0
+  });
   
   // Add new delta and duration to data
-  this._data[selected][point][speedup].delta += delta;
-  this._data[selected][point][speedup].duration += duration;
+  entry.delta += point.delta;
+  entry.duration += experiment.duration;
+};
+
+Profile.prototype.addLatencyMeasurement = function(experiment, point) {
+  var entry = this.ensureDataEntry(experiment.selected, point.name, experiment.speedup, {
+    arrivals: 0,
+    departures: 0,
+    difference: 0,
+    duration: 0
+  });
+  
+  entry.arrivals += point.arrivals;
+  entry.departures += point.departures;
+  
+  // Compute a running weighted average of the difference between arrivals and departures
+  if(entry.duration == 0) {
+    entry.difference = point.difference;
+  } else {
+    // Compute the new total duration of all experiments combined (including the new one)
+    var total_duration = entry.duration + experiment.duration;
+    // Scale the difference down by the ratio of the prior and total durations. This scale factor will be closer to 1 than 0, so divide first for better numerical stability 
+    entry.difference *= entry.duration / total_duration;
+    // Add the contribution to average difference from the current experiment. The scale factor will be close to zero, so multiply first for better numerical stability.
+    entry.difference += (point.difference * experiment.duration) / total_duration;
+  }
+  
+  // Update the total duration
+  entry.duration += experiment.duration;
 };
 
 Profile.prototype.getProgressPoints = function() {
