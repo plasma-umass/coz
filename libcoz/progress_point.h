@@ -145,8 +145,8 @@ public:
     virtual void log(std::ostream& os) const {
       os << "latency-point\t"
          << "name=" << _origin->get_name() << "\t"
-         << "begin_delta=" << get_begin_delta() << "\t"
-         << "end_delta=" << get_end_delta() << "\t"
+         << "begin-delta=" << get_begin_delta() << "\t"
+         << "end-delta=" << get_end_delta() << "\t"
          << "difference=" << get_difference() << "\n";
     }
 
