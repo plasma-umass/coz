@@ -291,58 +291,6 @@ void profiler::remove_thread() {
   _thread_states.remove(gettid());
 }
 
-throughput_point* profiler::get_throughput_point(const std::string& name) {
-  // Lock the map of throughput points
-  _throughput_points_lock.lock();
-  
-  // Search for a matching point
-  auto search = _throughput_points.find(name);
-  
-  // If there is no match, add a new throughput point
-  if(search == _throughput_points.end()) {
-    search = _throughput_points.emplace_hint(search, name, new throughput_point(name));
-  }
-  
-  // Get the matching or inserted value
-  throughput_point* result = search->second;
-  
-  // Unlock the map and return the result
-  _throughput_points_lock.unlock();
-  return result;
-}
-
-latency_point* profiler::get_latency_point(const std::string& name) {
-  // Lock the map of latency points
-  _latency_points_lock.lock();
-  
-  // Search for a matching point
-  auto search = _latency_points.find(name);
-  
-  // If there is no match, add a new latency point
-  if(search == _latency_points.end()) {
-    search = _latency_points.emplace_hint(search, name, new latency_point(name));
-  }
-  
-  // Get the matching or inserted value
-  latency_point* result = search->second;
-  
-  // Unlock the map and return the result
-  _latency_points_lock.unlock();
-  return result;
-}
-
-/**
- * Argument type passed to wrapped threads
- */
-struct thread_start_arg {
-  thread_fn_t _fn;
-  void* _arg;
-  size_t _parent_delay_time;
-
-  thread_start_arg(thread_fn_t fn, void* arg, size_t t) :
-      _fn(fn), _arg(arg), _parent_delay_time(t) {}
-};
-
 /**
  * Entry point for wrapped threads
  */
@@ -369,74 +317,6 @@ void* profiler::start_thread(void* p) {
   pthread_exit(result);
 }
 
-void profiler::catch_up() {
-  thread_state* state = get_thread_state();
-
-  if(!state)
-    return;
-
-  // Handle all samples and add delays as required
-  if(_experiment_active) {
-    state->set_in_use(true);
-    add_delays(state);
-    state->set_in_use(false);
-  }
-}
-
-void profiler::pre_block() {
-  thread_state* state = get_thread_state();
-  if(!state)
-    return;
-
-  state->pre_block_time = _global_delay.load();
-}
-
-/**
- * Called after a thread unblocks. Skip delays if the thread was unblocked by another thread.
- */
-void profiler::post_block(bool skip_delays) {
-  thread_state* state = get_thread_state();
-  if(!state)
-    return;
-
-  state->set_in_use(true);
-
-  if(skip_delays) {
-    // Skip all delays that were inserted during the blocked period
-    state->local_delay += _global_delay.load() - state->pre_block_time;
-  }
-
-  state->set_in_use(false);
-}
-
-/**
- * Wrap calls to pthread_create so children inherit delay time
- */
-int profiler::handle_pthread_create(pthread_t* thread,
-                                    const pthread_attr_t* attr,
-                                    thread_fn_t fn,
-                                    void* arg) {
-
-  thread_start_arg* new_arg;
-
-  thread_state* state = get_thread_state();
-  REQUIRE(state) << "Thread state not found";
-
-  // Allocate a struct to pass as an argument to the new thread
-  new_arg = new thread_start_arg(fn, arg, state->local_delay);
-
-  // Create a wrapped thread and pass in the wrapped argument
-  return real::pthread_create(thread, attr, profiler::start_thread, new_arg);
-}
-
-/**
- * Stop sampling and catch up on delays before a thread can exit
- */
-void profiler::handle_pthread_exit(void* result) {
-  end_sampling();
-  real::pthread_exit(result);
-}
-
 void profiler::begin_sampling(thread_state* state) {
   // Set the perf_event sampler configuration
   struct perf_event_attr pe = {
@@ -454,7 +334,6 @@ void profiler::begin_sampling(thread_state* state) {
   state->sampler = perf_event(pe);
   state->process_timer = timer(SampleSignal);
   state->process_timer.start_interval(SamplePeriod * SampleBatchSize);
-  //state->sampler.set_ready_signal(SampleSignal);
   state->sampler.start();
 }
 
