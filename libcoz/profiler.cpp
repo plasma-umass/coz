@@ -31,9 +31,7 @@ using namespace std;
 void profiler::startup(const string& outfile,
                        line* fixed_line,
                        int fixed_speedup,
-                       bool enable_arrival_speedup,
-                       const string& arrival_speedup_point_name,
-                       int arrival_speedup_fixed_size) {
+                       bool arrival_speedup) {
   // Set up the sampling signal handler
   struct sigaction sa = {
     .sa_sigaction = profiler::samples_ready,
@@ -58,6 +56,9 @@ void profiler::startup(const string& outfile,
   // If the speedup amount is in bounds, set a fixed delay size
   if(fixed_speedup >= 0 && fixed_speedup <= 100)
     _fixed_delay_size = SamplePeriod * fixed_speedup / 100;
+
+  // Save the arrival speedup point name
+  _enable_arrival_speedup = arrival_speedup;
 
   // Use a spinlock to wait for the profiler thread to finish intialization
   spinlock l;
@@ -160,6 +161,18 @@ void profiler::profiler_thread(spinlock& l) {
     size_t start_time = get_time();
     size_t starting_samples = selected->get_samples();
     size_t starting_delay_time = _global_delay.load();
+    
+    // Was arrival speedup enabled?
+    int arrival_speedup_percent;
+    // Yes. Choose a random arrival speedup size using the same procedure as for line speedup size
+    if(_enable_arrival_speedup) {
+      size_t r = delay_dist(generator);
+      if(r <= ZeroSpeedupWeight) {
+        arrival_speedup_percent = 0;
+      } else {
+        arrival_speedup_percent = (r - ZeroSpeedupWeight) * 100 / SpeedupDivisions;
+      }
+    }
 
     // Save throughput point values at the start of the experiment
     vector<unique_ptr<throughput_point::saved>> saved_throughput_points;
@@ -180,8 +193,24 @@ void profiler::profiler_thread(spinlock& l) {
     // Tell threads to start the experiment
     _experiment_active.store(true);
 
-    // Wait for the experiment duration to elapse
-    wait(experiment_length);
+    // If arrival speedup is enabled, profiler thread samples the arrival point
+    // Otherwise, just wait until experiment ends
+    if(_enable_arrival_speedup) {
+      size_t elapsed_time = 0;
+      while(elapsed_time < experiment_length) {
+        // Wait for a sampling period
+        size_t period = wait(SamplePeriod);
+        // Compute the amount of delay to add to all running threads
+        size_t delay_size = (period * arrival_speedup_percent) / 100;
+        // Add the delay
+        _global_delay += delay_size;
+        // Add this period to elapsed time
+        elapsed_time += period;
+      }
+    } else {
+      // Wait for the experiment duration to elapse
+      wait(experiment_length);
+    }
 
     // Compute experiment parameters
     float speedup = (float)delay_size / (float)SamplePeriod;

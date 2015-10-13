@@ -101,11 +101,8 @@ int wrapped_main(int argc, char** argv, char** env) {
   int fixed_speedup;
   stringstream(getenv_safe("COZ_FIXED_SPEEDUP", "-1")) >> fixed_speedup;
   
-  // Arrival rate speedup settings
-  string arrival_speedup_point_name = getenv_safe("COZ_ARRIVAL_SPEEDUP", "");
-  bool enable_arrival_speedup = arrival_speedup_point_name != "";
-  int arrival_speedup_fixed_size;
-  stringstream(getenv_safe("COZ_FIXED_ARRIVAL_SPEEDUP", "-1")) >> arrival_speedup_fixed_size;
+  // Should coz also virtually speed up arrivals/load on the system?
+  bool arrival_speedup = getenv("COZ_ARRIVAL_SPEEDUP");
 
   // Replace 'MAIN' in the binary_scope with the real path of the main executable
   if(binary_scope.find("MAIN") != binary_scope.end()) {
@@ -146,9 +143,7 @@ int wrapped_main(int argc, char** argv, char** env) {
   profiler::get_instance().startup(output_file,
                                    fixed_line.get(),
                                    fixed_speedup,
-                                   enable_arrival_speedup,
-                                   arrival_speedup_point_name,
-                                   arrival_speedup_fixed_size);
+                                   arrival_speedup);
 
   // Synchronizations can be intercepted once the profiler has been initialized
   initialized = true;

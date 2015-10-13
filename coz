@@ -71,10 +71,7 @@ def _coz_run(args):
     env['COZ_FIXED_SPEEDUP'] = str(args.fixed_speedup)
     
   if args.arrival_speedup:
-    env['COZ_ARRIVAL_SPEEDUP'] = args.arrival_speedup
-  
-  if args.fixed_arrival_speedup:
-    env['COZ_FIXED_ARRIVAL_SPEEDUP'] = args.fixed_arrival_speedup
+    env['COZ_ARRIVAL_SPEEDUP'] = '1'
 
   try:
     result = subprocess.call(args.remaining_args, env=env)
@@ -142,14 +139,8 @@ _run_parser.add_argument('--fixed-speedup',
                          help='Evaluate optimizations of a specific amount')
 
 _run_parser.add_argument('--arrival-speedup',
-                         metavar='<progress point name>',
-                         default=None,
+                         action='store_true', default=False,
                          help='Evaluate the effect of increasing the work arrival rate')
-
-_run_parser.add_argument('--fixed-arrival-speeup',
-                         metavar='<size of arrival speedup> (0-100)',
-                         type=int, choices=range(0, 101), default=None,
-                         help='If specified, Coz will use a fixed percent increase in arrival rate')
 
 # Use defaults to recover handler function and parser object from parser output
 _run_parser.set_defaults(func=_coz_run, parser=_run_parser)

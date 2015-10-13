@@ -53,9 +53,7 @@ public:
   void startup(const std::string& outfile,
                line* fixed_line,
                int fixed_speedup,
-               bool enable_arrival_speedup,
-               const std::string& arrival_speedup_point_name,
-               int arrival_speedup_fixed_size);
+               bool arrival_speedup);
 
   /// Shut down the profiler
   void shutdown();
@@ -222,8 +220,13 @@ private:
   pthread_t _profiler_thread;     //< Handle for the profiler thread
   std::atomic<bool> _running;     //< Clear to signal the profiler thread to quit
   std::string _output_filename;   //< File for profiler output
+  
+  // Settings for fixed line speedup and speedup size
   line* _fixed_line;              //< The only line that should be sped up, if set
   int _fixed_delay_size = -1;     //< The only delay size that should be used, if set
+  
+  /// Should coz virtually speed up the load on the system?
+  bool _enable_arrival_speedup;
 
   /// Atomic flag to guarantee shutdown procedures run exactly one time
   std::atomic_flag _shutdown_run = ATOMIC_FLAG_INIT;
