@@ -50,7 +50,12 @@ struct thread_start_arg {
 class profiler {
 public:
   /// Start the profiler
-  void startup(const std::string& outfile, line* fixed_line, int fixed_speedup);
+  void startup(const std::string& outfile,
+               line* fixed_line,
+               int fixed_speedup,
+               bool enable_arrival_speedup,
+               const std::string& arrival_speedup_point_name,
+               int arrival_speedup_fixed_size);
 
   /// Shut down the profiler
   void shutdown();

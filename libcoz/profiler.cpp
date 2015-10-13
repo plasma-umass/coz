@@ -28,7 +28,12 @@ using namespace std;
 /**
  * Start the profiler
  */
-void profiler::startup(const string& outfile, line* fixed_line, int fixed_speedup) {
+void profiler::startup(const string& outfile,
+                       line* fixed_line,
+                       int fixed_speedup,
+                       bool enable_arrival_speedup,
+                       const string& arrival_speedup_point_name,
+                       int arrival_speedup_fixed_size) {
   // Set up the sampling signal handler
   struct sigaction sa = {
     .sa_sigaction = profiler::samples_ready,
