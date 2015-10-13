@@ -48,8 +48,7 @@ void profiler::startup(const string& outfile, line* fixed_line, int fixed_speedu
   _output_filename = outfile;
 
   // If a non-empty fixed line was provided, set it
-  if(fixed_line)
-    _fixed_line = fixed_line;
+  if(fixed_line) _fixed_line = fixed_line;
 
   // If the speedup amount is in bounds, set a fixed delay size
   if(fixed_speedup >= 0 && fixed_speedup <= 100)
@@ -155,7 +154,7 @@ void profiler::profiler_thread(spinlock& l) {
     // Save the starting time and sample count
     size_t start_time = get_time();
     size_t starting_samples = selected->get_samples();
-    size_t starting_delays = _delays.load();
+    size_t starting_delay_time = _global_delay.load();
 
     // Save throughput point values at the start of the experiment
     vector<unique_ptr<throughput_point::saved>> saved_throughput_points;
@@ -181,8 +180,8 @@ void profiler::profiler_thread(spinlock& l) {
 
     // Compute experiment parameters
     float speedup = (float)delay_size / (float)SamplePeriod;
-    size_t total_delay = (_delays.load() - starting_delays) * delay_size;
-    size_t duration = get_time() - start_time - total_delay;
+    size_t experiment_delay = _global_delay.load() - starting_delay_time;
+    size_t duration = get_time() - start_time - experiment_delay;
     size_t selected_samples = selected->get_samples() - starting_samples;
 
     // Log the experiment parameters
@@ -239,10 +238,6 @@ void profiler::profiler_thread(spinlock& l) {
     if(_running) wait(ExperimentCoolOffTime);
   }
 
-  output << "shutdown\t"
-         << "time=" << _end_time << "\t"
-         << "samples=" << _samples << "\n";
-
   // Log the sample counts on exit
   log_samples(output, start_time);
 
@@ -276,8 +271,7 @@ void profiler::shutdown() {
     // Stop sampling in the main thread
     end_sampling();
 
-    // Save the true end time and signal the profiler thread to stop
-    _end_time = get_time();
+    // "Signal" the profiler thread to stop
     _running.store(false);
 
     // Join with the profiler thread
@@ -343,11 +337,10 @@ latency_point* profiler::get_latency_point(const std::string& name) {
 struct thread_start_arg {
   thread_fn_t _fn;
   void* _arg;
-  size_t _parent_delay_count;
-  size_t _parent_excess_delay;
+  size_t _parent_delay_time;
 
-  thread_start_arg(thread_fn_t fn, void* arg, size_t c, size_t t) :
-      _fn(fn), _arg(arg), _parent_delay_count(c), _parent_excess_delay(t) {}
+  thread_start_arg(thread_fn_t fn, void* arg, size_t t) :
+      _fn(fn), _arg(arg), _parent_delay_time(t) {}
 };
 
 /**
@@ -359,8 +352,7 @@ void* profiler::start_thread(void* p) {
   thread_state* state = get_instance().add_thread();
   REQUIRE(state) << "Failed to add thread state";
 
-  state->delay_count = arg->_parent_delay_count;
-  state->excess_delay = arg->_parent_excess_delay;
+  state->local_delay = arg->_parent_delay_time;
 
   // Make local copies of the function and argument before freeing the arg wrapper
   thread_fn_t real_fn = arg->_fn;
@@ -386,7 +378,6 @@ void profiler::catch_up() {
   // Handle all samples and add delays as required
   if(_experiment_active) {
     state->set_in_use(true);
-    //process_samples();
     add_delays(state);
     state->set_in_use(false);
   }
@@ -397,7 +388,7 @@ void profiler::pre_block() {
   if(!state)
     return;
 
-  state->pre_block_time = _delays.load();
+  state->pre_block_time = _global_delay.load();
 }
 
 /**
@@ -412,14 +403,14 @@ void profiler::post_block(bool skip_delays) {
 
   if(skip_delays) {
     // Skip all delays that were inserted during the blocked period
-    state->delay_count += _delays.load() - state->pre_block_time;
+    state->local_delay += _global_delay.load() - state->pre_block_time;
   }
 
   state->set_in_use(false);
 }
 
 /**
- * Wrap calls to pthread_create so children inherit delay counts
+ * Wrap calls to pthread_create so children inherit delay time
  */
 int profiler::handle_pthread_create(pthread_t* thread,
                                     const pthread_attr_t* attr,
@@ -432,7 +423,7 @@ int profiler::handle_pthread_create(pthread_t* thread,
   REQUIRE(state) << "Thread state not found";
 
   // Allocate a struct to pass as an argument to the new thread
-  new_arg = new thread_start_arg(fn, arg, state->delay_count, state->excess_delay);
+  new_arg = new thread_start_arg(fn, arg, state->local_delay);
 
   // Create a wrapped thread and pass in the wrapped argument
   return real::pthread_create(thread, attr, profiler::start_thread, new_arg);
@@ -506,47 +497,32 @@ void profiler::add_delays(thread_state* state) {
   // Add delays if there is an experiment running
   if(_experiment_active.load()) {
     // Take a snapshot of the global and local delays
-    size_t delays = _delays;
+    size_t global_delay = _global_delay;
     size_t delay_size = _delay_size;
 
     // Is this thread ahead or behind on delays?
-    if(state->delay_count > delays) {
-      // Thread is ahead: increase the global delay count
-      _delays.fetch_add(state->delay_count - delays);
+    if(state->local_delay > global_delay) {
+      // Thread is ahead: increase the global delay time to make other threads pause
+      _global_delay.fetch_add(state->local_delay - global_delay);
 
-    } else if(state->delay_count < delays) {
-      // Behind: Pause this thread to catch up
-      size_t time_to_wait = (delays - state->delay_count) * delay_size;
-
-      // Has this thread paused too long already?
-      if(state->excess_delay > time_to_wait) {
-        // Charge the excess delay
-        state->excess_delay -= time_to_wait;
-        // Update the local delay count
-        state->delay_count = delays;
-
-      } else {
-        // Use any available excess delay
-        time_to_wait -= state->excess_delay;
-        // Pause and record any *new* excess delay
-        state->sampler.stop();
-        state->excess_delay = wait(time_to_wait) - time_to_wait;
-        state->sampler.start();
-        // Update the local delay count
-        state->delay_count = delays;
-      }
+    } else if(state->local_delay < global_delay) {
+      // Thread is behind: Pause this thread to catch up
+      
+      // Pause and record the exact amount of time this thread paused
+      state->sampler.stop();
+      state->local_delay += wait(global_delay - state->local_delay);
+      state->sampler.start();
     }
 
   } else {
     // Just skip ahead on delays if there isn't an experiment running
-    state->delay_count = _delays;
+    state->local_delay = _global_delay;
   }
 }
 
 void profiler::process_samples(thread_state* state) {
   for(perf_event::record r : state->sampler) {
     if(r.is_sample()) {
-      _samples++;
       // Find the line that contains this sample
       line* sampled_line = find_line(r);
       if(sampled_line) {
@@ -556,7 +532,7 @@ void profiler::process_samples(thread_state* state) {
       if(_experiment_active) {
         // Add a delay if the sample is in the selected line
         if(sampled_line == _selected_line)
-          state->delay_count++;
+          state->local_delay += _delay_size;
 
       } else if(sampled_line != nullptr && _next_line.load() == nullptr) {
         _next_line.store(sampled_line);
