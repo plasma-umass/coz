@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <poll.h>
 #include <pthread.h>
+#include <string.h>
 
 #include <atomic>
 #include <cstdint>
@@ -30,17 +31,15 @@ using namespace std;
  */
 void profiler::startup(const string& outfile, line* fixed_line, int fixed_speedup) {
   // Set up the sampling signal handler
-  struct sigaction sa = {
-    .sa_sigaction = profiler::samples_ready,
-    .sa_flags = SA_SIGINFO | SA_ONSTACK
-  };
+  struct sigaction sa;
+  memset(&sa, 0, sizeof(sa));
+  sa.sa_sigaction = profiler::samples_ready,
+  sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
   real::sigaction(SampleSignal, &sa, nullptr);
 
   // Set up handlers for errors
-  sa = {
-    .sa_sigaction = on_error,
-    .sa_flags = SA_SIGINFO
-  };
+  sa.sa_sigaction = on_error;
+  sa.sa_flags = SA_SIGINFO;
   real::sigaction(SIGSEGV, &sa, nullptr);
   real::sigaction(SIGABRT, &sa, nullptr);
 
@@ -448,16 +447,16 @@ void profiler::handle_pthread_exit(void* result) {
 
 void profiler::begin_sampling(thread_state* state) {
   // Set the perf_event sampler configuration
-  struct perf_event_attr pe = {
-    .type = PERF_TYPE_SOFTWARE,
-    .config = PERF_COUNT_SW_TASK_CLOCK,
-    .sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_CALLCHAIN,
-    .sample_period = SamplePeriod,
-    .wakeup_events = SampleBatchSize, // This is ignored on linux 3.13 (why?)
-    .exclude_idle = 1,
-    .exclude_kernel = 1,
-    .disabled = 1
-  };
+  struct perf_event_attr pe;
+  memset(&pe, 0, sizeof(pe));
+  pe.type = PERF_TYPE_SOFTWARE;
+  pe.config = PERF_COUNT_SW_TASK_CLOCK;
+  pe.sample_type = PERF_SAMPLE_IP | PERF_SAMPLE_CALLCHAIN;
+  pe.sample_period = SamplePeriod;
+  pe.wakeup_events = SampleBatchSize; // This is ignored on linux 3.13 (why?)
+  pe.exclude_idle = 1;
+  pe.exclude_kernel = 1;
+  pe.disabled = 1;
 
   // Create this thread's perf_event sampler and start sampling
   state->sampler = perf_event(pe);
