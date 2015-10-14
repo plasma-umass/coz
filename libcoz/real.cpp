@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "util.h"
+
 static bool resolving = false;        //< Set to true while symbol resolution is in progress
 static bool in_dlopen = false;        //< Set to true while dlopen is running
 static void* pthread_handle = NULL;   //< The `dlopen` handle to libpthread
@@ -47,19 +49,19 @@ static void* get_pthread_handle() {
 
 static NORETURN void resolve_exit(int status) throw() {
   GET_SYMBOL(exit);
-  if(real_exit) real_exit(status);
+  if(real_exit) INVOKE_NONRETURN(real_exit(status));
   else abort();
 }
 
 static NORETURN void resolve__exit(int status) throw() {
   GET_SYMBOL(_exit);
-  if(real__exit) real__exit(status);
+  if(real__exit) INVOKE_NONRETURN(real__exit(status));
   else abort();
 }
 
 static NORETURN void resolve__Exit(int status) throw() {
   GET_SYMBOL(_Exit);
-  if(real__Exit) real__Exit(status);
+  if(real__Exit) INVOKE_NONRETURN(real__Exit(status));
   else abort();
 }
 
@@ -119,7 +121,7 @@ static int resolve_pthread_create(pthread_t* t, const pthread_attr_t* attr, void
 
 static NORETURN void resolve_pthread_exit(void* retval) {
   GET_SYMBOL_HANDLE(pthread_exit, get_pthread_handle());
-  if(real_pthread_exit) real_pthread_exit(retval);
+  if(real_pthread_exit) INVOKE_NONRETURN(real_pthread_exit(retval));
   else abort();
 }
 

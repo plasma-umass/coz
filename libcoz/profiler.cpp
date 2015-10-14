@@ -442,7 +442,7 @@ int profiler::handle_pthread_create(pthread_t* thread,
  */
 void profiler::handle_pthread_exit(void* result) {
   end_sampling();
-  real::pthread_exit(result);
+  INVOKE_NONRETURN(real::pthread_exit(result));
 }
 
 void profiler::begin_sampling(thread_state* state) {
