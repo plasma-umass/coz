@@ -66,7 +66,7 @@ obj/%.o: %.c $(PREREQS)
 # Link a shared library
 $(SHARED_LIB_TARGETS): $(OBJS)
 	@echo $(LOG_PREFIX) Linking $@ $(LOG_SUFFIX)
-	@$(CXX) -shared $(LDFLAGS) -o $@ $^
+	@$(CXX) -shared -o $@ $^ $(LDFLAGS)
 
 $(STATIC_LIB_TARGETS): $(OBJS)
 	@echo $(LOG_PREFIX) Linking $@ $(LOG_SUFFIX)
@@ -75,7 +75,7 @@ $(STATIC_LIB_TARGETS): $(OBJS)
 # Link binary targets
 $(OTHER_TARGETS): $(OBJS)
 	@echo $(LOG_PREFIX) Linking $@ $(LOG_SUFFIX)
-	@$(CXX) $(LDFLAGS) -o $@ $^
+	@$(CXX) -o $@ $^ $(LDFLAGS)
 
 # Set up build targets for benchmarking
 ifneq ($(BENCHMARK),)
