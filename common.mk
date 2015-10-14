@@ -1,6 +1,6 @@
 # Build with clang
-CC  := clang
-CXX := clang++
+CC  ?= clang
+CXX ?= clang++
 
 # Set coz and include path for coz
 ifeq ($(USE_SYSTEM_COZ),1)
