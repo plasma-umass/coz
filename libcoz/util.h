@@ -33,6 +33,10 @@ static size_t get_time() {
 #endif
 }
 
+/* Keep compilers happy about noreturn decorations. If stmt does not actually
+ * invoke a non-returning function, this will abort the program. */
+#define INVOKE_NONRETURN(stmt) do { stmt; abort(); } while (0)
+
 static inline size_t wait(size_t ns) {
   if(ns == 0) return 0;
 

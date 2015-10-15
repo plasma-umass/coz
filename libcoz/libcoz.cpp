@@ -328,19 +328,19 @@ extern "C" {
   /// Run shutdown before exiting
   void __attribute__((noreturn)) exit(int status) throw() {
     profiler::get_instance().shutdown();
-    real::exit(status);
+    INVOKE_NONRETURN(real::exit(status));
   }
 
   /// Run shutdown before exiting
   void __attribute__((noreturn)) _exit(int status) {
     profiler::get_instance().shutdown();
-  	real::_exit(status);
+    INVOKE_NONRETURN(real::_exit(status));
   }
 
   /// Run shutdown before exiting
   void __attribute__((noreturn)) _Exit(int status) throw() {
     profiler::get_instance().shutdown();
-    real::_Exit(status);
+    INVOKE_NONRETURN(real::_Exit(status));
   }
 
   /// Don't allow programs to set signal handlers for causal's required signals
