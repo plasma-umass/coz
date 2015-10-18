@@ -35,36 +35,133 @@ enum {
   ExperimentTargetDelta = 5 //< Target minimum number of visits to a progress point during an experiment
 };
 
+/**
+ * Argument type passed to wrapped threads
+ */
+struct thread_start_arg {
+  thread_fn_t _fn;
+  void* _arg;
+  size_t _parent_delay_time;
+
+  thread_start_arg(thread_fn_t fn, void* arg, size_t t) :
+      _fn(fn), _arg(arg), _parent_delay_time(t) {}
+};
+
 class profiler {
 public:
   /// Start the profiler
   void startup(const std::string& outfile,
                line* fixed_line,
-               int fixed_speedup);
+               int fixed_speedup,
+               bool arrival_speedup);
 
   /// Shut down the profiler
   void shutdown();
 
   /// Get or create a progress point to measure throughput
-  throughput_point* get_throughput_point(const std::string& name);
+  throughput_point* get_throughput_point(const std::string& name) {
+    // Lock the map of throughput points
+    _throughput_points_lock.lock();
+  
+    // Search for a matching point
+    auto search = _throughput_points.find(name);
+  
+    // If there is no match, add a new throughput point
+    if(search == _throughput_points.end()) {
+      search = _throughput_points.emplace_hint(search, name, new throughput_point(name));
+    }
+  
+    // Get the matching or inserted value
+    throughput_point* result = search->second;
+  
+    // Unlock the map and return the result
+    _throughput_points_lock.unlock();
+    return result;
+  }
   
   /// Get or create a progress point to measure latency
-  latency_point* get_latency_point(const std::string& name);
+  latency_point* get_latency_point(const std::string& name) {
+    // Lock the map of latency points
+    _latency_points_lock.lock();
+  
+    // Search for a matching point
+    auto search = _latency_points.find(name);
+  
+    // If there is no match, add a new latency point
+    if(search == _latency_points.end()) {
+      search = _latency_points.emplace_hint(search, name, new latency_point(name));
+    }
+  
+    // Get the matching or inserted value
+    latency_point* result = search->second;
+  
+    // Unlock the map and return the result
+    _latency_points_lock.unlock();
+    return result;
+  }
 
   /// Pass local delay counts and excess delay time to the child thread
-  int handle_pthread_create(pthread_t*, const pthread_attr_t*, thread_fn_t, void*);
+  int handle_pthread_create(pthread_t* thread,
+                            const pthread_attr_t* attr,
+                            thread_fn_t fn,
+                            void* arg) {
+    thread_start_arg* new_arg;
+
+    thread_state* state = get_thread_state();
+    REQUIRE(state) << "Thread state not found";
+
+    // Allocate a struct to pass as an argument to the new thread
+    new_arg = new thread_start_arg(fn, arg, state->local_delay);
+
+    // Create a wrapped thread and pass in the wrapped argument
+    return real::pthread_create(thread, attr, profiler::start_thread, new_arg);
+  }
 
   /// Force threads to catch up on delays, and stop sampling before the thread exits
-  void handle_pthread_exit(void*) __attribute__((noreturn));
+  void handle_pthread_exit(void* result) __attribute__((noreturn)) {
+    end_sampling();
+    real::pthread_exit(result);
+  }
 
   /// Ensure a thread has executed all the required delays before possibly unblocking another thread
-  void catch_up();
+  void catch_up() {
+    thread_state* state = get_thread_state();
+
+    if(!state)
+      return;
+
+    // Handle all samples and add delays as required
+    if(_experiment_active) {
+      state->set_in_use(true);
+      add_delays(state);
+      state->set_in_use(false);
+    }
+  }
 
   /// Call before (possibly) blocking
-  void pre_block();
+  void pre_block() {
+    thread_state* state = get_thread_state();
+    if(!state)
+      return;
+
+    state->pre_block_time = _global_delay.load();
+  }
 
   /// Call after unblocking. If by_thread is true, delays will be skipped
-  void post_block(bool skip_delays);
+  void post_block(bool skip_delays) {
+    thread_state* state = get_thread_state();
+    if(!state)
+      return;
+
+    state->set_in_use(true);
+
+    if(skip_delays) {
+      // Skip all delays that were inserted during the blocked period
+      state->local_delay += _global_delay.load() - state->pre_block_time;
+    }
+
+    state->set_in_use(false);
+  }
 
   /// Only allow one instance of the profiler, and never run the destructor
   static profiler& get_instance() {
@@ -76,11 +173,10 @@ public:
 private:
   profiler()  {
     _experiment_active.store(false);
-    _delays.store(0);
+    _global_delay.store(0);
     _delay_size.store(0);
     _selected_line.store(nullptr);
     _next_line.store(nullptr);
-    _samples.store(0);
     _running.store(true);
   }
 
@@ -107,29 +203,33 @@ private:
 
   /// A map from name to throughput monitoring progress points
   std::unordered_map<std::string, throughput_point*> _throughput_points;
-  spinlock _throughput_points_lock; //< Spinlock protecting throughput points map
+  spinlock _throughput_points_lock; //< Spinlock that protects the throughput points map
   
   /// A map from name to latency monitoring progress points
   std::unordered_map<std::string, latency_point*> _latency_points;
-  spinlock _latency_points_lock;  //< Spinlock protecting latency points map
+  spinlock _latency_points_lock;  //< Spinlock that protects the latency points map
 
   static_map<pid_t, thread_state> _thread_states;   //< Map from thread IDs to thread-local state
 
   std::atomic<bool> _experiment_active; //< Is an experiment running?
-  std::atomic<size_t> _delays;          //< The total number of delays inserted
+  std::atomic<size_t> _global_delay;    //< The global delay time required
   std::atomic<size_t> _delay_size;      //< The current delay size
   std::atomic<line*> _selected_line;    //< The line to speed up
   std::atomic<line*> _next_line;        //< The next line to speed up
 
-  std::string _output_filename;       //< File for profiler output
-  line* _fixed_line;  //< The only line that should be sped up, if set
-  int _fixed_delay_size = -1;         //< The only delay size that should be used, if set
+  pthread_t _profiler_thread;     //< Handle for the profiler thread
+  std::atomic<bool> _running;     //< Clear to signal the profiler thread to quit
+  std::string _output_filename;   //< File for profiler output
+  
+  // Settings for fixed line speedup and speedup size
+  line* _fixed_line;              //< The only line that should be sped up, if set
+  int _fixed_delay_size = -1;     //< The only delay size that should be used, if set
+  
+  /// Should coz virtually speed up the load on the system?
+  bool _enable_arrival_speedup;
 
-  pthread_t _profiler_thread;         //< Handle for the profiler thread
-  size_t _end_time;                   //< Time that shutdown was called
-  std::atomic<size_t> _samples;       //< Total number of samples collected
-  std::atomic<bool> _running;         //< Clear to signal the profiler thread to quit
-  std::atomic_flag _shutdown_run = ATOMIC_FLAG_INIT;  //< Used to ensure shutdown only runs once
+  /// Atomic flag to guarantee shutdown procedures run exactly one time
+  std::atomic_flag _shutdown_run = ATOMIC_FLAG_INIT;
 };
 
 #endif

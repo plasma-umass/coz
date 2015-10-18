@@ -100,6 +100,9 @@ int wrapped_main(int argc, char** argv, char** env) {
   string fixed_line_name = getenv_safe("COZ_FIXED_LINE", "");
   int fixed_speedup;
   stringstream(getenv_safe("COZ_FIXED_SPEEDUP", "-1")) >> fixed_speedup;
+  
+  // Should coz also virtually speed up arrivals/load on the system?
+  bool arrival_speedup = getenv("COZ_ARRIVAL_SPEEDUP");
 
   // Replace 'MAIN' in the binary_scope with the real path of the main executable
   if(binary_scope.find("MAIN") != binary_scope.end()) {
@@ -137,7 +140,10 @@ int wrapped_main(int argc, char** argv, char** env) {
   }
 
   // Start the profiler
-  profiler::get_instance().startup(output_file, fixed_line.get(), fixed_speedup);
+  profiler::get_instance().startup(output_file,
+                                   fixed_line.get(),
+                                   fixed_speedup,
+                                   arrival_speedup);
 
   // Synchronizations can be intercepted once the profiler has been initialized
   initialized = true;
