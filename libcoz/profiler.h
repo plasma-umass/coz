@@ -53,7 +53,7 @@ public:
   void startup(const std::string& outfile,
                line* fixed_line,
                int fixed_speedup,
-               bool arrival_speedup);
+               float load_amp);
 
   /// Shut down the profiler
   void shutdown();
@@ -162,6 +162,18 @@ public:
 
     state->set_in_use(false);
   }
+  
+  /// Get a pointer to the current thread's arrival counter
+  size_t* get_local_arrival_counter() {
+    thread_state* state = get_thread_state();
+    if(!state) return nullptr;
+    return &state->arrivals;
+  }
+  
+  /// Get a pointer to the global count of arrivals
+  size_t* get_global_arrival_counter() {
+    return &_arrival_count;
+  }
 
   /// Only allow one instance of the profiler, and never run the destructor
   static profiler& get_instance() {
@@ -225,8 +237,9 @@ private:
   line* _fixed_line;              //< The only line that should be sped up, if set
   int _fixed_delay_size = -1;     //< The only delay size that should be used, if set
   
-  /// Should coz virtually speed up the load on the system?
-  bool _enable_arrival_speedup;
+  bool _enable_load_amp = false;  //< Enable load amplification?
+  float _load_multiplier = 1.0;   //< How much should load be multiplied?
+  size_t _arrival_count = 0;      //< The total number of task arrivals 
 
   /// Atomic flag to guarantee shutdown procedures run exactly one time
   std::atomic_flag _shutdown_run = ATOMIC_FLAG_INIT;

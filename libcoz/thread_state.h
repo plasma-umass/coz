@@ -13,6 +13,10 @@ public:
   timer process_timer;      //< The timer that triggers sample processing for this thread
   size_t pre_block_time;    //< The time saved before (possibly) blocking
   
+  size_t arrivals = 0;      //< The number of task arrivals executed in this thread
+  size_t saved_global_arrivals = 0; //< The number of arrivals from any thread from the start of the current sampling period
+  size_t saved_local_arrivals = 0;  //< The number of arrivals from this thread from the start of the current sampling period
+  
   inline void set_in_use(bool value) {
     in_use = value;
     std::atomic_signal_fence(std::memory_order_seq_cst);

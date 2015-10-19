@@ -17,7 +17,7 @@ $(ROOT)/deps/libelfin:
 	@mkdir -p $(ROOT)/deps
 	@git clone git://github.com/ccurtsinger/libelfin $(ROOT)/deps/libelfin
 	@echo $(LOG_PREFIX) Building libelfin $(LOG_SUFFIX)
-	@cd $(ROOT)/deps/libelfin; make MAKEFLAGS="-j1"
+	@cd $(ROOT)/deps/libelfin; make MAKEFLAGS="-j1" CXX=$(CXX) CC=$(CC)
 
 # Update build settings to include libelfin libraries
 ifneq (,$(findstring libelfin,$(PREREQS)))

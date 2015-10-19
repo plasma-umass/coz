@@ -31,7 +31,7 @@ using namespace std;
 void profiler::startup(const string& outfile,
                        line* fixed_line,
                        int fixed_speedup,
-                       bool arrival_speedup) {
+                       float load_amp) {
   // Set up the sampling signal handler
   struct sigaction sa = {
     .sa_sigaction = profiler::samples_ready,
@@ -57,8 +57,11 @@ void profiler::startup(const string& outfile,
   if(fixed_speedup >= 0 && fixed_speedup <= 100)
     _fixed_delay_size = SamplePeriod * fixed_speedup / 100;
 
-  // Save the arrival speedup point name
-  _enable_arrival_speedup = arrival_speedup;
+  // If load amplification is greater than 1, enable it
+  if(load_amp > 1.0) {
+    _enable_load_amp = true;
+    _load_multiplier = load_amp;
+  }
 
   // Use a spinlock to wait for the profiler thread to finish intialization
   spinlock l;
@@ -156,24 +159,7 @@ void profiler::profiler_thread(spinlock& l) {
     }
 
     _delay_size.store(delay_size);
-
-    // Save the starting time and sample count
-    size_t start_time = get_time();
-    size_t starting_samples = selected->get_samples();
-    size_t starting_delay_time = _global_delay.load();
-    
-    // Was arrival speedup enabled?
-    int arrival_speedup_percent;
-    // Yes. Choose a random arrival speedup size using the same procedure as for line speedup size
-    if(_enable_arrival_speedup) {
-      size_t r = delay_dist(generator);
-      if(r <= ZeroSpeedupWeight) {
-        arrival_speedup_percent = 0;
-      } else {
-        arrival_speedup_percent = (r - ZeroSpeedupWeight) * 100 / SpeedupDivisions;
-      }
-    }
-
+ 
     // Save throughput point values at the start of the experiment
     vector<unique_ptr<throughput_point::saved>> saved_throughput_points;
     _throughput_points_lock.lock();
@@ -189,52 +175,50 @@ void profiler::profiler_thread(spinlock& l) {
       saved_latency_points.emplace_back(p.second->save());
     }
     _latency_points_lock.unlock();
+    
+    // Save the starting time and sample count
+    size_t start_time = get_time();
+    size_t starting_samples = selected->get_samples();
+    size_t starting_delay_time = _global_delay.load();
 
     // Tell threads to start the experiment
     _experiment_active.store(true);
 
-    // If arrival speedup is enabled, profiler thread samples the arrival point
-    // Otherwise, just wait until experiment ends
-    if(_enable_arrival_speedup) {
-      size_t elapsed_time = 0;
-      while(elapsed_time < experiment_length) {
-        // Wait for a sampling period
-        size_t period = wait(SamplePeriod);
-        // Compute the amount of delay to add to all running threads
-        size_t delay_size = (period * arrival_speedup_percent) / 100;
-        // Add the delay
-        _global_delay += delay_size;
-        // Add this period to elapsed time
-        elapsed_time += period;
-      }
-    } else {
-      // Wait for the experiment duration to elapse
-      wait(experiment_length);
-    }
+    // Wait until the experiment ends
+    wait(experiment_length);
 
     // Compute experiment parameters
     float speedup = (float)delay_size / (float)SamplePeriod;
-    size_t experiment_delay = _global_delay.load() - starting_delay_time;
-    size_t duration = get_time() - start_time - experiment_delay;
+    size_t ending_delay_time = _global_delay.load();
+    size_t experiment_delay = ending_delay_time - starting_delay_time;
+    size_t end_time = get_time();
+    size_t duration = end_time - start_time;
+    
+    // Delays are approximate, so total delay can actually exceed wall time.
+    // Just use zero time instead
+    if(experiment_delay > duration) duration = 0;
+    else duration -= experiment_delay;
+    
     size_t selected_samples = selected->get_samples() - starting_samples;
-
+    
     // Log the experiment parameters
     output << "experiment\t"
            << "selected=" << selected << "\t"
            << "speedup=" << speedup << "\t"
+           << "load-amp=" << _load_multiplier << "\t"
            << "duration=" << duration << "\t"
            << "selected-samples=" << selected_samples << "\n";
 
     // Keep a running count of the minimum delta over all progress points
     size_t min_delta = std::numeric_limits<size_t>::max();
-    
+  
     // Log throughput point measurements and update the minimum delta
     for(const auto& s : saved_throughput_points) {
       size_t delta = s->get_delta();
       if(delta < min_delta) min_delta = delta;
       s->log(output);
     }
-    
+  
     // Log latency point measurements and update the minimum delta
     for(const auto& s : saved_latency_points) {
       size_t begin_delta = s->get_begin_delta();
@@ -420,7 +404,6 @@ void profiler::add_delays(thread_state* state) {
 
     } else if(state->local_delay < global_delay) {
       // Thread is behind: Pause this thread to catch up
-      
       // Pause and record the exact amount of time this thread paused
       state->sampler.stop();
       state->local_delay += wait(global_delay - state->local_delay);
@@ -450,6 +433,29 @@ void profiler::process_samples(thread_state* state) {
       } else if(sampled_line != nullptr && _next_line.load() == nullptr) {
         _next_line.store(sampled_line);
       }
+    }
+  }
+  
+  if(_enable_load_amp) {
+    // Handle load amplification, if enabled
+    size_t global_arrivals = __atomic_load_n(&_arrival_count, __ATOMIC_RELAXED);
+    size_t local_arrivals = __atomic_load_n(&state->arrivals, __ATOMIC_RELAXED);
+  
+    // How many global arrivals during this sampling period?
+    size_t new_global_arrivals = global_arrivals - state->saved_global_arrivals;
+    state->saved_global_arrivals = global_arrivals;
+  
+    // How many local arrivals during this sampling period?
+    size_t new_local_arrivals = local_arrivals - state->saved_local_arrivals;
+    state->saved_local_arrivals = local_arrivals;
+  
+    // How much should this thread be sped up?
+    if(new_global_arrivals > 0 && new_local_arrivals > 0) {
+      size_t per_arrival_speedup = (SamplePeriod * SampleBatchSize) * (_load_multiplier - 1) / (new_global_arrivals * _load_multiplier);
+      
+      size_t speedup_time = per_arrival_speedup * new_local_arrivals;
+      
+      state->local_delay += speedup_time;
     }
   }
 
@@ -489,6 +495,8 @@ void profiler::on_error(int signum, siginfo_t* info, void* p) {
   for(int i=0; i<frames; i++) {
     fprintf(stderr, "  %d: %s\n", i, syms[i]);
   }
+  
+  for(;;){}
 
   real::_exit(2);
 }
