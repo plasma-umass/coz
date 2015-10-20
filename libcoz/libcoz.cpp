@@ -55,6 +55,20 @@ extern "C" coz_counter_t* _coz_get_counter(progress_point_type t, const char* na
 }
 
 /**
+ * Called by the application to get a handle to the thread-local arrival counter
+ */
+extern "C" size_t* _coz_get_local_arrivals() {
+  return profiler::get_instance().get_local_arrival_counter();
+}
+
+/**
+ * Called by the application to get a handle to the global arrival counter
+ */
+extern "C" size_t* _coz_get_global_arrivals() {
+  return profiler::get_instance().get_global_arrival_counter();
+}
+
+/**
  * Read a link's contents and return it as a string
  */
 static string readlink_str(const char* path) {
@@ -101,8 +115,9 @@ int wrapped_main(int argc, char** argv, char** env) {
   int fixed_speedup;
   stringstream(getenv_safe("COZ_FIXED_SPEEDUP", "-1")) >> fixed_speedup;
   
-  // Should coz also virtually speed up arrivals/load on the system?
-  bool arrival_speedup = getenv("COZ_ARRIVAL_SPEEDUP");
+  // How much should program load be amplified?
+  float load_amp;
+  stringstream(getenv_safe("COZ_LOAD_AMP", "1.0")) >> load_amp;
 
   // Replace 'MAIN' in the binary_scope with the real path of the main executable
   if(binary_scope.find("MAIN") != binary_scope.end()) {
@@ -143,8 +158,8 @@ int wrapped_main(int argc, char** argv, char** env) {
   profiler::get_instance().startup(output_file,
                                    fixed_line.get(),
                                    fixed_speedup,
-                                   arrival_speedup);
-
+                                   load_amp);
+                                   
   // Synchronizations can be intercepted once the profiler has been initialized
   initialized = true;
 

@@ -70,8 +70,8 @@ def _coz_run(args):
   if args.fixed_speedup:
     env['COZ_FIXED_SPEEDUP'] = str(args.fixed_speedup)
     
-  if args.arrival_speedup:
-    env['COZ_ARRIVAL_SPEEDUP'] = '1'
+  if args.load_amp:
+    env['COZ_LOAD_AMP'] = str(args.load_amp)
 
   try:
     result = subprocess.call(args.remaining_args, env=env)
@@ -138,9 +138,10 @@ _run_parser.add_argument('--fixed-speedup',
                          type=int, choices=range(0, 101), default=None,
                          help='Evaluate optimizations of a specific amount')
 
-_run_parser.add_argument('--arrival-speedup',
-                         action='store_true', default=False,
-                         help='Evaluate the effect of increasing the work arrival rate')
+_run_parser.add_argument('--load-amp',
+                         metavar='<load multiplier> (>= 1.0)', default=None,
+                         type=float,
+                         help='Use virtual speedup to multiply load on the program')
 
 # Use defaults to recover handler function and parser object from parser output
 _run_parser.set_defaults(func=_coz_run, parser=_run_parser)

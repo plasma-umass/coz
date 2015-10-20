@@ -143,11 +143,17 @@ public:
 
     /// Log the change in this progress point since it was saved
     virtual void log(std::ostream& os) const {
+      // Log the latency point info
       os << "latency-point\t"
          << "name=" << _origin->get_name() << "\t"
          << "arrivals=" << get_begin_delta() << "\t"
          << "departures=" << get_end_delta() << "\t"
          << "difference=" << get_difference() << "\n";
+      
+      // Also log departures as a throughput point, at least for now
+      os << "throughput-point\t"
+         << "name=" << _origin->get_name() << " [departures]\t"
+         << "delta=" << get_end_delta() << "\n";
     }
 
     virtual size_t get_begin_delta() const {
