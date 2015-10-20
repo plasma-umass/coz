@@ -67,7 +67,7 @@ def _coz_run(args):
   if args.fixed_line:
     env['COZ_FIXED_LINE'] = args.fixed_line
 
-  if args.fixed_speedup:
+  if args.fixed_speedup != None:
     env['COZ_FIXED_SPEEDUP'] = str(args.fixed_speedup)
     
   if args.load_amp:
