@@ -495,8 +495,6 @@ void profiler::on_error(int signum, siginfo_t* info, void* p) {
   for(int i=0; i<frames; i++) {
     fprintf(stderr, "  %d: %s\n", i, syms[i]);
   }
-  
-  for(;;){}
 
   real::_exit(2);
 }
