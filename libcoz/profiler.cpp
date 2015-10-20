@@ -32,6 +32,7 @@ using namespace std;
 void profiler::startup(const string& outfile,
                        line* fixed_line,
                        int fixed_speedup,
+                       bool end_to_end,
                        float load_amp) {
   // Set up the sampling signal handler
   struct sigaction sa;
@@ -55,6 +56,9 @@ void profiler::startup(const string& outfile,
   // If the speedup amount is in bounds, set a fixed delay size
   if(fixed_speedup >= 0 && fixed_speedup <= 100)
     _fixed_delay_size = SamplePeriod * fixed_speedup / 100;
+
+  // Should end-to-end mode be enabled?
+  _enable_end_to_end = end_to_end;
 
   // If load amplification is greater than 1, enable it
   if(load_amp > 1.0) {
@@ -183,8 +187,14 @@ void profiler::profiler_thread(spinlock& l) {
     // Tell threads to start the experiment
     _experiment_active.store(true);
 
-    // Wait until the experiment ends
-    wait(experiment_length);
+    // Wait until the experiment ends, or until shutdown if in end-to-end mode
+    if(_enable_end_to_end) {
+      while(_running) {
+        wait(SamplePeriod * SampleBatchSize);
+      }
+    } else {
+      wait(experiment_length);
+    }
 
     // Compute experiment parameters
     float speedup = (float)delay_size / (float)SamplePeriod;

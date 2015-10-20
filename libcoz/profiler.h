@@ -53,6 +53,7 @@ public:
   void startup(const std::string& outfile,
                line* fixed_line,
                int fixed_speedup,
+               bool end_to_end,
                float load_amp);
 
   /// Shut down the profiler
@@ -240,6 +241,9 @@ private:
   bool _enable_load_amp = false;  //< Enable load amplification?
   float _load_multiplier = 1.0;   //< How much should load be multiplied?
   size_t _arrival_count = 0;      //< The total number of task arrivals 
+
+  /// Should coz run in end-to-end mode?
+  bool _enable_end_to_end;
 
   /// Atomic flag to guarantee shutdown procedures run exactly one time
   std::atomic_flag _shutdown_run = ATOMIC_FLAG_INIT;

@@ -127,7 +127,7 @@ _run_parser.add_argument('--output', '-o',
 
 _run_parser.add_argument('--end-to-end',
                          action='store_true', default=False,
-                         help='[NOT SUPPORTED] Run a single performance experiment per-execution')
+                         help='Run a single performance experiment per-execution')
 
 _run_parser.add_argument('--fixed-line',
                          metavar='<source file>:<line number>', default=None,
