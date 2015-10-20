@@ -137,7 +137,10 @@ int wrapped_main(int argc, char** argv, char** env) {
   }
 
   // Start the profiler
-  profiler::get_instance().startup(output_file, fixed_line.get(), fixed_speedup);
+  profiler::get_instance().startup(output_file,
+                                   fixed_line.get(),
+                                   fixed_speedup,
+                                   end_to_end);
 
   // Synchronizations can be intercepted once the profiler has been initialized
   initialized = true;

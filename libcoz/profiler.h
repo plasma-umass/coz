@@ -50,7 +50,10 @@ struct thread_start_arg {
 class profiler {
 public:
   /// Start the profiler
-  void startup(const std::string& outfile, line* fixed_line, int fixed_speedup);
+  void startup(const std::string& outfile,
+               line* fixed_line,
+               int fixed_speedup,
+               bool end_to_end);
 
   /// Shut down the profiler
   void shutdown();
@@ -219,6 +222,9 @@ private:
   std::string _output_filename;   //< File for profiler output
   line* _fixed_line;              //< The only line that should be sped up, if set
   int _fixed_delay_size = -1;     //< The only delay size that should be used, if set
+
+  /// Should coz run in end-to-end mode?
+  bool _enable_end_to_end;
 
   /// Atomic flag to guarantee shutdown procedures run exactly one time
   std::atomic_flag _shutdown_run = ATOMIC_FLAG_INIT;

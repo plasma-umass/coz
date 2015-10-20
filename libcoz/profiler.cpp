@@ -28,7 +28,10 @@ using namespace std;
 /**
  * Start the profiler
  */
-void profiler::startup(const string& outfile, line* fixed_line, int fixed_speedup) {
+void profiler::startup(const string& outfile,
+                       line* fixed_line,
+                       int fixed_speedup,
+                       bool end_to_end) {
   // Set up the sampling signal handler
   struct sigaction sa = {
     .sa_sigaction = profiler::samples_ready,
@@ -53,6 +56,9 @@ void profiler::startup(const string& outfile, line* fixed_line, int fixed_speedu
   // If the speedup amount is in bounds, set a fixed delay size
   if(fixed_speedup >= 0 && fixed_speedup <= 100)
     _fixed_delay_size = SamplePeriod * fixed_speedup / 100;
+
+  // Should end-to-end mode be enabled?
+  _enable_end_to_end = end_to_end;
 
   // Use a spinlock to wait for the profiler thread to finish intialization
   spinlock l;
@@ -175,8 +181,14 @@ void profiler::profiler_thread(spinlock& l) {
     // Tell threads to start the experiment
     _experiment_active.store(true);
 
-    // Wait for the experiment duration to elapse
-    wait(experiment_length);
+    // Wait until the experiment ends, or until shutdown if in end-to-end mode
+    if(_enable_end_to_end) {
+      while(_running) {
+        wait(SamplePeriod * SampleBatchSize);
+      }
+    } else {
+      wait(experiment_length);
+    }
 
     // Compute experiment parameters
     float speedup = (float)delay_size / (float)SamplePeriod;
