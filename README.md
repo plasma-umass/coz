@@ -29,7 +29,7 @@ To build Coz, just clone this repository and run `make`. The build system will c
 ## Using Coz
 Using coz requires a small amount of setup, but you can jump ahead to the section on the included [sample applications](#sample-applications) in this repository if you want to try coz right away.
 
-To run your program with coz, you will need to build it with debug information. You do not need to include debug symbols in the main executable: coz uses the same procedure as `gdb` to locate debug information for stripped binaries.
+To run your program with coz, you will need to build it with debug information. You do not need to include debug symbols in the main executable: coz uses the same procedure as `gdb` to locate debug information for stripped binaries. If you plan to use your program with progress points (see below), you also need to link your program with the dynamic loader library by specifying the `-ldl` option.
 
 Once you have your program built with debug information, you can run it with coz using the command `coz run {coz options} --- {program name and arguments}`. But, to produce a useful profile you need to decide which part(s) of the application you want to speed up by specifying one or more progress points.
 
@@ -41,13 +41,13 @@ Coz departs from conventional profiling by making it possible to view the effect
 
 To profile throughput you must indicate a line in the code that corresponds to the end of a unit of work. For example, a progress point could be the point at which a transaction concludes, when a web page finishes rendering, or when a query completes. Coz then measures the rate of visits to each progress point to determine any potential optimization's effect on throughput. 
 
-To place a progress point, include `coz.h` (under the `include` directory in this repository) and add the `COZ_PROGRESS` macro to at least one line you would like to execute more frequently.
+To place a progress point, include `coz.h` (under the `include` directory in this repository) and add the `COZ_PROGRESS` macro to at least one line you would like to execute more frequently. Don't forget to link your program with libdl: use the `-ldl` option. 
 
 By default, Coz uses the source file and line number as the name for your progress points. If you use `COZ_PROGRESS_NAMED("name for progress point")` instead, you can provide an informative name for your progress points. This also allows you to mark multiple source locations that correspond to the same progress point.
 
 #### Latency Profiling: Specifying Progress Points
 
-To profile latency, you must place two progress points that correspond to the start and end of an event of interest, such as when a transaction begins and completes. Simply  mark the beginning of a transaction with the `COZ_BEGIN("transaction name")` macro, and the end with the `COZ_END("transaction name")` macro. Unlike regular progress points, you always need to specify a name for your latency progress points.
+To profile latency, you must place two progress points that correspond to the start and end of an event of interest, such as when a transaction begins and completes. Simply  mark the beginning of a transaction with the `COZ_BEGIN("transaction name")` macro, and the end with the `COZ_END("transaction name")` macro. Unlike regular progress points, you always need to specify a name for your latency progress points. Don't forget to link your program with libdl: use the `-ldl` option. 
 
 When coz tests a hypothetical optimization it will report the effect of that optimization on the average latency between these two points. Coz can track this information with any knowledge of individual transactions thanks to [Little's Law](https://en.wikipedia.org/wiki/Little%27s_law).
 
