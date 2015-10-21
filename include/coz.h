@@ -33,7 +33,7 @@ typedef coz_counter_t* (*coz_get_counter_t)(int, const char*);
 // Locate and invoke _coz_get_counter
 static coz_counter_t* _call_coz_get_counter(int type, const char* name) {
   static unsigned char _initialized = 0;
-  coz_get_counter_t fn; // The pointer to _coz_get_counter
+  static coz_get_counter_t fn; // The pointer to _coz_get_counter
   
   if(!_initialized) {
     // Locate the _coz_get_counter method
