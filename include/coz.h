@@ -56,7 +56,7 @@ typedef size_t* (*coz_get_arrivals_t)();
 // Get a pointer to the thread-local arrival counter
 static size_t* _call_coz_get_local_arrivals() {
   static unsigned char _initialized = 0;
-  coz_get_arrivals_t fn;  // The pointer to _coz_get_local_arrivals
+  static coz_get_arrivals_t fn;  // The pointer to _coz_get_local_arrivals
   
   if(!_initialized) {
     // Locate the _coz_get_local_arrivals function
@@ -76,7 +76,7 @@ static size_t* _call_coz_get_local_arrivals() {
 // Get a pointer to the global arrival counter
 static size_t* _call_coz_get_global_arrivals() {
   static unsigned char _initialized = 0;
-  coz_get_arrivals_t fn;  // The pointer to _coz_get_local_arrivals
+  static coz_get_arrivals_t fn;  // The pointer to _coz_get_local_arrivals
   
   if(!_initialized) {
     // Locate the _coz_get_local_arrivals function
