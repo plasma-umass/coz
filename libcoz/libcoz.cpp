@@ -78,10 +78,10 @@ static string readlink_str(const char* path) {
 
 /**
  * Pass the real __libc_start_main this main function, then run the real main
- * function. This allows Causal to shut down when the real main function returns.
+ * function. This allows Coz to shut down when the real main function returns.
  */
 int wrapped_main(int argc, char** argv, char** env) {
-  // Remove causal from LD_PRELOAD. Just clearing LD_PRELOAD for now FIXME!
+  // Remove Coz from LD_PRELOAD. Just clearing LD_PRELOAD for now FIXME!
   unsetenv("LD_PRELOAD");
 
   // Read settings out of environment variables
@@ -162,9 +162,9 @@ int wrapped_main(int argc, char** argv, char** env) {
 /**
  * Interpose on the call to __libc_start_main to run before libc constructors.
  */
-extern "C" int __libc_start_main(main_fn_t, int, char**, void (*)(), void (*)(), void (*)(), void*) __attribute__((weak, alias("causal_libc_start_main")));
+extern "C" int __libc_start_main(main_fn_t, int, char**, void (*)(), void (*)(), void (*)(), void*) __attribute__((weak, alias("coz_libc_start_main")));
 
-extern "C" int causal_libc_start_main(main_fn_t main_fn, int argc, char** argv,
+extern "C" int coz_libc_start_main(main_fn_t main_fn, int argc, char** argv,
     void (*init)(), void (*fini)(), void (*rtld_fini)(), void* stack_end) {
   // Find the real __libc_start_main
   auto real_libc_start_main = (decltype(__libc_start_main)*)dlsym(RTLD_NEXT, "__libc_start_main");
@@ -176,8 +176,8 @@ extern "C" int causal_libc_start_main(main_fn_t main_fn, int argc, char** argv,
   return result;
 }
 
-/// Remove causal's required signals from a signal mask
-void remove_causal_signals(sigset_t* set) {
+/// Remove coz's required signals from a signal mask
+void remove_coz_signals(sigset_t* set) {
   if(sigismember(set, SampleSignal)) {
     sigdelset(set, SampleSignal);
   }
@@ -189,13 +189,13 @@ void remove_causal_signals(sigset_t* set) {
   }
 }
 
-/// Check if a signal is required by causal
-bool is_causal_signal(int signum) {
+/// Check if a signal is required by coz
+bool is_coz_signal(int signum) {
   return signum == SampleSignal || signum == SIGSEGV || signum == SIGABRT;
 }
 
 extern "C" {
-  /// Pass pthread_create calls to causal so child threads can inherit the parent's delay count
+  /// Pass pthread_create calls to coz so child threads can inherit the parent's delay count
   int pthread_create(pthread_t* thread,
                      const pthread_attr_t* attr,
                      thread_fn_t fn,
@@ -346,34 +346,34 @@ extern "C" {
     real::_Exit(status);
   }
 
-  /// Don't allow programs to set signal handlers for causal's required signals
+  /// Don't allow programs to set signal handlers for coz's required signals
   sighandler_t signal(int signum, sighandler_t handler) throw() {
-    if(is_causal_signal(signum)) {
+    if(is_coz_signal(signum)) {
       return NULL;
     } else {
       return real::signal(signum, handler);
     }
   }
 
-  /// Don't allow programs to set handlers or mask signals required for causal
+  /// Don't allow programs to set handlers or mask signals required for coz
   int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact) throw() {
-    if(is_causal_signal(signum)) {
+    if(is_coz_signal(signum)) {
       return 0;
     } else if(act != NULL) {
       struct sigaction my_act = *act;
-      remove_causal_signals(&my_act.sa_mask);
+      remove_coz_signals(&my_act.sa_mask);
       return real::sigaction(signum, &my_act, oldact);
     } else {
       return real::sigaction(signum, act, oldact);
     }
   }
 
-  /// Ensure causal's signals remain unmasked
+  /// Ensure coz's signals remain unmasked
   int sigprocmask(int how, const sigset_t* set, sigset_t* oldset) throw() {
     if(how == SIG_BLOCK || how == SIG_SETMASK) {
       if(set != NULL) {
         sigset_t myset = *set;
-        remove_causal_signals(&myset);
+        remove_coz_signals(&myset);
         return real::sigprocmask(how, &myset, oldset);
       }
     }
@@ -381,12 +381,12 @@ extern "C" {
     return real::sigprocmask(how, set, oldset);
   }
 
-  /// Ensure causal's signals remain unmasked
+  /// Ensure coz's signals remain unmasked
   int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset) throw() {
     if(how == SIG_BLOCK || how == SIG_SETMASK) {
       if(set != NULL) {
         sigset_t myset = *set;
-        remove_causal_signals(&myset);
+        remove_coz_signals(&myset);
 
         return real::pthread_sigmask(how, &myset, oldset);
       }
@@ -404,7 +404,7 @@ extern "C" {
 
   /// Catch up on delays before sending a signal to another thread
   int pthread_kill(pthread_t thread, int sig) throw() {
-    // TODO: Don't allow threads to send causal's signals
+    // TODO: Don't allow threads to send coz's signals
     if(initialized) profiler::get_instance().catch_up();
     return real::pthread_kill(thread, sig);
   }
@@ -415,13 +415,13 @@ extern "C" {
   }
 
   /**
-   * Ensure a thread cannot wait for causal's signals.
+   * Ensure a thread cannot wait for coz's signals.
    * If the waking signal is delivered from the same process, skip any global delays added
    * while blocked.
    */
   int sigwait(const sigset_t* set, int* sig) {
     sigset_t myset = *set;
-    remove_causal_signals(&myset);
+    remove_coz_signals(&myset);
     siginfo_t info;
 
     if(initialized) profiler::get_instance().pre_block();
@@ -442,13 +442,13 @@ extern "C" {
   }
 
   /**
-   * Ensure a thread cannot wait for causal's signals.
+   * Ensure a thread cannot wait for coz's signals.
    * If the waking signal is delivered from the same process, skip any added global delays.
    */
   int sigwaitinfo(const sigset_t* set, siginfo_t* info) {
     sigset_t myset = *set;
     siginfo_t myinfo;
-    remove_causal_signals(&myset);
+    remove_coz_signals(&myset);
 
     if(initialized) profiler::get_instance().pre_block();
 
@@ -464,13 +464,13 @@ extern "C" {
   }
 
   /**
-   * Ensure a thread cannot wait for causal's signals.
+   * Ensure a thread cannot wait for coz's signals.
    * If the waking signal is delivered from the same process, skip any global delays.
    */
   int sigtimedwait(const sigset_t* set, siginfo_t* info, const struct timespec* timeout) {
     sigset_t myset = *set;
     siginfo_t myinfo;
-    remove_causal_signals(&myset);
+    remove_coz_signals(&myset);
 
     if(initialized) profiler::get_instance().pre_block();
 
