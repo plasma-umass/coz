@@ -16,6 +16,8 @@ that Counts with Causal Profiling
 (pdf)](Coz-Curtsinger-Berger-SOSP2015.pdf), SOSP 2015, October 2015
 (recipient of a Best Paper Award).
 
+[![Coz presentation at SOSP 2015](http://img.youtube.com/vi/jE0V-p1odPg/0.jpg)](http://www.youtube.com/watch?v=jE0V-p1odPg&t=0m28s "Coz presentation at SOSP 2015")
+
 ## Requirements
 Coz, our prototype causal profiler, runs with unmodified Linux executables. Coz requires:
 
