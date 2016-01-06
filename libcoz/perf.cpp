@@ -203,7 +203,7 @@ bool perf_event::iterator::has_data() const {
 }
 
 void perf_event::copy_from_ring_buffer(struct perf_event_mmap_page* mapping,
-                                       uint64_t index, void* dest, size_t bytes) {
+                                       size_t index, void* dest, size_t bytes) {
   uintptr_t base = reinterpret_cast<uintptr_t>(mapping) + PageSize;
   size_t start_index = index % DataSize;
   size_t end_index = start_index + bytes;
