@@ -4,6 +4,7 @@
 #include <linux/perf_event.h>
 #include <sys/types.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 
@@ -183,7 +184,7 @@ private:
   
   // Copy data out of the mmap ring buffer
   static void copy_from_ring_buffer(struct perf_event_mmap_page* mapping,
-                                    size_t index, void* dest, size_t bytes);
+                                    ptrdiff_t index, void* dest, size_t bytes);
   
   /// File descriptor for the perf event
   long _fd = -1;
