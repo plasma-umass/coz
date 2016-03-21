@@ -138,9 +138,10 @@ void profiler::profiler_thread(spinlock& l) {
 
       // If we're no longer running, exit the experiment loop
       if(!_running) break;
-
-      _selected_line.store(selected);
     }
+
+    // Store the globally-visible selected line
+    _selected_line.store(selected);
 
     // Choose a delay size
     size_t delay_size;
