@@ -62,6 +62,10 @@ To plot profile results, go to http://plasma-umass.github.io/coz/ and load your 
 ## Sample Applications
 The `benchmarks` directory in this repository includes several small benchmarks with progress points added at appropriate locations. To build and run one of these benchmarks with `coz`, just browse to `benchmarks/{bench name}` and type `make bench` (or `make test` for a smaller input size). These programs may require several runs before coz has enough measurements to generate a useful profile. Once you have profiled these programs for several minutes, go to http://plasma-umass.github.io/coz/ to load and plot your profile.
 
+## Limitations
+Coz currently does not support interpreted or JIT-compiled languages such as Python, Ruby, or JavaScript.
+Interpreted languages will likely not be supported at any point, but support for JIT-compiled languages that produce debug information could be added in the future.
+
 ## License
 All source code is licensed under the BSD 2-clause license unless otherwise indicated.
 
