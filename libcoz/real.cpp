@@ -12,14 +12,13 @@ static void* pthread_handle = NULL;   //< The `dlopen` handle to libpthread
 
 #define GET_SYMBOL_HANDLE(name, handle) \
   decltype(::name)* real_##name = nullptr; \
-  if(!__atomic_exchange_n(&resolving, true, __ATOMIC_ACQ_REL)) { \
-    uintptr_t addr = reinterpret_cast<uintptr_t>(dlsym(handle, #name)); \
-    memcpy(&real_##name, &addr, sizeof(uintptr_t)); \
-    if(real_##name) { \
-      memcpy(&real::name, &addr, sizeof(uintptr_t)); \
-    } \
-    __atomic_store_n(&resolving, false, __ATOMIC_RELEASE); \
-  }
+  while(!__atomic_exchange_n(&resolving, true, __ATOMIC_ACQ_REL)) {} \
+  uintptr_t addr = reinterpret_cast<uintptr_t>(dlsym(handle, #name)); \
+  memcpy(&real_##name, &addr, sizeof(uintptr_t)); \
+  if(real_##name) { \
+    memcpy(&real::name, &addr, sizeof(uintptr_t)); \
+  } \
+  __atomic_store_n(&resolving, false, __ATOMIC_RELEASE);
 
 #define GET_SYMBOL(name) GET_SYMBOL_HANDLE(name, RTLD_NEXT)
 
