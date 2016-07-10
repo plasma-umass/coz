@@ -1,3 +1,11 @@
+DESTDIR =
+prefix = /usr
+bindir = $(prefix)/bin
+pkglibdir = $(prefix)/lib/coz-profiler
+incdir = $(prefix)/include
+
+INSTALL = install
+
 # Build with clang
 CC  := clang
 CXX := clang++
@@ -19,7 +27,7 @@ SRCS    ?= $(wildcard *.cpp) $(wildcard *.c)
 OBJS    ?= $(addprefix obj/,$(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS))))
 
 # Targets to build recirsively into $(DIRS)
-RECURSIVE_TARGETS  ?= all clean bench test
+RECURSIVE_TARGETS  ?= all clean bench test install
 
 # Build in parallel
 MAKEFLAGS := -j
