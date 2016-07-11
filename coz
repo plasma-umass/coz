@@ -39,8 +39,11 @@ def _coz_run(args):
     sys.exit(1)
 
   env = copy.deepcopy(os.environ)
-  coz_prefix = dirname(realpath(sys.argv[0]))
-  coz_runtime = coz_prefix + path_sep + 'libcoz' + path_sep + 'libcoz.so'
+  if os.path.exists('/usr/lib/coz-profiler/libcoz.so'):
+    coz_runtime = '/usr/lib/coz-profiler/libcoz.so'
+  else:
+    coz_prefix = dirname(realpath(sys.argv[0]))
+    coz_runtime = coz_prefix + path_sep + 'libcoz' + path_sep + 'libcoz.so'
 
   if 'LD_PRELOAD' in env:
     env['LD_PRELOAD'] += ':' + coz_runtime
