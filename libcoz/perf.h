@@ -60,12 +60,34 @@ public:
     stream_id = PERF_SAMPLE_STREAM_ID,
     cpu = PERF_SAMPLE_CPU,
     period = PERF_SAMPLE_PERIOD,
+    
+#if defined(PREF_SAMPLE_READ)
     read = PERF_SAMPLE_READ,
+#else
+    read = 0,
+#endif
+
     callchain = PERF_SAMPLE_CALLCHAIN,
     raw = PERF_SAMPLE_RAW,
+    
+#if defined(PERF_SAMPLE_BRANCH_STACK)
     branch_stack = PERF_SAMPLE_BRANCH_STACK,
+#else
+    branch_stack = 0,
+#endif
+
+#if defined(PERF_SAMPLE_REGS_USER)
     regs = PERF_SAMPLE_REGS_USER,
+#else
+    regs = 0,
+#endif
+
+#if defined(PERF_SAMPLE_STACK_USER)
     stack = PERF_SAMPLE_STACK_USER,
+#else
+    stack = 0,
+#endif
+
     _end = PERF_SAMPLE_MAX
   };
   
@@ -90,7 +112,12 @@ public:
     fork = PERF_RECORD_FORK,
     read = PERF_RECORD_READ,
     sample = PERF_RECORD_SAMPLE,
+
+#if defined(PERF_RECORD_MMAP2)
     mmap2 = PERF_RECORD_MMAP2
+#else
+    mmap2 = 0
+#endif
   };
   
   class iterator;
