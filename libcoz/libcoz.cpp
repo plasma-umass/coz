@@ -65,7 +65,7 @@ static string readlink_str(const char* path) {
     char exe_path[exe_size];
 
     exe_used = readlink(path, exe_path, exe_size - 1);
-    REQUIRE(exe_used > 0) << "Unable to read link";
+    REQUIRE(exe_used > 0) << "Unable to read link " << path;
 
     if(exe_used < exe_size - 1) {
       exe_path[exe_used] = '\0';
