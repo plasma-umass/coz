@@ -67,8 +67,6 @@ Coz currently does not support interpreted or JIT-compiled languages such as Pyt
 Interpreted languages will likely not be supported at any point, but support for JIT-compiled languages that produce debug information could be added in the future.
 
 ## License
-All source code is licensed under the BSD 2-clause license unless otherwise indicated.
+All source code is licensed under the BSD 2-clause license unless otherwise indicated. See LICENSE.md for.
 
-Copyright (C) 2015 Charlie Curtsinger and Emery Berger, University of Massachusetts Amherst
-
-Sample applications (in the `benchmarks` directory) include several [PHOENIX](https://github.com/kozyraki/phoenix) programs and [pbzip2](http://compression.ca/pbzip2/), which are licensed separately and included with this release for convenience.
+Sample applications (in the `benchmarks` directory) include several [Phoenix](https://github.com/kozyraki/phoenix) programs and [pbzip2](http://compression.ca/pbzip2/), which are licensed separately and included with this release for convenience.
