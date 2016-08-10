@@ -104,7 +104,7 @@ endif
 # Build any recursive targets in subdirectories
 $(RECURSIVE_TARGETS)::
 	@for dir in $(DIRS); do \
-	$(MAKE) -C $$dir --no-print-directory $@ MAKEPATH="$(MAKEPATH)/$$dir"; \
+	$(MAKE) -C $$dir --no-print-directory $@ MAKEPATH="$(MAKEPATH)/$$dir" || exit 1; \
 	done
 
 include $(ROOT)/deps.mk
