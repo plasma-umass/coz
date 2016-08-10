@@ -27,7 +27,7 @@ SRCS    ?= $(wildcard *.cpp) $(wildcard *.c)
 OBJS    ?= $(addprefix obj/,$(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS))))
 
 # Targets to build recirsively into $(DIRS)
-RECURSIVE_TARGETS  ?= all clean bench test install
+RECURSIVE_TARGETS  ?= all clean distclean bench test install
 
 # Build in parallel
 MAKEFLAGS := -j
@@ -54,10 +54,13 @@ clean::
 	done
 	@rm -rf $(TARGETS) obj
 
+# Bring source back to pristine state
+distclean:: clean
+
 test::
 
-# Prevent errors if files named all, clean, bench, or test exist
-.PHONY: all clean bench test
+# Prevent errors if files named all, clean, distclean, bench, or test exist
+.PHONY: all clean distclean bench test
 
 # Compile a C++ source file (and generate its dependency rules)
 obj/%.o: %.cpp $(PREREQS)
