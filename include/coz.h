@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2015, Charlie Curtsinger and Emery Berger,
+ *                     University of Massachusetts Amherst
+ * This file is part of the Coz project. See LICENSE.md file at the top-level
+ * directory of this distribution and at http://github.com/plasma-umass/coz.
+ */
+
 #if !defined(COZ_H)
 #define COZ_H
 
