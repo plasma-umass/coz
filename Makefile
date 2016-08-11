@@ -12,5 +12,5 @@ install::
 
 distclean::
 	@for dir in deps/libelfin ; do \
-	make -C $$dir distclean || make -C $$dir clean; \
+	if [ -d $$dir ] ; then make -C $$dir distclean || make -C $$dir clean; fi; \
 	done
