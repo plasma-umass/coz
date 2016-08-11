@@ -1,7 +1,10 @@
 ROOT := .
-DIRS := libcoz benchmarks
+DIRS := libcoz
 
 include $(ROOT)/common.mk
+
+bench::
+	@for dir in benchmarks ; do make -C $$dir $@; done
 
 install::
 	$(INSTALL) -D coz $(DESTDIR)$(bindir)/coz
