@@ -17,7 +17,7 @@ $(ROOT)/deps/libelfin: $(ROOT)/deps/libelfin/elf/libelf++.a
 $(ROOT)/deps/libelfin/Makefile:
 	@echo $(LOG_PREFIX) Checking out libelfin $(LOG_SUFFIX)
 	@mkdir -p $(ROOT)/deps
-	@git clone git://github.com/ccurtsinger/libelfin $(ROOT)/deps/libelfin
+	@git clone git://github.com/aclements/libelfin $(ROOT)/deps/libelfin
 
 $(ROOT)/deps/libelfin/elf/libelf++.a: $(ROOT)/deps/libelfin/Makefile
 	@echo $(LOG_PREFIX) Building libelfin $(LOG_SUFFIX)

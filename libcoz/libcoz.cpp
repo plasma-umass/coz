@@ -442,8 +442,8 @@ extern "C" {
       // If there was an error, return the error code
       return errno;
     } else {
-      // If the sig pointer is not null, pass the received signal to the caller
-      if(sig) *sig = result;
+      // No need to check if sig is null because it's declared as non-null
+      *sig = result;
       return 0;
     }
   }
