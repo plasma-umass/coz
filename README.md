@@ -13,7 +13,7 @@ developers had assumed they were getting all along.
 
 Full details of Coz are available in our paper, [Coz: Finding Code
 that Counts with Causal Profiling
-(pdf)](http://arxiv.org/abs/1608.03676), SOSP 2015, October 2015
+(pdf)](http://arxiv.org/pdf/1608.03676v1.pdf), SOSP 2015, October 2015
 (recipient of a Best Paper Award).
 
 [![Coz presentation at SOSP 2015](http://img.youtube.com/vi/jE0V-p1odPg/0.jpg)](http://www.youtube.com/watch?v=jE0V-p1odPg&t=0m28s "Coz presentation at SOSP 2015")
