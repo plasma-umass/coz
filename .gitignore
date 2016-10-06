@@ -39,3 +39,6 @@ tests/*/obj
 
 bin/inspect/obj
 bin/inspect/inspect
+
+.vscode
+node_modules
