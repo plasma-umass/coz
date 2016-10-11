@@ -80,6 +80,7 @@ d3.select('#minpoints_field').on('input', function () {
 d3.select('#sortby_field').on('change', update);
 d3.select(window).on('resize', function () { update(true); });
 var sample_profiles = ['blackscholes', 'dedup', 'ferret', 'fluidanimate', 'sqlite', 'swaptions'];
+var sample_profile_objects = {};
 var samples_sel = d3.select('#samples').selectAll('.sample-profile').data(sample_profiles)
     .enter().append('button')
     .attr('class', 'btn btn-sm btn-default sample-profile')
@@ -89,16 +90,23 @@ var samples_sel = d3.select('#samples').selectAll('.sample-profile').data(sample
     .on('click', function (d) {
     var sel = d3.select(this);
     if (sel.attr('loaded') != 'yes') {
-        d3.select('body').append('script')
-            .attr('src', 'profiles/' + d + '.coz.js')
-            .on('load', function () {
-            sel.attr('loaded', 'yes');
-            current_profile = eval(d + '_profile');
+        // Avoid race condition: Set first.
+        sel.attr('loaded', 'yes');
+        var xhr_1 = new XMLHttpRequest();
+        xhr_1.open('GET', "profiles/" + d + ".coz");
+        xhr_1.onload = function () {
+            current_profile = sample_profile_objects[d] =
+                new Profile(xhr_1.responseText, d3.select('#plot-area'), d3.select('#legend'), get_min_points, display_warning);
             update();
-        });
+        };
+        xhr_1.onerror = function () {
+            sel.attr('loaded', 'no');
+            display_warning("Error", "Failed to load profile for " + d + ".");
+        };
+        xhr_1.send();
     }
     else {
-        current_profile = eval(d + '_profile');
+        current_profile = sample_profile_objects[d];
         update();
     }
 });

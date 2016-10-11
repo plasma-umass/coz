@@ -106,6 +106,7 @@ d3.select('#sortby_field').on('change', update);
 d3.select(window).on('resize', function() { update(true); });
 
 let sample_profiles = ['blackscholes', 'dedup', 'ferret', 'fluidanimate', 'sqlite', 'swaptions'];
+let sample_profile_objects: {[name: string]: Profile} = {};
 
 let samples_sel = d3.select('#samples').selectAll('.sample-profile').data(sample_profiles)
   .enter().append('button')
@@ -114,17 +115,24 @@ let samples_sel = d3.select('#samples').selectAll('.sample-profile').data(sample
     .attr('loaded', 'no')
     .text(function(d) { return d; })
     .on('click', function(d) {
-      var sel = d3.select(this);
-      if(sel.attr('loaded') != 'yes') {
-        d3.select('body').append('script')
-          .attr('src', 'profiles/' + d + '.coz.js')
-          .on('load', function() {
-            sel.attr('loaded', 'yes');
-            current_profile = eval(d + '_profile');
-            update();
-          });
+      let sel = d3.select(this);
+      if (sel.attr('loaded') !== 'yes') {
+        // Avoid race condition: Set first.
+        sel.attr('loaded', 'yes');
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', `profiles/${d}.coz`);
+        xhr.onload = function() {
+          current_profile = sample_profile_objects[d] =
+            new Profile(xhr.responseText, d3.select('#plot-area'), d3.select('#legend'), get_min_points, display_warning);
+          update();
+        };
+        xhr.onerror = function() {
+          sel.attr('loaded', 'no');
+          display_warning("Error", `Failed to load profile for ${d}.`);
+        };
+        xhr.send();
       } else {
-        current_profile = eval(d + '_profile');
+        current_profile = sample_profile_objects[d];
         update();
       }
     });
