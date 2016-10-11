@@ -34,7 +34,9 @@ typedef int (*main_fn_t)(int, char**, char**);
 /// The program's real main function
 main_fn_t real_main;
 
+static bool end_to_end = false;
 bool initialized = false;
+static bool init_in_progress = false;
 
 /**
  * Called by the application to get/create a progress point
@@ -83,11 +85,21 @@ static string readlink_str(const char* path) {
   }
 }
 
-/**
- * Pass the real __libc_start_main this main function, then run the real main
- * function. This allows Coz to shut down when the real main function returns.
+/*
+ * Initialize coz.  This will either happen as main() is called using
+ * __libc_start_main, or on the first call to pthread_create() (if
+ * that happen earlier, which might happen if some shared library
+ * dependency create a thread in its initializer).
  */
-int wrapped_main(int argc, char** argv, char** env) {
+void init_coz(void) {
+  if (init_in_progress) {
+    INFO << "init_coz in progress, do not recurse";
+    return;
+  }
+  init_in_progress = true;
+  INFO << "bootstrapping coz";
+  initialized = false;
+
   // Remove Coz from LD_PRELOAD. Just clearing LD_PRELOAD for now FIXME!
   unsetenv("LD_PRELOAD");
 
@@ -103,7 +115,7 @@ int wrapped_main(int argc, char** argv, char** env) {
   vector<string> progress_points_v = split(getenv_safe("COZ_PROGRESS_POINTS"), '\t');
   unordered_set<string> progress_points(progress_points_v.begin(), progress_points_v.end());
 
-  bool end_to_end = getenv("COZ_END_TO_END");
+  end_to_end = getenv("COZ_END_TO_END");
   string fixed_line_name = getenv_safe("COZ_FIXED_LINE", "");
   int fixed_speedup;
   stringstream(getenv_safe("COZ_FIXED_SPEEDUP", "-1")) >> fixed_speedup;
@@ -137,10 +149,10 @@ int wrapped_main(int argc, char** argv, char** env) {
     PREFER(fixed_line) << "Fixed line \"" << fixed_line_name << "\" was not found.";
   }
 
-  // Create an end-to-end progress point and register it if running in end-to-end mode
-  throughput_point* end_point = nullptr;
+  // Create an end-to-end progress point and register it if running in
+  // end-to-end mode
   if(end_to_end) {
-    end_point = profiler::get_instance().get_throughput_point("end-to-end");
+    (void)profiler::get_instance().get_throughput_point("end-to-end");
   }
 
   // Start the profiler
@@ -151,12 +163,24 @@ int wrapped_main(int argc, char** argv, char** env) {
 
   // Synchronizations can be intercepted once the profiler has been initialized
   initialized = true;
+  init_in_progress = false;
+}
+
+/**
+ * Pass the real __libc_start_main this main function, then run the real main
+ * function. This allows Coz to shut down when the real main function returns.
+ */
+static int wrapped_main(int argc, char** argv, char** env) {
+  if (!initialized)
+    init_coz();
 
   // Run the real main function
   int result = real_main(argc, argv, env);
 
   // Increment the end-to-end progress point just before shutdown
-  if(end_point) {
+  if(end_to_end) {
+    throughput_point* end_point =
+      profiler::get_instance().get_throughput_point("end-to-end");
     end_point->visit();
   }
 

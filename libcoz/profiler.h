@@ -54,6 +54,7 @@ struct thread_start_arg {
       _fn(fn), _arg(arg), _parent_delay_time(t) {}
 };
 
+void init_coz(void);
 class profiler {
 public:
   /// Start the profiler
@@ -114,7 +115,13 @@ public:
                             void* arg) {
     thread_start_arg* new_arg;
 
+    INFO << "running pthread_create()";
     thread_state* state = get_thread_state();
+    if (NULL == state) {
+      INFO << "bootstrapping coz from pthread_create()";
+      init_coz();
+      state = get_thread_state();
+    }
     REQUIRE(state) << "Thread state not found";
 
     // Allocate a struct to pass as an argument to the new thread
