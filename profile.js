@@ -1,3 +1,40 @@
+/**
+ * Returns if this data point is valid.
+ * Infinity / -Infinity occurs when dividing by 0.
+ * NaN happens when the data is messed up and we get a NaN into a computation somewhere.
+ */
+function isValidDataPoint(data) {
+    return !isNaN(data) && data !== Infinity && data !== -Infinity;
+}
+/**
+ * Get the applicable data point from this particular experiment.
+ * Returns -Infinity or Infinity in undefined cases.
+ */
+function getDataPoint(data) {
+    // Discard obviously incorrect data points.
+    if (data.duration < 0) {
+        return NaN;
+    }
+    switch (data.type) {
+        case 'throughput':
+            return data.duration / data.delta;
+        case 'latency':
+            var arrivalRate = data.arrivals / data.duration;
+            // Average latency, according to Little's Law.
+            return data.difference / arrivalRate;
+    }
+}
+/**
+ * Are we trying to maximize or minimize this progress point?
+ */
+function shouldMaximize(data) {
+    switch (data.type) {
+        case 'latency':
+            return false;
+        case 'throughput':
+            return true;
+    }
+}
 function parseLine(s) {
     if (s[0] == '{') {
         return JSON.parse(s);
@@ -11,14 +48,23 @@ function parseLine(s) {
                 continue;
             var key = parts[i].substring(0, equals_index);
             var value = parts[i].substring(equals_index + 1);
-            if (key === 'type' && obj.type === 'progress-point') {
-                key = 'point-type';
-            }
-            else if (key === 'delta' || key === 'time' || key === 'duration') {
-                value = parseInt(value);
-            }
-            else if (key === 'speedup') {
-                value = parseFloat(value);
+            switch (key) {
+                case 'type':
+                    if (obj.type === 'progress-point') {
+                        key = 'point-type';
+                    }
+                    break;
+                case 'delta':
+                case 'time':
+                case 'duration':
+                case 'arrivals':
+                case 'departures':
+                case 'difference':
+                    value = parseInt(value, 10);
+                    break;
+                case 'speedup':
+                    value = parseFloat(value);
+                    break;
             }
             obj[key] = value;
         }
@@ -138,7 +184,7 @@ var Profile = (function () {
         var entry = this.ensureDataEntry(experiment.selected, point.name, experiment.speedup, {
             arrivals: 0,
             departures: 0,
-            delta: 0,
+            difference: 0,
             duration: 0,
             type: 'latency'
         });
@@ -146,15 +192,15 @@ var Profile = (function () {
         entry.departures += point.departures;
         // Compute a running weighted average of the difference between arrivals and departures
         if (entry.duration === 0) {
-            entry.delta = point.difference;
+            entry.difference = point.difference;
         }
         else {
             // Compute the new total duration of all experiments combined (including the new one)
             var total_duration = entry.duration + experiment.duration;
             // Scale the difference down by the ratio of the prior and total durations. This scale factor will be closer to 1 than 0, so divide first for better numerical stability
-            entry.delta *= entry.duration / total_duration;
+            entry.difference *= entry.duration / total_duration;
             // Add the contribution to average difference from the current experiment. The scale factor will be close to zero, so multiply first for better numerical stability.
-            entry.delta += (point.difference * experiment.duration) / total_duration;
+            entry.difference += (point.difference * experiment.duration) / total_duration;
         }
         // Update the total duration
         entry.duration += experiment.duration;
@@ -180,29 +226,39 @@ var Profile = (function () {
         for (var selected in this._data) {
             var points = [];
             var points_with_enough = 0;
-            for (var i = 0; i < progress_points.length; i++) {
+            progress_point_loop: for (var i = 0; i < progress_points.length; i++) {
                 // Set up an empty record for this progress point
                 var point = {
                     name: progress_points[i],
                     measurements: new Array()
                 };
+                points.push(point);
                 // Get the data for this progress point, if any
                 var point_data = this._data[selected][progress_points[i]];
                 // Check to be sure the point was observed and we have baseline (zero speedup) data
-                if (point_data !== undefined && point_data[0] !== undefined && point_data[0].delta > 0) {
-                    // Compute the baseline progress period
-                    var baseline_period = point_data[0].duration / point_data[0].delta;
+                if (point_data !== undefined && point_data[0] !== undefined) {
+                    // Compute the baseline data point
+                    var baseline_data_point = getDataPoint(point_data[0]);
+                    var maximize = shouldMaximize(point_data[0]);
+                    if (!isValidDataPoint(baseline_data_point)) {
+                        // Baseline data point is invalid (divide by zero, or a NaN)
+                        continue progress_point_loop;
+                    }
                     // Loop over measurements and compute progress speedups in D3-friendly format
                     var measurements = [];
                     for (var speedup in point_data) {
-                        // Skip this speedup measurement if period is undefined
-                        if (point_data[speedup].delta == 0)
+                        var data_point = getDataPoint(point_data[speedup]);
+                        // Skip invalid data.
+                        if (!isValidDataPoint(data_point)) {
                             continue;
-                        // Compute progress period for this speedup size
-                        var period = point_data[speedup].duration / point_data[speedup].delta;
-                        var progress_speedup = (baseline_period - period) / baseline_period;
-                        // Skip really large negative values
-                        if (progress_speedup >= -1) {
+                        }
+                        var progress_speedup = (baseline_data_point - data_point) / baseline_data_point;
+                        if (!maximize) {
+                            // We are trying to *minimize* this progress point, so negate the speedup.
+                            progress_speedup = -progress_speedup;
+                        }
+                        // Skip really large negative and positive values
+                        if (progress_speedup >= -1 && progress_speedup <= 2) {
                             // Add entry to measurements
                             measurements.push({
                                 speedup: +speedup,
@@ -218,7 +274,6 @@ var Profile = (function () {
                         point.measurements = measurements;
                     }
                 }
-                points.push(point);
             }
             if (points_with_enough > 0) {
                 result.push({
