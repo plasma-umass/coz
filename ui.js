@@ -89,7 +89,7 @@ var samples_sel = d3.select('#samples').selectAll('.sample-profile').data(sample
     .text(function (d) { return d; })
     .on('click', function (d) {
     var sel = d3.select(this);
-    if (sel.attr('loaded') != 'yes') {
+    if (sel.attr('loaded') !== 'yes') {
         // Avoid race condition: Set first.
         sel.attr('loaded', 'yes');
         var xhr_1 = new XMLHttpRequest();
