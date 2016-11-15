@@ -208,7 +208,7 @@ extern "C" int coz_libc_start_main(main_fn_t main_fn, int argc, char** argv,
 }
 
 /// Remove coz's required signals from a signal mask
-void remove_coz_signals(sigset_t* set) {
+static void remove_coz_signals(sigset_t* set) {
   if(sigismember(set, SampleSignal)) {
     sigdelset(set, SampleSignal);
   }
@@ -221,7 +221,7 @@ void remove_coz_signals(sigset_t* set) {
 }
 
 /// Check if a signal is required by coz
-bool is_coz_signal(int signum) {
+static bool is_coz_signal(int signum) {
   return signum == SampleSignal || signum == SIGSEGV || signum == SIGABRT;
 }
 
