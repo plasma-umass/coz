@@ -69,8 +69,4 @@ static inline std::string getenv_safe(const char* var, const char* fallback = ""
   return std::string(value);
 }
 
-static inline int rt_tgsigqueueinfo(pid_t tgid, pid_t tid, int sig, siginfo_t *uinfo) {
-  return syscall(__NR_rt_tgsigqueueinfo, tgid, tid, sig, uinfo);
-}
-
 #endif
