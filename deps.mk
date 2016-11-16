@@ -1,10 +1,12 @@
 # Targets to fetch and build external dependencies
 
+GIT = git
+
 # Get ccutil (header only)
 $(ROOT)/deps/ccutil:
 	@echo $(LOG_PREFIX) Checking out ccutil includes $(LOG_SUFFIX)
 	@mkdir -p $(ROOT)/deps
-	@git clone git://github.com/ccurtsinger/ccutil $(ROOT)/deps/ccutil
+	@$(GIT) clone git://github.com/ccurtsinger/ccutil $(ROOT)/deps/ccutil
 
 # Update build settings to use ccutil
 ifneq (,$(findstring ccutil,$(PREREQS)))
@@ -17,7 +19,7 @@ $(ROOT)/deps/libelfin: $(ROOT)/deps/libelfin/elf/libelf++.a
 $(ROOT)/deps/libelfin/Makefile:
 	@echo $(LOG_PREFIX) Checking out libelfin $(LOG_SUFFIX)
 	@mkdir -p $(ROOT)/deps
-	@git clone git://github.com/aclements/libelfin $(ROOT)/deps/libelfin
+	@$(GIT) clone git://github.com/aclements/libelfin $(ROOT)/deps/libelfin
 
 $(ROOT)/deps/libelfin/elf/libelf++.a: $(ROOT)/deps/libelfin/Makefile
 	@echo $(LOG_PREFIX) Building libelfin $(LOG_SUFFIX)
