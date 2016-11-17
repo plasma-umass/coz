@@ -1,0 +1,23 @@
+{
+  "name": "coz",
+  "version": "1.0.0",
+  "description": "Displays results from a causal profile.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jvilk/Coz.git"
+  },
+  "scripts": {
+    "prepublish": "tsc"
+  },
+  "license": "BSD-2-Clause",
+  "bugs": {
+    "url": "https://github.com/jvilk/Coz/issues"
+  },
+  "homepage": "https://github.com/jvilk/Coz#readme",
+  "devDependencies": {
+    "@types/bootstrap": "^3.3.32",
+    "@types/d3": "^3.5.36",
+    "@types/jquery": "^2.0.33",
+    "typescript": "^2.0.3"
+  }
+}
