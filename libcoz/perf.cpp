@@ -54,7 +54,24 @@ perf_event::perf_event(struct perf_event_attr& pe, pid_t pid, int cpu) :
 
   // Open the file
   _fd = perf_event_open(&pe, pid, cpu, -1, 0);
-  REQUIRE(_fd != -1) << "Failed to open perf event";
+  if (_fd == -1) {
+      std::string path = "/proc/sys/kernel/perf_event_paranoid";
+
+      FILE *file = fopen(path.c_str(), "r");
+      REQUIRE(file != NULL) << "Failed to open " << path << ": " << strerror(errno);
+
+      char value_str[3];
+      int res = fread(value_str, sizeof(value_str), 1, file);
+      REQUIRE(res != -1) << "Failed to read from " << path << ": " << strerror(errno);
+
+      value_str[2] = '\0';
+      int value = atoi(value_str);
+
+      FATAL << "Failed to open perf event. "
+            << "Consider tweaking " << path << " to 2 or less "
+            << "(current value is " << value << "), "
+            << "or run coz as a privileged user (with CAP_SYS_ADMIN).";
+  }
 
   // If sampling, map the perf event file
   if(pe.sample_type != 0 && pe.sample_period != 0) {
