@@ -308,23 +308,24 @@ bool in_scope(const string& name, const unordered_set<string>& scope) {
 
 void memory_map::build(const unordered_set<string>& binary_scope,
                        const unordered_set<string>& source_scope) {
-  //REQUIRE(wildcard_match("/abc/def/ghij", "/abc/def/ghij")) << "ohshit";
-
+  size_t in_scope_count = 0;
   for(const auto& f : get_loaded_files()) {
     if(in_scope(f.first, binary_scope)) {
       try {
         if(process_file(f.first, f.second, source_scope)) {
           INFO << "Including lines from executable " << f.first;
+          in_scope_count++;
         } else {
           INFO << "Unable to locate debug information for " << f.first;
         }
       } catch(const system_error& e) {
         WARNING << "Processing file \"" << f.first << "\" failed: " << e.what();
       }
-    } else {
-      INFO << f.first << " is not in scope";
     }
   }
+
+  REQUIRE(in_scope_count > 0)
+    << "Debug information was not found for any in-scope executables or libraries";
 }
 
 dwarf::value find_attribute(const dwarf::die& d, dwarf::DW_AT attr) {
