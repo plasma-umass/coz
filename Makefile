@@ -1,5 +1,5 @@
 ROOT := .
-DIRS := libcoz
+DIRS := libcoz viewer
 
 include $(ROOT)/common.mk
 

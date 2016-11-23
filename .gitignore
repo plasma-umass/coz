@@ -27,3 +27,5 @@ benchmarks/pbzip2/data
 benchmarks/pbzip2/bzip2-1.0.6
 benchmarks/string_match/string_match_datafiles
 benchmarks/word_count/word_count_datafiles
+
+viewer/node_modules
