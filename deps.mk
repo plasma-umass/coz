@@ -2,17 +2,6 @@
 
 GIT = git
 
-# Get ccutil (header only)
-$(ROOT)/deps/ccutil:
-	@echo $(LOG_PREFIX) Checking out ccutil includes $(LOG_SUFFIX)
-	@mkdir -p $(ROOT)/deps
-	@$(GIT) clone git://github.com/ccurtsinger/ccutil $(ROOT)/deps/ccutil
-
-# Update build settings to use ccutil
-ifneq (,$(findstring ccutil,$(PREREQS)))
-CXXFLAGS += -I$(ROOT)/deps
-endif
-
 # Get and build libelfin
 $(ROOT)/deps/libelfin: $(ROOT)/deps/libelfin/elf/libelf++.a
 
