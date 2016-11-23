@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>coz plot</title>
+
+    <link rel="stylesheet" href="lib/bootstrap/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="lib/font-awesome/css/font-awesome.min.css">
+    <link rel="stylesheet" type="text/css" href="ui.css">
+    <link rel="stylesheet" type="text/css" href="plot.css">
+  </head>
+  <body>
+    <div class="container-fluid">
+      <div class="row">
+        <div id="sidebar" class="col-sm-3 col-md-3 col-lg-2 sidebar">
+
+          <h3 class="">Causal Profile</h3>
+          <button type="button" id="load-profile-btn" class="btn btn-primary btn-block" data-toggle="modal" data-target="#load-profile-dlg">
+            <i class="fa fa-folder-open"></i> Load a Profile
+          </button>
+
+          <div id="legend">
+            <h4>Progress Points</h4>
+            <p class="legend-entry noseries">None</p>
+          </div> <!-- /legend -->
+
+          <div id="sortby">
+            <h4 id="sortby_label">Sort By</h4>
+            <select id="sortby_field" class="form-control" disabled aria-labelledby="sortby_label">
+              <option value="alphabetical">Alphabetical</option>
+              <option value="impact" selected>Impact</option>
+              <option value="max_speedup">Max Speedup</option>
+              <option value="min_speedup">Min Speedup</option>
+            </select>
+          </div> <!-- /sortby -->
+
+          <div id="minpoints">
+            <h4 id="minpoints_label">Minimum Points</h4>
+            <input type="range" id="minpoints_field" min="0" max="20" step="1" value="10" list="ticks" aria-labeledby="minpoints_label">
+            <datalist id="ticks">
+              <option value="0">
+              <option value="5">
+              <option value="10">
+              <option value="15">
+              <option value="20">
+            </datalist>
+            <p id="minpoints_display" class="text-center">10</p>
+          </div> <!-- /minpoint -->
+
+        </div> <!-- /sidebar -->
+
+        <div class="col-sm-9 col-sm-offset-3 col-md-9 col-md-offset-3 col-lg-10 col-lg-offset-2">
+          <div class="row">
+            <div id="warning-area" class="col-md-12"></div>
+          </div>
+          <div class="row">
+            <div id="plot-area" class="col-md-12"></div>
+          </div>
+        </div> <!-- /main content -->
+
+      </div> <!-- /row -->
+    </div> <!-- /container-fluid -->
+
+    <!-- File open dialog (hidden) -->
+    <div class="modal fade" id="load-profile-dlg" tabindex="-1" role="dialog" aria-labelledby="load-profile-dlg-title" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            <h4 class="modal-title" id="load-profile-dlg-title">Select a Causal Profile</h4>
+          </div> <!-- /modal-header -->
+          <div class="modal-body">
+            <div class="text-center">
+              <label for="load-profile-form">Load Profile</label>
+              <form id="load-profile-form">
+                <input type="file" id="load-profile-file" accept=".coz" style="display: none" />
+                <div class="input-group">
+                  <span class="input-group-addon"><i class="fa fa-file-text-o"></i></span>
+                  <input type="text" class="form-control" id="load-profile-filename" disabled placeholder="Select a profile">
+                  <span class="input-group-btn">
+                    <button class="browse btn btn-primary" id="load-profile-browse-btn" type="button">
+                      <i class="fa fa-search"></i>
+                      Browse
+                    </button>
+                  </span>
+                </div> <!-- /input-group -->
+              </form>
+              <br>
+              <label for="samples">Sample Profiles</label>
+              <div id="samples"></div>
+            </div> <!-- /text-center -->
+          </div> <!-- /modal-body -->
+          <div class="modal-footer">
+            <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+            <button id="load-profile-open-btn" type="button" data-dismiss="modal" class="btn btn-primary disabled">Open</button>
+          </div> <!-- /modal-footer -->
+        </div> <!-- /modal-content -->
+      </div> <!-- /modal-dialog -->
+    </div> <!-- /modal -->
+
+    <script src="lib/jquery.min.js"></script>
+    <script src="lib/bootstrap/bootstrap.min.js"></script>
+    <script src="lib/d3/d3.min.js"></script>
+    <script src="lib/d3/d3-tip.min.js"></script>
+    <script src="lib/science/science.v1.min.js"></script>
+
+    <!-- Causal profile loading and plotting code -->
+    <script src="profile.js"></script>
+
+    <!-- The UI code -->
+    <script src="ui.js"></script>
+  </body>
+</html>

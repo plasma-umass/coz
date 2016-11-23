@@ -1,0 +1,807 @@
+startup	time=1415917793864559947
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.05	duration=189155916	selected-samples=1360
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.70	duration=89685374	selected-samples=969
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.00	duration=100673387	selected-samples=122
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.50	duration=190033591	selected-samples=1829
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.60	duration=76111168	selected-samples=2806
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=13
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.00	duration=100081678	selected-samples=47
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=13
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100070186	selected-samples=877
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.95	duration=1267307	selected-samples=1207
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.25	duration=145636108	selected-samples=2881
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=1.00	duration=134204811	selected-samples=182
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100067777	selected-samples=664
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100151797	selected-samples=842
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100155493	selected-samples=1463
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.45	duration=118414269	selected-samples=717
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.40	duration=114949336	selected-samples=2892
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=15
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.50	duration=162467251	selected-samples=587
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=200131219	selected-samples=3077
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=13
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.85	duration=13370320	selected-samples=1248
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.20	duration=78663397	selected-samples=1527
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=1.00	duration=104226583	selected-samples=118
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100161819	selected-samples=1545
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.70	duration=93263477	selected-samples=663
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.90	duration=40359140	selected-samples=1684
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=20
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.25	duration=73156299	selected-samples=1294
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100156707	selected-samples=869
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.45	duration=54258237	selected-samples=444
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.80	duration=10556539	selected-samples=1233
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.65	duration=123684564	selected-samples=850
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.15	duration=168120240	selected-samples=664
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100159359	selected-samples=1551
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.30	duration=135809074	selected-samples=2942
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.30	duration=67755358	selected-samples=602
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+runtime	time=100237459
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:144	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	count=2288
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:230	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:245	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	count=4072
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:278	count=377
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:296	count=2
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:299	count=2
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:315	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	count=24599
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:352	count=2341
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	count=62319
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:365	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:375	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:381	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:385	count=2
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:392	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:501	count=57
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:503	count=1
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.60	duration=123983514	selected-samples=522
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.00	duration=100064481	selected-samples=68
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.20	duration=77474323	selected-samples=452
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100064826	selected-samples=592
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.90	duration=45607094	selected-samples=563
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.30	duration=138716746	selected-samples=420
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.35	duration=63667237	selected-samples=1442
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.85	duration=77766916	selected-samples=817
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.20	duration=90963628	selected-samples=50
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=1.00	duration=133309688	selected-samples=78
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.00	duration=100077105	selected-samples=82
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.35	duration=59216860	selected-samples=1396
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.10	duration=88553205	selected-samples=673
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.25	duration=71412941	selected-samples=1471
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.90	duration=15820785	selected-samples=1859
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=13
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.40	duration=57353966	selected-samples=1308
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.25	duration=69916269	selected-samples=197
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.15	duration=167544424	selected-samples=1014
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.20	duration=78564973	selected-samples=1528
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:278	speedup=0.00	duration=200230727	selected-samples=6
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=14
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.30	duration=135808915	selected-samples=754
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:352	speedup=0.25	duration=91823183	selected-samples=47
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=1.00	duration=152165808	selected-samples=802
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.25	duration=89904266	selected-samples=37
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.50	duration=112302283	selected-samples=417
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.25	duration=70570521	selected-samples=639
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.20	duration=87674413	selected-samples=62
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.80	duration=35438229	selected-samples=2424
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=14
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.00	duration=100068317	selected-samples=128
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.45	duration=50126122	selected-samples=1401
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.30	duration=68269467	selected-samples=876
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100065945	selected-samples=1543
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=13
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=1.00	duration=98738046	selected-samples=888
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.70	duration=142791497	selected-samples=532
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=200132720	selected-samples=429
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.70	duration=26569823	selected-samples=1209
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100058894	selected-samples=893
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=14
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=1.00	duration=18446744073705875774	selected-samples=2099
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=15
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100070126	selected-samples=1444
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=16
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=1.00	duration=111529118	selected-samples=942
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.05	duration=96666948	selected-samples=68
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.80	duration=65912697	selected-samples=452
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.90	duration=20302319	selected-samples=1931
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100164056	selected-samples=811
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100160967	selected-samples=1572
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.90	duration=82661435	selected-samples=297
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.50	duration=81660481	selected-samples=37
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100165259	selected-samples=1463
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=14
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.55	duration=118334349	selected-samples=1019
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=200325500	selected-samples=3048
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=17
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.35	duration=90712642	selected-samples=27
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=1.00	duration=311984	selected-samples=1873
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.40	duration=116629307	selected-samples=1402
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.20	duration=244182862	selected-samples=973
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.10	duration=97078878	selected-samples=53
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.70	duration=54637954	selected-samples=2586
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.20	duration=190118211	selected-samples=69
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.75	duration=42807723	selected-samples=2552
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.65	duration=98958562	selected-samples=977
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.65	duration=33859620	selected-samples=1250
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.90	duration=138046235	selected-samples=69
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.45	duration=103030750	selected-samples=660
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100164187	selected-samples=1478
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=13
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100057011	selected-samples=406
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+runtime	time=100115374
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:144	count=3
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	count=5644
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:204	count=3
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:230	count=5
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:245	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	count=10603
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:259	count=2
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:272	count=3
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:278	count=1138
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:284	count=3
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:296	count=4
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:299	count=4
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:315	count=2
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	count=70911
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:321	count=4
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:338	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:348	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:352	count=6716
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:353	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	count=183095
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:359	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:365	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:375	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:381	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:384	count=2
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:385	count=11
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:392	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:501	count=57
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:503	count=1
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100077061	selected-samples=852
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=14
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.35	duration=128229426	selected-samples=885
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.15	duration=90020226	selected-samples=67
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=15
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.80	duration=17671475	selected-samples=1186
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.35	duration=82924481	selected-samples=44
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.65	duration=32475809	selected-samples=480
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.85	duration=149311236	selected-samples=60
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=14
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.40	duration=56469211	selected-samples=1513
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100067629	selected-samples=622
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.50	duration=134368555	selected-samples=572
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.05	duration=94571533	selected-samples=714
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.85	duration=30230374	selected-samples=1664
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=16
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.10	duration=189449357	selected-samples=165
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=1.00	duration=102454966	selected-samples=363
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.40	duration=159850644	selected-samples=111
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.90	duration=52964181	selected-samples=586
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.15	duration=83811338	selected-samples=1209
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100074300	selected-samples=438
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=200314599	selected-samples=3119
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.75	duration=102298136	selected-samples=511
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.55	duration=79734527	selected-samples=37
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100076341	selected-samples=854
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100077731	selected-samples=744
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.95	duration=100804431	selected-samples=636
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.60	duration=80299574	selected-samples=2122
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=200130983	selected-samples=3062
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.15	duration=93557182	selected-samples=55
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.55	duration=92973605	selected-samples=758
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.75	duration=36054793	selected-samples=1926
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.10	duration=92978006	selected-samples=91
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100076803	selected-samples=1501
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.20	duration=77470731	selected-samples=1483
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100089843	selected-samples=531
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.00	duration=100163231	selected-samples=86
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100165708	selected-samples=496
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.35	duration=187407668	selected-samples=739
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.90	duration=86188360	selected-samples=422
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100155247	selected-samples=1527
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100158367	selected-samples=643
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100162112	selected-samples=565
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.90	duration=13117181	selected-samples=1741
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=13
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=200332641	selected-samples=1496
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=16
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.45	duration=64151593	selected-samples=77
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.40	duration=58559137	selected-samples=1458
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=200319243	selected-samples=1277
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.90	duration=6557198	selected-samples=978
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.90	duration=57455788	selected-samples=745
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=1.00	duration=153316806	selected-samples=47
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.00	duration=100079049	selected-samples=79
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.35	duration=131287898	selected-samples=515
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100061621	selected-samples=1547
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.55	duration=84169096	selected-samples=738
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.30	duration=69179300	selected-samples=412
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.65	duration=22766304	selected-samples=1189
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.00	duration=100070038	selected-samples=145
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100063785	selected-samples=604
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.60	duration=73021157	selected-samples=651
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.55	duration=88028208	selected-samples=620
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.50	duration=49571948	selected-samples=305
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.35	duration=82922643	selected-samples=36
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.30	duration=136850964	selected-samples=2977
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=18
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.10	duration=88175147	selected-samples=1445
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=14
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:278	speedup=0.60	duration=100072105	selected-samples=0
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.60	duration=76075894	selected-samples=55
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.75	duration=21431909	selected-samples=1268
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100081662	selected-samples=1548
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.80	duration=134178286	selected-samples=851
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.60	duration=61758393	selected-samples=73
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:352	speedup=0.25	duration=83325910	selected-samples=97
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.50	duration=94817563	selected-samples=756
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.75	duration=22161744	selected-samples=1416
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100078542	selected-samples=715
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=1.00	duration=18446744073701023083	selected-samples=2716
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100170019	selected-samples=1215
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.60	duration=78529648	selected-samples=516
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.10	duration=87770143	selected-samples=558
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.75	duration=44244495	selected-samples=2459
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.20	duration=154713267	selected-samples=1035
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100187615	selected-samples=1524
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.05	duration=94177952	selected-samples=589
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:278	speedup=0.75	duration=100070692	selected-samples=0
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:278	speedup=0.85	duration=100072854	selected-samples=0
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100151189	selected-samples=656
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.75	duration=47230544	selected-samples=2490
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=18
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.05	duration=95974380	selected-samples=160
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.15	duration=138066208	selected-samples=1435
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100168136	selected-samples=1527
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.15	duration=95443129	selected-samples=31
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100086847	selected-samples=614
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=200252791	selected-samples=1300
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=14
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100167696	selected-samples=1552
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.00	duration=100170278	selected-samples=53
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.10	duration=93580381	selected-samples=96
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.35	duration=62008769	selected-samples=1486
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.15	duration=80819848	selected-samples=702
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=1.00	duration=18446744073705638561	selected-samples=1166
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.75	duration=41330861	selected-samples=2149
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.00	duration=100093999	selected-samples=66
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.60	duration=164198318	selected-samples=541
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100077765	selected-samples=1519
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=15
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.30	duration=67383086	selected-samples=569
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=1.00	duration=18446744073705876537	selected-samples=2092
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100072296	selected-samples=1088
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=14
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100081002	selected-samples=1021
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=19
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100082014	selected-samples=1397
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.65	duration=115163404	selected-samples=887
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.25	duration=74415488	selected-samples=405
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.00	duration=100099820	selected-samples=53
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.80	duration=134124408	selected-samples=617
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.60	duration=80307088	selected-samples=2501
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.85	duration=26075984	selected-samples=2554
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100082740	selected-samples=605
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.75	duration=69818359	selected-samples=510
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.30	duration=63481966	selected-samples=1237
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100084249	selected-samples=888
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=13
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.20	duration=155918373	selected-samples=1133
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.80	duration=16155501	selected-samples=1076
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.50	duration=91325622	selected-samples=1515
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=200320304	selected-samples=3075
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100076267	selected-samples=1499
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.30	duration=178734925	selected-samples=64
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.30	duration=218256495	selected-samples=662
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.30	duration=73765890	selected-samples=114
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.30	duration=205958604	selected-samples=789
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100155693	selected-samples=657
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100166338	selected-samples=1549
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.60	duration=35953193	selected-samples=1235
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100160670	selected-samples=654
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+runtime	time=100260957
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:144	count=11
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	count=12010
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:204	count=7
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:211	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:230	count=6
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:245	count=3
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	count=22993
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:259	count=6
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:272	count=8
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:278	count=2551
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:284	count=13
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:296	count=10
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:299	count=8
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:307	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:315	count=2
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	count=162831
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:321	count=6
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:334	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:338	count=2
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:344	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:348	count=2
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:352	count=15144
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:353	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:356	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	count=420081
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:359	count=2
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:365	count=2
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:375	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:376	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:379	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:381	count=4
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:384	count=2
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:385	count=26
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:392	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:501	count=57
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:503	count=1
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.80	duration=15352145	selected-samples=1107
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.50	duration=78075980	selected-samples=44
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100162046	selected-samples=1529
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=14
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100174858	selected-samples=1048
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.60	duration=82109387	selected-samples=587
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=1.00	duration=137327443	selected-samples=56
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.00	duration=100174167	selected-samples=112
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.25	duration=85169828	selected-samples=52
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.20	duration=78167787	selected-samples=1477
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.00	duration=100081848	selected-samples=90
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.10	duration=95388464	selected-samples=48
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.85	duration=58439868	selected-samples=49
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.70	duration=144414836	selected-samples=841
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.35	duration=82951692	selected-samples=72
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.80	duration=62557188	selected-samples=55
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.95	duration=10185414	selected-samples=780
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.60	duration=132984755	selected-samples=442
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.10	duration=88263242	selected-samples=1453
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.15	duration=169541559	selected-samples=735
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.25	duration=143572385	selected-samples=787
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=14
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.20	duration=76877284	selected-samples=1421
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.40	duration=125512866	selected-samples=749
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.10	duration=89254624	selected-samples=1536
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100072950	selected-samples=1526
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=13
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.50	duration=145497890	selected-samples=1079
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100074208	selected-samples=1507
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=13
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=200329931	selected-samples=946
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.90	duration=145974221	selected-samples=440
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.50	duration=81662525	selected-samples=34
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.45	duration=51570506	selected-samples=1503
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=200311777	selected-samples=575
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.35	duration=60874855	selected-samples=1430
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.35	duration=80567493	selected-samples=78
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.10	duration=92164192	selected-samples=107
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.20	duration=77675793	selected-samples=481
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.05	duration=94130221	selected-samples=1461
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100172263	selected-samples=716
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100159323	selected-samples=568
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.40	duration=117585967	selected-samples=516
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.75	duration=160581388	selected-samples=72
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100071787	selected-samples=614
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100161752	selected-samples=540
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.85	duration=13465909	selected-samples=1301
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100081283	selected-samples=799
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100071304	selected-samples=963
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=13
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.55	duration=83022251	selected-samples=772
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.90	duration=158848924	selected-samples=46
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.90	duration=23268100	selected-samples=3501
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.35	duration=133468561	selected-samples=979
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.50	duration=94810452	selected-samples=408
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:352	speedup=0.25	duration=93408552	selected-samples=31
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.15	duration=92722957	selected-samples=63
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.50	duration=44659072	selected-samples=1409
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.40	duration=163526371	selected-samples=123
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.10	duration=88180171	selected-samples=505
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.45	duration=174575548	selected-samples=71
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100160364	selected-samples=1524
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.30	duration=68370292	selected-samples=696
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.10	duration=94668823	selected-samples=77
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.60	duration=95325975	selected-samples=492
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.15	duration=87556111	selected-samples=152
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=13
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.40	duration=121116282	selected-samples=701
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.75	duration=20653462	selected-samples=1079
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:278	speedup=0.55	duration=183839100	selected-samples=30
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=1.00	duration=18446744073704873738	selected-samples=2296
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.20	duration=77563416	selected-samples=646
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100165806	selected-samples=917
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.55	duration=35176476	selected-samples=481
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.00	duration=100168425	selected-samples=122
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.60	duration=29890254	selected-samples=1222
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100080937	selected-samples=1307
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.10	duration=85469944	selected-samples=889
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.10	duration=88179151	selected-samples=871
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=13
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.20	duration=76362095	selected-samples=1511
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.75	duration=18413254	selected-samples=1231
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100169144	selected-samples=676
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100116694	selected-samples=1112
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=17
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100078720	selected-samples=876
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.40	duration=56470753	selected-samples=1338
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=15
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.30	duration=66573324	selected-samples=1093
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.10	duration=87780052	selected-samples=1464
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100074587	selected-samples=1545
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.05	duration=94010868	selected-samples=537
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.75	duration=126391845	selected-samples=1119
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=14
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.00	duration=100082135	selected-samples=108
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.55	duration=144253415	selected-samples=567
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.65	duration=130759184	selected-samples=531
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.00	duration=100158238	selected-samples=38
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.80	duration=87576282	selected-samples=597
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.00	duration=100072103	selected-samples=57
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100083366	selected-samples=1554
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=16
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.75	duration=102480447	selected-samples=835
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	speedup=0.00	duration=100167775	selected-samples=65
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.75	duration=43560692	selected-samples=840
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100075787	selected-samples=592
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.95	duration=108014228	selected-samples=980
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.75	duration=50316732	selected-samples=2275
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=16
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	speedup=0.00	duration=100082507	selected-samples=131
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.50	duration=89727276	selected-samples=1248
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=11
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.40	duration=56474923	selected-samples=1374
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=8
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100155530	selected-samples=1543
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.00	duration=100078809	selected-samples=695
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.50	duration=96252437	selected-samples=2883
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=18
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.75	duration=129877219	selected-samples=732
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100174209	selected-samples=1476
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=19
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	speedup=0.50	duration=105313187	selected-samples=788
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=10
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.00	duration=100153374	selected-samples=1544
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=9
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.90	duration=6547496	selected-samples=1003
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=12
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.60	duration=39559250	selected-samples=1225
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=7
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.45	duration=217909548	selected-samples=2510
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=6
+experiment	selected=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	speedup=0.75	duration=175596674	selected-samples=520
+progress-point	name=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	type=source	delta=3
+shutdown	time=1415917851977877288	samples=941980
+runtime	time=58183440598
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:144	count=14
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:167	count=17067
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:175	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:204	count=10
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:211	count=3
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:213	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:230	count=6
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:245	count=5
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:254	count=32807
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:256	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:259	count=10
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:272	count=9
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:278	count=3797
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:284	count=21
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:296	count=10
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:299	count=8
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:307	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:315	count=2
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:319	count=242545
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:321	count=12
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:334	count=4
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:338	count=3
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:344	count=4
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:346	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:348	count=2
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:352	count=22209
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:353	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:356	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:357	count=618141
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:359	count=5
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:360	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:365	count=3
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:375	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:376	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:379	count=6
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:381	count=4
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:384	count=3
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:385	count=35
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:392	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:398	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:501	count=57
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:503	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:505	count=1
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:603	count=2
+samples	location=parsec-2.1/pkgs/apps/ferret/obj/amd64-linux.llvm/benchmark/ferret-parallel.c:608	count=6
