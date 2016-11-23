@@ -22,7 +22,7 @@ that Counts with Causal Profiling
 Coz, our prototype causal profiler, runs with unmodified Linux executables. Coz requires:
 
 - [Python](http://www.python.org)
-- [Clang 3.1 or newer](http://clang.llvm.org) or another compiler with C++11 support
+- [Clang 3.1 or newer](http://clang.llvm.org) or another compiler with C++0x support (C++11 is recommended)
 - [Linux](http://kernel.org) version 2.6.32 or newer (must support the `perf_event_open` system call)
 
 ## Building
