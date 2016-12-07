@@ -115,10 +115,8 @@ public:
                             void* arg) {
     thread_start_arg* new_arg;
 
-    INFO << "running pthread_create()";
     thread_state* state = get_thread_state();
     if (NULL == state) {
-      INFO << "bootstrapping coz from pthread_create()";
       init_coz();
       state = get_thread_state();
     }
