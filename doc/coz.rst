@@ -7,6 +7,7 @@ profiler running experiements on multithreaded code
 ---------------------------------------------------
 
 :Author: Emery Berger - emery@cs.umass.edu
+:Author: Charlie Curtsinger - curtsinger@grinnell.edu
 :Date:   2017-08-06
 :Copyright: public domain
 :Version: 0.2
