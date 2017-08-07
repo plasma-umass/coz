@@ -3,6 +3,7 @@ prefix = /usr
 bindir = $(prefix)/bin
 pkglibdir = $(prefix)/lib/coz-profiler
 incdir = $(prefix)/include
+mandir = $(prefix)/man
 
 INSTALL = install
 
@@ -27,7 +28,7 @@ SRCS    ?= $(wildcard *.cpp) $(wildcard *.c)
 OBJS    ?= $(addprefix obj/,$(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS))))
 
 # Targets to build recirsively into $(DIRS)
-RECURSIVE_TARGETS  ?= all clean distclean bench test install
+RECURSIVE_TARGETS  ?= all clean distclean bench doc test install
 
 # Build in parallel
 MAKEFLAGS := -j
@@ -60,7 +61,7 @@ distclean:: clean
 test::
 
 # Prevent errors if files named all, clean, distclean, bench, or test exist
-.PHONY: all clean distclean bench test
+.PHONY: all clean distclean bench test doc
 
 # Compile a C++ source file (and generate its dependency rules)
 obj/%.o: %.cpp $(PREREQS)

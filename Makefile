@@ -9,9 +9,12 @@ bench::
 check::
 	make -C libcoz $@
 
+doc::
+
 install::
 	$(INSTALL) -D coz $(DESTDIR)$(bindir)/coz
 	$(INSTALL) -D include/coz.h $(DESTDIR)$(incdir)/coz.h
+	$(INSTALL) -D doc/coz.1 $(DESTDIR)$(mandir)/coz.1
 
 distclean::
 	@for dir in deps/libelfin ; do \
