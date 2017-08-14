@@ -4,7 +4,7 @@ bindir = $(prefix)/bin
 pkglibdir = $(prefix)/lib/coz-profiler
 incdir = $(prefix)/include
 mandir = $(prefix)/share/man
-man1dir = $(prefix)/man1
+man1dir = $(mandir)/man1
 
 INSTALL = install
 RST2MAN = rst2man

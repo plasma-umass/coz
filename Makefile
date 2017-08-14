@@ -12,7 +12,7 @@ check::
 install::
 	$(INSTALL) -D coz $(DESTDIR)$(bindir)/coz
 	$(INSTALL) -D include/coz.h $(DESTDIR)$(incdir)/coz.h
-	$(RST2MAN) docs/coz.rst $(mandir)/coz.1
+	$(RST2MAN) docs/coz.rst $(DESTDIR)$(man1dir)/coz.1
 
 distclean::
 	@for dir in deps/libelfin ; do \
