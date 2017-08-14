@@ -7,7 +7,7 @@ mandir = $(prefix)/share/man
 man1dir = $(prefix)/man1
 
 INSTALL = install
-RST2MAN = rst2man.py
+RST2MAN = rst2man
 
 # Build with clang
 CC  := clang
