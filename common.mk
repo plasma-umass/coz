@@ -3,6 +3,7 @@ prefix = /usr
 bindir = $(prefix)/bin
 pkglibdir = $(prefix)/lib/coz-profiler
 incdir = $(prefix)/include
+mandir = $(prefix)/share/man
 
 INSTALL = install
 

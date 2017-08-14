@@ -12,6 +12,7 @@ check::
 install::
 	$(INSTALL) -D coz $(DESTDIR)$(bindir)/coz
 	$(INSTALL) -D include/coz.h $(DESTDIR)$(incdir)/coz.h
+	rst2man.py docs/coz.rst $(mandir)/coz.1
 
 distclean::
 	@for dir in deps/libelfin ; do \
