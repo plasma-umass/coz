@@ -1,2 +1,2 @@
 all:
-	rst2man.py doc/coz.rst > doc/coz.1
+	$(RST2MAN) coz.rst > coz.1

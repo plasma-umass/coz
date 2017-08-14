@@ -4,8 +4,10 @@ bindir = $(prefix)/bin
 pkglibdir = $(prefix)/lib/coz-profiler
 incdir = $(prefix)/include
 mandir = $(prefix)/share/man
+man1dir = $(prefix)/man1
 
 INSTALL = install
+RST2MAN = rst2man.py
 
 # Build with clang
 CC  := clang
