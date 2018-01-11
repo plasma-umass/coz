@@ -371,25 +371,42 @@ void profiler::end_sampling() {
   }
 }
 
-line* profiler::find_line(perf_event::record& sample) {
+std::pair<line*,bool> profiler::match_line(perf_event::record& sample) {
+  // bool -> true: hit selected_line
+  std::pair<line*, bool> match_res(nullptr, false);
+  // flag use to increase the sample only for the first line in the source scope. could it be last line in callchain?
+  bool first_hit = false;
   if(!sample.is_sample())
-    return nullptr;
-
+    return match_res;
   // Check if the sample occurred in known code
   line* l = memory_map::get_instance().find_line(sample.get_ip()).get();
-  if(l)
-    return l;
-
+  if(l){
+    match_res.first = l;
+    first_hit = true;
+    if(_selected_line == l){
+      match_res.second = true;
+      return match_res;
+    }
+  }
   // Walk the callchain
   for(uint64_t pc : sample.get_callchain()) {
     // Need to subtract one. PC is the return address, but we're looking for the callsite.
     l = memory_map::get_instance().find_line(pc-1).get();
-    if(l)
-      return l;
+    if(l){
+      if(!first_hit){
+        first_hit = true;
+        match_res.first = l;
+      }
+      if(_selected_line == l){
+        match_res.first = l;
+	match_res.second = true;
+        return match_res;
+      }
+    }
   }
 
   // No hits. Return null
-  return nullptr;
+  return match_res;
 }
 
 void profiler::add_delays(thread_state* state) {
@@ -422,19 +439,19 @@ void profiler::add_delays(thread_state* state) {
 void profiler::process_samples(thread_state* state) {
   for(perf_event::record r : state->sampler) {
     if(r.is_sample()) {
-      // Find the line that contains this sample
-      line* sampled_line = find_line(r);
-      if(sampled_line) {
-        sampled_line->add_sample();
+      // Find and matches the line that contains this sample
+      std::pair<line*, bool> sampled_line = match_line(r);
+      if(sampled_line.first) {
+        sampled_line.first->add_sample();
       }
 
       if(_experiment_active) {
         // Add a delay if the sample is in the selected line
-        if(sampled_line == _selected_line)
+        if(sampled_line.second)
           state->local_delay += _delay_size;
 
-      } else if(sampled_line != nullptr && _next_line.load() == nullptr) {
-        _next_line.store(sampled_line);
+      } else if(sampled_line.first != nullptr && _next_line.load() == nullptr) {
+        _next_line.store(sampled_line.first);
       }
     }
   }
