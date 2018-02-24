@@ -2,9 +2,9 @@
  coz
 =====
 
----------------------------------------------------
-profiler running experiements on multithreaded code
----------------------------------------------------
+--------------------------------------------------
+profiler running experiments on multithreaded code
+--------------------------------------------------
 
 :Author: Emery Berger - emery@cs.umass.edu
 :Author: Charlie Curtsinger - curtsinger@grinnell.edu
