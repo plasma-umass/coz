@@ -32,7 +32,15 @@ function update(resize?: boolean) {
   d3.select('#sortby_field').attr('disabled', null);
 
   // Draw plots
-  current_profile.drawPlots(resize);
+  let num_plots = current_profile.drawPlots(resize);
+  
+  // Clear the message area
+  d3.select('#plot-message').text('');
+  
+  // Display a warning if there are no plots
+  if (num_plots == 0) {
+    d3.select('#plot-message').html('<h1>No Data to Plot</h1><p>Your profile does not contain enough observations to generate any plots. Try reducing the minimum number of points required to show a plot using the slider, or run your program for a longer time to collect more data.</p>');
+  }
 
   // Draw the legend
   current_profile.drawLegend();

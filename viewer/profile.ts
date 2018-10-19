@@ -30,7 +30,7 @@ interface LatencyData {
   duration: number;
 }
 
-type Line = Experiment | ThroughputPoint | LatencyPoint;
+type Line = Experiment | ThroughputPoint | LatencyPoint | IgnoredRecord;
 
 interface Experiment {
   type: 'experiment';
@@ -51,6 +51,10 @@ interface LatencyPoint {
   arrivals: number;
   departures: number;
   difference: number;
+}
+
+interface IgnoredRecord {
+  type: 'startup' | 'shutdown' | 'samples' | 'runtime';
 }
 
 /**
@@ -217,13 +221,27 @@ class Profile {
       if (lines[i].length == 0) continue;
       let entry = parseLine(lines[i]);
 
-      if (entry.type === 'experiment') {
+      if (entry.type === 'startup') {
+        // Do nothing
+      } else if (entry.type === 'shutdown') {
+        // Do nothing
+      } else if (entry.type === 'samples') {
+        // Do nothing
+      } else if (entry.type === 'runtime') {
+        // Do nothing
+      } else if (entry.type === 'experiment') {
         experiment = entry;
       } else if (entry.type === 'throughput-point' || entry.type === 'progress-point') {
         this.addThroughputMeasurement(experiment, entry);
       } else if (entry.type === 'latency-point') {
         this.addLatencyMeasurement(experiment, entry);
+      } else {
+        display_warning('Invalid Profile', 'The profile you loaded contains an invalid line: <pre>' + lines[i] + '</pre>');
       }
+    }
+    
+    if (experiment == null) {
+      display_warning('Empty Profile', 'The profile you loaded does not contain result from any performance experiments. Make sure you specified a progress point, built your program with debug information, and ran your program on an input that took at least a few seconds.')
     }
   }
 
@@ -396,7 +414,7 @@ class Profile {
     legend_entries_sel.exit().remove();
   }
 
-  public drawPlots(no_animate: boolean): void {
+  public drawPlots(no_animate: boolean): number {
     const container = this._plot_container;
     const min_points = this._get_min_points();
     const speedup_data = this.getSpeedupData(min_points);
@@ -682,5 +700,8 @@ class Profile {
                 tip.hide(d, i);
               });
     points_sel.exit().remove();
+    
+    // Return the number of plots
+    return speedup_data.length;
   }
 }

@@ -15,6 +15,11 @@ div.plot-title {
   z-index: 0;
 }
 
+div.plot-message {
+  color: #EEE;
+  
+}
+
 .xaxis path,
 .xaxis line,
 .yaxis path,
