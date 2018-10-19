@@ -135,7 +135,7 @@ var sort_functions = {
             return -1;
     }
 };
-var Profile = (function () {
+var Profile = /** @class */ (function () {
     function Profile(profile_text, container, legend, get_min_points, display_warning) {
         this._data = {};
         this._disabled_progress_points = [];
@@ -547,6 +547,7 @@ var Profile = (function () {
                 smoothed_y = loess(xvals, yvals);
             }
             catch (e) {
+                // Bandwidth too small error. Ignore and proceed with empty smoothed line.
             }
             // Speedup is always zero for a line speedup of zero
             smoothed_y[0] = 0;
@@ -575,3 +576,4 @@ var Profile = (function () {
     };
     return Profile;
 }());
+//# sourceMappingURL=profile.js.map
