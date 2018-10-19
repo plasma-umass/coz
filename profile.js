@@ -150,7 +150,19 @@ var Profile = /** @class */ (function () {
             if (lines[i].length == 0)
                 continue;
             var entry = parseLine(lines[i]);
-            if (entry.type === 'experiment') {
+            if (entry.type === 'startup') {
+                // Do nothing
+            }
+            else if (entry.type === 'shutdown') {
+                // Do nothing
+            }
+            else if (entry.type === 'samples') {
+                // Do nothing
+            }
+            else if (entry.type === 'runtime') {
+                // Do nothing
+            }
+            else if (entry.type === 'experiment') {
                 experiment = entry;
             }
             else if (entry.type === 'throughput-point' || entry.type === 'progress-point') {
@@ -159,6 +171,12 @@ var Profile = /** @class */ (function () {
             else if (entry.type === 'latency-point') {
                 this.addLatencyMeasurement(experiment, entry);
             }
+            else {
+                display_warning('Invalid Profile', 'The profile you loaded contains an invalid line: <pre>' + lines[i] + '</pre>');
+            }
+        }
+        if (experiment == null) {
+            display_warning('Empty Profile', 'The profile you loaded does not contain result from any performance experiments. Make sure you specified a progress point, built your program with debug information, and ran your program on an input that took at least a few seconds.');
         }
     }
     Profile.prototype.ensureDataEntry = function (selected, point, speedup, initial_value) {
@@ -573,6 +591,8 @@ var Profile = /** @class */ (function () {
             tip.hide(d, i);
         });
         points_sel.exit().remove();
+        // Return the number of plots
+        return speedup_data.length;
     };
     return Profile;
 }());
