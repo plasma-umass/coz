@@ -16,9 +16,12 @@ include $(ROOT)/common.mk
 pbzip2: bzip2-1.0.6/libbz2.a
 
 # Download and build libbz2
+# This no longer works: wget -c http://bzip.org/1.0.6/bzip2-1.0.6.tar.gz
+# Replaced with a fossies.org link
+
 bzip2-1.0.6/libbz2.a:
 	@echo $(LOG_PREFIX) Downloading libbz2 $(LOG_SUFFIX)
-	@wget -c http://bzip.org/1.0.6/bzip2-1.0.6.tar.gz
+	@wget -c https://fossies.org/linux/misc/bzip2-1.0.6.tar.gz
 	@echo $(LOG_PREFIX) Unpacking libbz2 $(LOG_SUFFIX)
 	@tar xzf bzip2-1.0.6.tar.gz
 	@echo $(LOG_PREFIX) Building libbz2 $(LOG_SUFFIX)
