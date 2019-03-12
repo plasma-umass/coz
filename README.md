@@ -18,15 +18,24 @@ that Counts with Causal Profiling
 
 [![Coz presentation at SOSP 2015](http://img.youtube.com/vi/jE0V-p1odPg/0.jpg)](http://www.youtube.com/watch?v=jE0V-p1odPg&t=0m28s "Coz presentation at SOSP 2015")
 
-## Requirements
-Coz, our prototype causal profiler, runs with unmodified Linux executables. Coz requires:
+## Installation
+
+On many Linux distros, you can install Coz by typing this at the command line:
+
+```sudo apt install coz-profiler```
+
+Coz runs with unmodified Linux executables. Using Coz requires:
 
 - [Python](http://www.python.org)
-- [Clang 3.1 or newer](http://clang.llvm.org) or another compiler with C++0x support (C++11 is recommended)
 - [Linux](http://kernel.org) version 2.6.32 or newer (must support the `perf_event_open` system call)
 
-## Building
-To build Coz, just clone this repository and run `make`. The build system will check out other build dependencies and install them locally in the `deps` directory.
+If you want to build Coz from source, just clone this repository and
+run `make`. The build system will check out other build dependencies
+and install them locally in the `deps` directory.
+
+To build Coz, you will also need the following:
+- [Clang 3.1 or newer](http://clang.llvm.org) or another compiler with C++0x support (C++11 is recommended)
+
 
 ## Using Coz
 Using coz requires a small amount of setup, but you can jump ahead to the section on the included [sample applications](#sample-applications) in this repository if you want to try coz right away.
