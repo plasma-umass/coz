@@ -1,5 +1,5 @@
 ROOT := .
-DIRS := libcoz viewer benchmarks
+DIRS := libcoz viewer
 
 include $(ROOT)/common.mk
 
@@ -13,3 +13,6 @@ install:: all
 	@$(INSTALL) -D libcoz/libcoz.so $(DESTDIR)$(pkglibdir)/libcoz.so
 	@$(INSTALL) -D include/coz.h $(DESTDIR)$(incdir)/coz.h
 	@$(RST2MAN) docs/coz.rst $(DESTDIR)$(man1dir)/coz.1
+
+bench::
+	@$(MAKE) -C benchmarks bench

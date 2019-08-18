@@ -51,11 +51,7 @@ LOG_SUFFIX := "$(shell tput sgr0)"
 MAKEFLAGS += -j
 
 # Build all targets by default, unless this is a benchmark
-ifeq ($(BENCHMARK),)
 all:: $(TARGETS)
-else
-all::
-endif
 
 # Clean up after a bild
 clean::
