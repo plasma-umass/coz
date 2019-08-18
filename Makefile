@@ -9,6 +9,10 @@ bench::
 check::
 	make -C libcoz $@
 
+update-gh-pages::
+	$(MAKE) -C viewer
+	git push origin `git subtree split --prefix viewer master 2> /dev/null`:gh-pages
+
 install::
 	$(INSTALL) -D coz $(DESTDIR)$(bindir)/coz
 	$(INSTALL) -D include/coz.h $(DESTDIR)$(incdir)/coz.h
