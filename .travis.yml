@@ -1,13 +1,20 @@
+# Build on Ubuntu 18.04
+dist: bionic
+
+# Build all branches except gh-pages
 branches:
   except:
     - gh-pages
 
+# Make and install
 install:
   - make install
 
+# Run the make check target (add tests later)
 script:
   - make check
 
+# Specify apt dependencies
 addons:
   apt:
     update: true
