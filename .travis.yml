@@ -27,3 +27,4 @@ install:
 # Run the make check target (add tests later)
 script:
   - make check USE_SYSTEM_COZ=1
+  - cd benchmarks && make test USE_SYSTEM_COZ=1
