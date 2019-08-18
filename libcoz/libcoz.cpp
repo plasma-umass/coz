@@ -363,18 +363,21 @@ extern "C" {
   void __attribute__((noreturn)) exit(int status) throw() {
     profiler::get_instance().shutdown();
     real::exit(status);
+    abort(); // Silence g++ warning about noreturn
   }
 
   /// Run shutdown before exiting
   void __attribute__((noreturn)) _exit(int status) {
     profiler::get_instance().shutdown();
   	real::_exit(status);
+    abort(); // Silence g++ warning about noreturn
   }
 
   /// Run shutdown before exiting
   void __attribute__((noreturn)) _Exit(int status) throw() {
     profiler::get_instance().shutdown();
     real::_Exit(status);
+    abort(); // Silence g++ warning about noreturn
   }
 
   /// Don't allow programs to set signal handlers for coz's required signals

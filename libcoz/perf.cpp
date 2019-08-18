@@ -135,7 +135,8 @@ void perf_event::operator=(perf_event&& other) {
 /// Read event count
 uint64_t perf_event::get_count() const {
   uint64_t count;
-  read(_fd, &count, sizeof(uint64_t));
+  REQUIRE(read(_fd, &count, sizeof(uint64_t)) == sizeof(uint64_t))
+    << "Failed to read event count from perf_event file";
   return count;
 }
 

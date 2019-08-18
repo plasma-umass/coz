@@ -54,19 +54,19 @@ static void* get_pthread_handle() {
 static NORETURN void resolve_exit(int status) throw() {
   GET_SYMBOL(exit);
   if(real_exit) real_exit(status);
-  else abort();
+  abort();
 }
 
 static NORETURN void resolve__exit(int status) throw() {
   GET_SYMBOL(_exit);
   if(real__exit) real__exit(status);
-  else abort();
+  abort();
 }
 
 static NORETURN void resolve__Exit(int status) throw() {
   GET_SYMBOL(_Exit);
   if(real__Exit) real__Exit(status);
-  else abort();
+  abort();
 }
 
 static int resolve_fork() throw() {
@@ -126,7 +126,7 @@ static int resolve_pthread_create(pthread_t* t, const pthread_attr_t* attr, void
 static NORETURN void resolve_pthread_exit(void* retval) {
   GET_SYMBOL_HANDLE(pthread_exit, get_pthread_handle());
   if(real_pthread_exit) real_pthread_exit(retval);
-  else abort();
+  abort();
 }
 
 static int resolve_pthread_join(pthread_t t, void** ret) {

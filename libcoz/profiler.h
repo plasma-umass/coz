@@ -133,6 +133,7 @@ public:
   void handle_pthread_exit(void* result) __attribute__((noreturn)) {
     end_sampling();
     real::pthread_exit(result);
+    abort(); // Silence g++ warning about noreturn
   }
 
   /// Ensure a thread has executed all the required delays before possibly unblocking another thread
