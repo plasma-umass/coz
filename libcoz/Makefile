@@ -1,7 +1,7 @@
 ROOT 		 := ..
 TARGETS  := libcoz.so
-LIBS     := dl rt pthread
-CXXFLAGS := --std=c++0x -g -O2 -fPIC -I$(ROOT)/include -I.
+LIBS     := dl rt pthread elf++ dwarf++
+CXXFLAGS := --std=c++14 -g -O2 -fPIC -I$(ROOT)/include -I.
 
 include $(ROOT)/common.mk
 
