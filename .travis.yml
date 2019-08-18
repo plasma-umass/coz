@@ -1,6 +1,9 @@
 # Build on Ubuntu 18.04
 dist: bionic
 
+# Specify language
+language: cpp
+
 # Build all branches except gh-pages
 branches:
   except:
@@ -8,7 +11,8 @@ branches:
 
 # Make and install
 install:
-  - make install
+  - make
+  - sudo make install
 
 # Run the make check target (add tests later)
 script:
