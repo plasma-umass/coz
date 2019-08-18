@@ -9,9 +9,9 @@ man1dir = $(mandir)/man1
 INSTALL = install
 RST2MAN = rst2man
 
-# Build with clang
-CC  := clang
-CXX := clang++
+# Build with clang by default
+CC  ?= clang
+CXX ?= clang++
 
 # Set coz and include path for coz
 ifeq ($(USE_SYSTEM_COZ),1)

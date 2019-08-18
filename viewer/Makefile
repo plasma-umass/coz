@@ -5,3 +5,7 @@ js/%.js: ts/%.ts tsconfig.json
 
 clean:
 	rm -f js/*
+
+# Do nothing for install target
+install::
+	

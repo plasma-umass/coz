@@ -4,6 +4,11 @@ dist: bionic
 # Specify language
 language: cpp
 
+# Build with both clang and gcc
+compiler:
+  - clang
+  - g++
+
 # Build all branches except gh-pages
 branches:
   except:
