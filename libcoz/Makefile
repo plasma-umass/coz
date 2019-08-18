@@ -1,7 +1,7 @@
 ROOT 		 := ..
 TARGETS  := libcoz.so
 LIBS     := dl rt pthread elf++ dwarf++
-CXXFLAGS := --std=c++14 -g -O2 -fPIC -I$(ROOT)/include -I.
+CXXFLAGS := --std=c++0x -g -O2 -fPIC -I$(ROOT)/include -I.
 
 include $(ROOT)/common.mk
 
@@ -11,6 +11,3 @@ check:: libcoz.so
 	../coz run --- ./x
 	if grep -q time= profile.coz; then echo success: coz profiler ran as it should.; fi
 	$(RM) -f x.c x profile.coz
-
-install::
-	$(INSTALL) -D $(ROOT)/libcoz/libcoz.so $(DESTDIR)$(pkglibdir)/libcoz.so

@@ -1,10 +1,10 @@
-DESTDIR =
-prefix = /usr
-bindir = $(prefix)/bin
-pkglibdir = $(prefix)/lib/coz-profiler
-incdir = $(prefix)/include
-mandir = $(prefix)/share/man
-man1dir = $(mandir)/man1
+DESTDIR   ?=
+prefix    ?= /usr
+bindir    := $(prefix)/bin
+pkglibdir := $(prefix)/lib/coz-profiler
+incdir    := $(prefix)/include
+mandir    := $(prefix)/share/man
+man1dir   := $(mandir)/man1
 
 INSTALL = install
 RST2MAN = rst2man
@@ -15,9 +15,9 @@ CXX ?= clang++
 
 # Set coz and include path for coz
 ifeq ($(USE_SYSTEM_COZ),1)
-COZ = $(shell which coz)
+COZ := $(shell which coz)
 else
-COZ = $(ROOT)/coz
+COZ := $(ROOT)/coz
 endif
 
 # Default flags
@@ -26,11 +26,14 @@ CXXFLAGS ?= $(CFLAGS)
 LDLIBS   += $(addprefix -l,$(LIBS))
 
 # Default source and object files
-SRCS    ?= $(wildcard *.cpp) $(wildcard *.c)
-OBJS    ?= $(addprefix obj/,$(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS))))
+SRCS ?= $(wildcard *.cpp) $(wildcard *.c)
+OBJS ?= $(addprefix obj/,$(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS))))
+
+# Prevent errors if files named all, clean, distclean, bench, or test exist
+.PHONY: all clean distclean bench test
 
 # Targets to build recirsively into $(DIRS)
-RECURSIVE_TARGETS  ?= all clean distclean bench test install
+RECURSIVE_TARGETS  ?= all clean bench test install check
 
 # Targets separated by type
 SHARED_LIB_TARGETS := $(filter %.so, $(TARGETS))
@@ -38,11 +41,14 @@ STATIC_LIB_TARGETS := $(filter %.a, $(TARGETS))
 OTHER_TARGETS      := $(filter-out %.so, $(filter-out %.a, $(TARGETS)))
 
 # If not set, the build path is just the current directory name
-MAKEPATH ?= `basename $(PWD)`
+MAKEPATH ?= $(shell basename $(shell pwd))
 
 # Log the build path in gray, following by a log message in bold green
 LOG_PREFIX := "$(shell tput setaf 7)[$(MAKEPATH)]$(shell tput sgr0)$(shell tput setaf 2)"
 LOG_SUFFIX := "$(shell tput sgr0)"
+
+# Build in parallel
+MAKEFLAGS += -j
 
 # Build all targets by default
 all:: $(TARGETS)
@@ -56,11 +62,7 @@ clean::
 
 # Bring source back to pristine state
 distclean:: clean
-
-test::
-
-# Prevent errors if files named all, clean, distclean, bench, or test exist
-.PHONY: all clean distclean bench test
+	@$(MAKE) -C benchmarks clean
 
 # Compile a C++ source file (and generate its dependency rules)
 obj/%.o: %.cpp $(PREREQS)
@@ -95,9 +97,11 @@ bench_inputs:
 test_inputs:
 
 bench:: $(OTHER_TARGETS) bench_inputs
+	@echo $(LOG_PREFIX) Running benchmark on full input $(LOG_SUFFIX)
 	$(COZ) run $(COZ_ARGS) --- ./$< $(BENCH_ARGS)
 
 test:: $(OTHER_TARGETS) test_inputs
+	@echo $(LOG_PREFIX) Running benchmark on test input $(LOG_SUFFIX)
 	$(COZ) run $(COZ_ARGS) --- ./$< $(TEST_ARGS)
 endif
 

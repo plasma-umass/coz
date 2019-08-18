@@ -26,4 +26,4 @@ install:
 
 # Run the make check target (add tests later)
 script:
-  - make check
+  - make check USE_SYSTEM_COZ=1

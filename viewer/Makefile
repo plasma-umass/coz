@@ -1,11 +1,9 @@
-all: js/ui.js js/profile.js
+ROOT   := ..
 
-js/%.js: ts/%.ts tsconfig.json
-	npm install
+include $(ROOT)/common.mk
 
-clean:
-	rm -f js/*
+all:: js/ui.js
 
-# Do nothing for install target
-install::
-	
+js/ui.js: $(wildcard ts/*.ts) tsconfig.json
+	@echo $(LOG_PREFIX) Building profile viewer $(LOG_SUFFIX)
+	@npm install > /dev/null
