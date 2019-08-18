@@ -29,12 +29,7 @@ extern "C" {
 #define COZ_COUNTER_TYPE_END 3
 
 // Declare dlsym as a weak reference so libdl isn't required
-void* dlsym(void* handle, const char* symbol) __attribute__((weak, alias("__null_dlsym")));
-
-// When running without libdl (e.g. without coz) this is the function that runs when calling dlsym
-static void* __null_dlsym(void* handle, const char* symbol) {
-  return NULL;
-}
+void* dlsym(void* handle, const char* symbol) __attribute__((weak));
 
 // Counter info struct, containing both a counter and backoff size
 typedef struct {
@@ -51,11 +46,13 @@ static coz_counter_t* _call_coz_get_counter(int type, const char* name) {
   static coz_get_counter_t fn; // The pointer to _coz_get_counter
   
   if(!_initialized) {
-    // Locate the _coz_get_counter method
-    void* p = dlsym(RTLD_DEFAULT, "_coz_get_counter");
+    if(dlsym) {
+      // Locate the _coz_get_counter method
+      void* p = dlsym(RTLD_DEFAULT, "_coz_get_counter");
   
-    // Use memcpy to avoid pedantic GCC complaint about storing function pointer in void*
-    memcpy(&fn, &p, sizeof(p));
+      // Use memcpy to avoid pedantic GCC complaint about storing function pointer in void*
+      memcpy(&fn, &p, sizeof(p));
+    }
     
     _initialized = 1;
   }
