@@ -17,7 +17,7 @@ branches:
 # Install dependencies
 before_install:
   - sudo apt-get update
-  - sudo apt-get install -y docutils-common libelfin-dev nodejs npm python2.7
+  - sudo apt-get install -y --install-recommends docutils-common libelfin-dev nodejs npm
 
 # Make and install
 install:
