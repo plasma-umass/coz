@@ -7,7 +7,7 @@
     "url": "git+https://github.com/jvilk/Coz.git"
   },
   "scripts": {
-    "prepare": "tsc"
+    "prepare": "tsc --rootDir ts --outDir js"
   },
   "license": "BSD-2-Clause",
   "bugs": {

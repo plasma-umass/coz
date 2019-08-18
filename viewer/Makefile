@@ -1,7 +1,7 @@
-ROOT = ..
+all: $(wildcard js/*.js)
 
-all:
+js/%.js: ts/%.ts tsconfig.json
 	npm install
 
 clean:
-
+	rm -f js/*
