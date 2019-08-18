@@ -2,7 +2,6 @@ ROOT 		 := ..
 TARGETS  := libcoz.so
 LIBS     := dl rt pthread
 CXXFLAGS := --std=c++0x -g -O2 -fPIC -I$(ROOT)/include -I.
-PREREQS  := $(ROOT)/deps/libelfin
 
 include $(ROOT)/common.mk
 

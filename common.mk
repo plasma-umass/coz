@@ -32,9 +32,6 @@ OBJS    ?= $(addprefix obj/,$(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS))))
 # Targets to build recirsively into $(DIRS)
 RECURSIVE_TARGETS  ?= all clean distclean bench test install
 
-# Build in parallel
-MAKEFLAGS := -j
-
 # Targets separated by type
 SHARED_LIB_TARGETS := $(filter %.so, $(TARGETS))
 STATIC_LIB_TARGETS := $(filter %.a, $(TARGETS))
@@ -112,5 +109,3 @@ $(RECURSIVE_TARGETS)::
 	@for dir in $(DIRS); do \
 	$(MAKE) -C $$dir --no-print-directory $@ MAKEPATH="$(MAKEPATH)/$$dir" || exit 1; \
 	done
-
-include $(ROOT)/deps.mk

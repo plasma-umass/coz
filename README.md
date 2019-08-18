@@ -1,41 +1,34 @@
 # Coz: Finding Code that Counts with Causal Profiling
+Coz is a new kind of profiler that unlocks optimization opportunities missed by traditional profilers. Coz employs a novel technique we call *causal profiling* that measures optimization potential. This measurement matches developers' assumptions about profilers: that optimizing highly-ranked code will have the greatest impact on performance. Causal profiling measures optimization potential for serial, parallel, and asynchronous programs without instrumentation of special handling for library calls and concurrency primitives. Instead, a causal profiler uses performance experiments to predict the effect of optimizations. This allows the profiler to establish causality: "optimizing function X will have effect Y," exactly the measurement developers had assumed they were getting all along.
 
-Coz is a new kind of profiler that unlocks optimization opportunities missed by traditional profilers. Coz employs a novel technique we call *causal profiling* that measures optimization potential.
-This measurement matches developers' assumptions about profilers: that
-optimizing highly-ranked code will have the greatest impact on
-performance. Causal profiling measures optimization potential for serial,
-parallel, and asynchronous programs without instrumentation of special
-handling for library calls and concurrency primitives. Instead, a causal
-profiler uses performance experiments to predict the effect of
-optimizations. This allows the profiler to establish causality:
-"optimizing function X will have effect Y," exactly the measurement
-developers had assumed they were getting all along.
-
-Full details of Coz are available in our paper, [Coz: Finding Code
-that Counts with Causal Profiling
-(pdf)](http://arxiv.org/pdf/1608.03676v1.pdf), SOSP 2015, October 2015
-(recipient of a Best Paper Award).
+Full details of Coz are available in our paper, [Coz: Finding Code that Counts with Causal Profiling (pdf)](http://arxiv.org/pdf/1608.03676v1.pdf), SOSP 2015, October 2015 (recipient of a Best Paper Award).
 
 [![Coz presentation at SOSP 2015](http://img.youtube.com/vi/jE0V-p1odPg/0.jpg)](http://www.youtube.com/watch?v=jE0V-p1odPg&t=0m28s "Coz presentation at SOSP 2015")
 
 ## Installation
+To run Coz, you will need a Linux machine with kernel version 2.6.32 or later (it must support the `perf_event_open` system call) and a Python 2.7 interpreter. Coz is available as a Debian package. If you use a Debian-based distribution you can install Coz with the line:
 
-On many Linux distros, you can install Coz by typing this at the command line:
+```
+$ sudo apt-get install coz-profiler
+```
 
-```sudo apt install coz-profiler```
+## Building Coz From Source
+To build Coz from source, you will need:
 
-Coz runs with unmodified Linux executables. Using Coz requires:
+- A copy of the source code for this project
+- A compiler with C++0x support (clang++ or g++)
+- A python 2.7 interpreter
+- The libelfin development libraries
+- NodeJS and npm (for building the profiler viewer)
 
-- [Python](http://www.python.org)
-- [Linux](http://kernel.org) version 2.6.32 or newer (must support the `perf_event_open` system call)
+Once you have all dependencies in place, run `make` to build Coz. On Debian-based distributions, the following commands should take care of the entire process:
 
-If you want to build Coz from source, just clone this repository and
-run `make`. The build system will check out other build dependencies
-and install them locally in the `deps` directory.
-
-To build Coz, you will also need the following:
-- [Clang 3.1 or newer](http://clang.llvm.org) or another compiler with C++0x support (C++11 is recommended)
-
+```
+$ sudo apt-get install clang python2.7 libelfin-dev nodejs npm
+$ git clone https://github.com/plasma-umass/coz.git
+$ cd coz
+$ make
+```
 
 ## Using Coz
 Using coz requires a small amount of setup, but you can jump ahead to the section on the included [sample applications](#sample-applications) in this repository if you want to try coz right away.
@@ -45,11 +38,9 @@ To run your program with coz, you will need to build it with debug information. 
 Once you have your program built with debug information, you can run it with coz using the command `coz run {coz options} --- {program name and arguments}`. But, to produce a useful profile you need to decide which part(s) of the application you want to speed up by specifying one or more progress points.
 
 ### Profiling Modes
-
 Coz departs from conventional profiling by making it possible to view the effect of optimizations on both throughput and latency. To profile throughput, you must specify a progress point. To profile latency, you must specify a pair of progress points. 
 
 #### Throughput Profiling: Specifying Progress Points
-
 To profile throughput you must indicate a line in the code that corresponds to the end of a unit of work. For example, a progress point could be the point at which a transaction concludes, when a web page finishes rendering, or when a query completes. Coz then measures the rate of visits to each progress point to determine any potential optimization's effect on throughput. 
 
 To place a progress point, include `coz.h` (under the `include` directory in this repository) and add the `COZ_PROGRESS` macro to at least one line you would like to execute more frequently. Don't forget to link your program with libdl: use the `-ldl` option. 
@@ -57,7 +48,6 @@ To place a progress point, include `coz.h` (under the `include` directory in thi
 By default, Coz uses the source file and line number as the name for your progress points. If you use `COZ_PROGRESS_NAMED("name for progress point")` instead, you can provide an informative name for your progress points. This also allows you to mark multiple source locations that correspond to the same progress point.
 
 #### Latency Profiling: Specifying Progress Points
-
 To profile latency, you must place two progress points that correspond to the start and end of an event of interest, such as when a transaction begins and completes. Simply  mark the beginning of a transaction with the `COZ_BEGIN("transaction name")` macro, and the end with the `COZ_END("transaction name")` macro. Unlike regular progress points, you always need to specify a name for your latency progress points. Don't forget to link your program with libdl: use the `-ldl` option. 
 
 When coz tests a hypothetical optimization it will report the effect of that optimization on the average latency between these two points. Coz can track this information with any knowledge of individual transactions thanks to [Little's Law](https://en.wikipedia.org/wiki/Little%27s_law).
@@ -72,8 +62,7 @@ To plot profile results, go to http://plasma-umass.github.io/coz/ and load your 
 The `benchmarks` directory in this repository includes several small benchmarks with progress points added at appropriate locations. To build and run one of these benchmarks with `coz`, just browse to `benchmarks/{bench name}` and type `make bench` (or `make test` for a smaller input size). These programs may require several runs before coz has enough measurements to generate a useful profile. Once you have profiled these programs for several minutes, go to http://plasma-umass.github.io/coz/ to load and plot your profile.
 
 ## Limitations
-Coz currently does not support interpreted or JIT-compiled languages such as Python, Ruby, or JavaScript.
-Interpreted languages will likely not be supported at any point, but support for JIT-compiled languages that produce debug information could be added in the future.
+Coz currently does not support interpreted or JIT-compiled languages such as Python, Ruby, or JavaScript. Interpreted languages will likely not be supported at any point, but support for JIT-compiled languages that produce debug information could be added in the future.
 
 ## License
 All source code is licensed under the BSD 2-clause license unless otherwise indicated. See LICENSE.md for details.
