@@ -1,24 +1,15 @@
 ROOT     := ../..
 TARGETS  := pbzip2
-LIBS     := bz2 pthread dl
+LIBS     := bz2 pthread
 CXXFLAGS := -g -O2 -Wno-format -Ibzip2-1.0.6
 LDFLAGS  := -Lbzip2-1.0.6
 
-ifeq ($(USE_SYSTEM_COZ),)
-CXXFLAGS += -I$(ROOT)/include
-endif
-
-BENCHMARK := 1
-
-include $(ROOT)/common.mk
+include $(ROOT)/benchmark.mk
 
 # pbzip2 depends on the libbz2 library
 pbzip2: bzip2-1.0.6/libbz2.a
 
 # Download and build libbz2
-# This no longer works: wget -c http://bzip.org/1.0.6/bzip2-1.0.6.tar.gz
-# Replaced with a fossies.org link
-
 bzip2-1.0.6/libbz2.a:
 	@echo $(LOG_PREFIX) Downloading libbz2 $(LOG_SUFFIX)
 	@wget -c https://sourceware.org/pub/bzip2/bzip2-1.0.6.tar.gz
@@ -28,12 +19,12 @@ bzip2-1.0.6/libbz2.a:
 	@cd bzip2-1.0.6; $(MAKE) CFLAGS=-g > /dev/null
 	@rm bzip2-1.0.6.tar.gz
 
-BENCH_ARGS := -c < data/key_file_500MB.txt > data/key_file_500MB_compressed.bz2
-TEST_ARGS  := -c < data/key_file_50MB.txt > data/key_file_50MB_compressed.bz2
+BENCH_LARGE_ARGS := -c < data/key_file_500MB.txt > data/key_file_500MB_compressed.bz2
+BENCH_SMALL_ARGS := -c < data/key_file_50MB.txt > data/key_file_50MB_compressed.bz2
 
-bench_inputs: data/key_file_500MB.txt
+large_inputs: data/key_file_500MB.txt
 
-test_inputs: data/key_file_50MB.txt
+small_inputs: data/key_file_50MB.txt
 
 data/%:
 	@echo $(LOG_PREFIX) Downloading pbzip2 inputs $(LOG_SUFFIX)

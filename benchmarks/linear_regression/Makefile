@@ -1,22 +1,16 @@
 ROOT    := ../..
 TARGETS := linear_regression
-LIBS    := pthread dl
+LIBS    := pthread
 CFLAGS  := -g -O2
 
-ifeq ($(USE_SYSTEM_COZ),)
-CFLAGS += -I$(ROOT)/include
-endif
+include $(ROOT)/benchmark.mk
 
-BENCHMARK := 1
+BENCH_LARGE_ARGS := linear_regression_datafiles/key_file_500MB.txt
+BENCH_SMALL_ARGS := linear_regression_datafiles/key_file_50MB.txt
 
-include $(ROOT)/common.mk
+large_inputs: linear_regression_datafiles/key_file_500MB.txt
 
-BENCH_ARGS := linear_regression_datafiles/key_file_500MB.txt
-TEST_ARGS  := linear_regression_datafiles/key_file_50MB.txt
-
-bench_inputs: linear_regression_datafiles/key_file_500MB.txt
-
-test_inputs: linear_regression_datafiles/key_file_50MB.txt
+small_inputs: linear_regression_datafiles/key_file_50MB.txt
 
 linear_regression_datafiles/%:
 	@echo $(LOG_PREFIX) Downloading linear_regression inputs $(LOG_SUFFIX)

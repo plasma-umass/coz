@@ -18,8 +18,8 @@ benchmarks/word_count/word_count
 
 benchmarks/histogram/histogram_datafiles
 benchmarks/linear_regression/linear_regression_datafiles
-benchmarks/matrix_multiply/.input_bench
-benchmarks/matrix_multiply/.input_test
+benchmarks/matrix_multiply/.input_large
+benchmarks/matrix_multiply/.input_small
 benchmarks/matrix_multiply/matrix_file_A.txt
 benchmarks/matrix_multiply/matrix_file_B.txt
 benchmarks/matrix_multiply/matrix_file_out_pthreads.txt

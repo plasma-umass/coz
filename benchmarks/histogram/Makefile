@@ -1,22 +1,16 @@
 ROOT    := ../..
 TARGETS := histogram
-LIBS    := pthread dl
+LIBS    := pthread
 CFLAGS  := -g -O2
 
-ifeq ($(USE_SYSTEM_COZ),)
-CFLAGS += -I$(ROOT)/include
-endif
+include $(ROOT)/benchmark.mk
 
-BENCHMARK := 1
+BENCH_LARGE_ARGS := histogram_datafiles/large.bmp
+BENCH_SMALL_ARGS  := histogram_datafiles/small.bmp
 
-include $(ROOT)/common.mk
+large_inputs: histogram_datafiles/large.bmp
 
-BENCH_ARGS := histogram_datafiles/large.bmp
-TEST_ARGS  := histogram_datafiles/small.bmp
-
-bench_inputs: histogram_datafiles/large.bmp
-
-test_inputs: histogram_datafiles/small.bmp
+small_inputs: histogram_datafiles/small.bmp
 
 histogram_datafiles/%:
 	@echo $(LOG_PREFIX) Downloading histogram inputs $(LOG_SUFFIX)

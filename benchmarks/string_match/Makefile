@@ -1,22 +1,16 @@
 ROOT    := ../..
 TARGETS := string_match
-LIBS    := pthread dl
+LIBS    := pthread
 CFLAGS  := -g -O2
 
-ifeq ($(USE_SYSTEM_COZ),)
-CFLAGS += -I$(ROOT)/include
-endif
+include $(ROOT)/benchmark.mk
 
-BENCHMARK := 1
+BENCH_LARGE_ARGS := string_match_datafiles/key_file_500MB.txt > /dev/null
+BENCH_SMALL_ARGS := string_match_datafiles/key_file_50MB.txt > /dev/null
 
-include $(ROOT)/common.mk
+large_inputs: string_match_datafiles/key_file_500MB.txt
 
-BENCH_ARGS := string_match_datafiles/key_file_500MB.txt > /dev/null
-TEST_ARGS  := string_match_datafiles/key_file_50MB.txt > /dev/null
-
-bench_inputs: string_match_datafiles/key_file_500MB.txt
-
-test_inputs: string_match_datafiles/key_file_50MB.txt
+small_inputs: string_match_datafiles/key_file_50MB.txt
 
 string_match_datafiles/%:
 	@echo $(LOG_PREFIX) Downloading string_match inputs $(LOG_SUFFIX)

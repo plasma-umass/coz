@@ -28,6 +28,14 @@ extern "C" {
 #define COZ_COUNTER_TYPE_BEGIN 2
 #define COZ_COUNTER_TYPE_END 3
 
+// Declare dlsym as a weak reference so libdl isn't required
+void* dlsym(void* handle, const char* symbol) __attribute__((weak, alias("__null_dlsym")));
+
+// When running without libdl (e.g. without coz) this is the function that runs when calling dlsym
+static void* __null_dlsym(void* handle, const char* symbol) {
+  return NULL;
+}
+
 // Counter info struct, containing both a counter and backoff size
 typedef struct {
   size_t count;    // The actual count

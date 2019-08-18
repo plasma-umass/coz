@@ -33,7 +33,7 @@ OBJS ?= $(addprefix obj/,$(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS))))
 .PHONY: all clean distclean bench test
 
 # Targets to build recirsively into $(DIRS)
-RECURSIVE_TARGETS  ?= all clean bench test install check
+RECURSIVE_TARGETS  ?= all clean bench bench_large bench_small test install check
 
 # Targets separated by type
 SHARED_LIB_TARGETS := $(filter %.so, $(TARGETS))
@@ -53,7 +53,7 @@ MAKEFLAGS += -j
 # Build all targets by default, unless this is a benchmark
 all:: $(TARGETS)
 
-# Clean up after a bild
+# Clean up after a build
 clean::
 	@for t in $(TARGETS); do \
 	echo $(LOG_PREFIX) Cleaning $$t $(LOG_SUFFIX); \
@@ -89,21 +89,6 @@ $(STATIC_LIB_TARGETS): $(OBJS)
 $(OTHER_TARGETS): $(OBJS)
 	@echo $(LOG_PREFIX) Linking $@ $(LOG_SUFFIX)
 	@$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
-
-# Set up build targets for benchmarking
-ifneq ($(BENCHMARK),)
-bench_inputs:
-
-test_inputs:
-
-bench:: $(OTHER_TARGETS) bench_inputs
-	@echo $(LOG_PREFIX) Running benchmark on full input $(LOG_SUFFIX)
-	$(COZ) run $(COZ_ARGS) --- ./$< $(BENCH_ARGS)
-
-test:: $(OTHER_TARGETS) test_inputs
-	@echo $(LOG_PREFIX) Running benchmark on test input $(LOG_SUFFIX)
-	$(COZ) run $(COZ_ARGS) --- ./$< $(TEST_ARGS)
-endif
 
 # Include dependency rules for all objects
 -include $(OBJS:.o=.d)

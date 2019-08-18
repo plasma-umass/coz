@@ -1,15 +1,9 @@
 ROOT    := ../..
 TARGETS := pca
-LIBS    := pthread dl
+LIBS    := pthread
 CFLAGS  := -g -O2
 
-ifeq ($(USE_SYSTEM_COZ),)
-CFLAGS += -I$(ROOT)/include
-endif
+include $(ROOT)/benchmark.mk
 
-BENCHMARK := 1
-
-include $(ROOT)/common.mk
-
-BENCH_ARGS := > /dev/null
-TEST_ARGS  := > /dev/null
+BENCH_LARGE_ARGS := > /dev/null
+BENCH_SMALL_ARGS := > /dev/null

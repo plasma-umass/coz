@@ -1,22 +1,16 @@
 ROOT    := ../..
 TARGETS := word_count
-LIBS    := pthread dl
+LIBS    := pthread
 CFLAGS  := -g -O2
 
-ifeq ($(USE_SYSTEM_COZ),)
-CFLAGS += -I$(ROOT)/include
-endif
+include $(ROOT)/benchmark.mk
 
-BENCHMARK := 1
+BENCH_LARGE_ARGS := word_count_datafiles/word_100MB.txt
+BENCH_SMALL_ARGS := word_count_datafiles/word_10MB.txt
 
-include $(ROOT)/common.mk
+large_inputs: word_count_datafiles/word_100MB.txt
 
-BENCH_ARGS := word_count_datafiles/word_100MB.txt
-TEST_ARGS  := word_count_datafiles/word_10MB.txt
-
-bench_inputs: word_count_datafiles/word_100MB.txt
-
-test_inputs: word_count_datafiles/word_10MB.txt
+small_inputs: word_count_datafiles/word_10MB.txt
 
 word_count_datafiles/%:
 	@echo $(LOG_PREFIX) Downloading word_count inputs $(LOG_SUFFIX)
