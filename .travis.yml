@@ -29,7 +29,8 @@ addons:
     update: true
     packages:
       - clang
-      - python2.7
+      - docutils-common
       - libelfin-dev
       - nodejs
       - npm
+      - python2.7
