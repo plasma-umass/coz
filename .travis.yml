@@ -1,0 +1,19 @@
+branches:
+  except:
+    - gh-pages
+
+install:
+  - make install
+
+script:
+  - make check
+
+addons:
+  apt:
+    update: true
+    packages:
+      - clang
+      - python2.7
+      - libelfin-dev
+      - nodejs
+      - npm
