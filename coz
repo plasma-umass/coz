@@ -1,6 +1,6 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3
 
-# Copyright (c) 2015, Charlie Curtsinger and Emery Berger,
+# Copyright (c) 2019, Charlie Curtsinger and Emery Berger,
 #                     University of Massachusetts Amherst
 # This file is part of the Coz project. See LICENSE.md file at the top-level
 # directory of this distribution and at http://github.com/plasma-umass/coz.
@@ -84,7 +84,7 @@ def _coz_run(args):
     # Exit with special control-C return code
     result = 130
     # Add a newline to mimic output when running without coz
-    print
+    print()
   exit(result)
 
 def _coz_plot(args):
@@ -140,7 +140,7 @@ _run_parser.add_argument('--fixed-line',
 
 _run_parser.add_argument('--fixed-speedup',
                          metavar='<speedup> (0-100)',
-                         type=int, choices=range(0, 101), default=None,
+                         type=int, choices=list(range(0, 101)), default=None,
                          help='Evaluate optimizations of a specific amount')
 
 # Use defaults to recover handler function and parser object from parser output
