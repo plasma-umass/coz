@@ -73,9 +73,6 @@ def _coz_run(args):
   if not coz_runtime_found:
     sys.stderr.write('error: unable to locate coz runtime library\n')
     sys.exit(1)
-  
-  print(coz_runtime)
-  sys.exit(0)
 
   if 'LD_PRELOAD' in env:
     env['LD_PRELOAD'] += ':' + coz_runtime
