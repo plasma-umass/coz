@@ -12,6 +12,7 @@ install:: all
 	@$(INSTALL) -D coz $(DESTDIR)$(bindir)/coz
 	@$(INSTALL) -D libcoz/libcoz.so $(DESTDIR)$(pkglibdir)/libcoz.so
 	@$(INSTALL) -D include/coz.h $(DESTDIR)$(incdir)/coz.h
+	@mkdir -p $(DESTDIR)$(man1dir)
 	@$(RST2MAN) docs/coz.rst $(DESTDIR)$(man1dir)/coz.1
 
 bench::
