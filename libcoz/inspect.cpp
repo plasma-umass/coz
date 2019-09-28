@@ -379,9 +379,8 @@ void memory_map::process_inlines(const dwarf::die& d,
       }
 
       string decl_file;
-      dwarf::value decl_file_val = find_attribute(d, dwarf::DW_AT::decl_file);
-      if(decl_file_val.valid() && table.valid()) {
-        decl_file = table.get_file(decl_file_val.as_uconstant())->path;
+      if(d.has(dwarf::DW_AT::decl_file) && table.valid()) {
+        decl_file = table.get_file(d[dwarf::DW_AT::decl_file].as_uconstant())->path;
       }
 
       size_t decl_line = 0;
