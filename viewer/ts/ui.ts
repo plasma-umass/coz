@@ -52,11 +52,15 @@ function update(resize?: boolean) {
   	.style("visibility", "hidden");
 
   // Shorten path strings
+  let short_paths_checkbox = document.getElementById('short_paths_checkbox') as HTMLInputElement;
+  let use_short_paths = short_paths_checkbox.checked;
   let paths = d3.selectAll('.path')
     .classed('path', false).classed('shortpath', true)
     .text(function(d) {
       let parts = d.split('/');
-      let filename = parts[parts.length-1];
+      let filename = use_short_paths
+          ? parts[parts.length-1]
+          : parts.slice(1, parts.length).join('/');
       return filename;
     });
 }
@@ -109,6 +113,7 @@ d3.select('#minpoints_field').on('input', function() {
   update();
 });
 
+d3.select('#short_paths_checkbox').on('change', update);
 d3.select('#sortby_field').on('change', update);
 
 d3.select(window).on('resize', function() { update(true); });

@@ -37,11 +37,15 @@ function update(resize) {
         .style("z-index", "10")
         .style("visibility", "hidden");
     // Shorten path strings
+    var short_paths_checkbox = document.getElementById('short_paths_checkbox');
+    var use_short_paths = short_paths_checkbox.checked;
     var paths = d3.selectAll('.path')
         .classed('path', false).classed('shortpath', true)
         .text(function (d) {
         var parts = d.split('/');
-        var filename = parts[parts.length - 1];
+        var filename = use_short_paths
+            ? parts[parts.length - 1]
+            : parts.slice(1, parts.length).join('/');
         return filename;
     });
 }
@@ -83,6 +87,7 @@ d3.select('#minpoints_field').on('input', function () {
     d3.select('#minpoints_display').text(this.value);
     update();
 });
+d3.select('#short_paths_checkbox').on('change', update);
 d3.select('#sortby_field').on('change', update);
 d3.select(window).on('resize', function () { update(true); });
 var sample_profiles = ['blackscholes', 'dedup', 'ferret', 'fluidanimate', 'sqlite', 'swaptions'];

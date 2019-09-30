@@ -13,6 +13,7 @@ div.plot-title {
   font-weight: bold;
   color: black;
   z-index: 0;
+  direction: rtl;
 }
 
 div.plot-message {
