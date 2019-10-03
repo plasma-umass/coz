@@ -264,8 +264,9 @@ function update(resize?: boolean) {
   // Shorten path strings
   let paths = d3.selectAll('.path')
     .classed('path', false).classed('shortpath', true)
-    .text(function(path: string) {
-      return get_unique_path_part(common_path_prefixes, path);
+    .text((path: string) => get_unique_path_part(common_path_prefixes, path))
+    .attr('title', (datum: string, index: number, outerIndex: number) => {
+      return datum;
     });
 }
 

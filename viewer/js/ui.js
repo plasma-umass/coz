@@ -32,9 +32,6 @@ function get_common_path_prefix(paths) {
     // Ex: "/a/b/c/some_path" => "/a/b/c/some"
     // We want to turn that into "/a/b/c/" in that case.
     var last_slash = prefix.lastIndexOf("/");
-    console.log(prefix);
-    console.log(last_slash);
-    console.log(prefix.substring(0, last_slash));
     if (last_slash !== -1 && last_slash < prefix.length - 1) {
         prefix = prefix.substring(0, last_slash + 1);
     }
@@ -44,12 +41,17 @@ function get_common_path_prefix(paths) {
 // of prefixes is determined by how many unique path prefixes there are within
 // the first slash.
 // Ex: get_common_path_prefixes([
+//    "file.c:123",
+//    "file.c:123",
+//    "a/file.c:123",
+//    "a/file.c:123",
 //    "/test/a/b/c/d/file.c:123",
 //    "/test/a/b/c/f/file.c:123",
 //    "/other/a/b/c/d/file.c:123",
 //    "/other/a/c/file.c:321",
 //    "/a/b/c/file.c:100",
-// ]) => ["/test/a/b/c/", "/other/a/", "/a/b/c/"]
+//    "/a/b/d/file.c:123",
+// ]) => ["/test/a/b/c/", "/other/a/", "/a/b/"]
 function get_common_path_prefixes(paths) {
     // Paths grouped by the first path part
     var grouped_paths = {};
@@ -87,10 +89,10 @@ function get_common_path_prefixes(paths) {
             }
         }
     }
+    // Get the largest common path prefix for each different group of paths
     var common_prefixes = [];
     for (var prefix in grouped_paths) {
         var paths_2 = grouped_paths[prefix];
-        console.log(paths_2);
         common_prefixes.push(get_common_path_prefix(paths_2));
     }
     return common_prefixes;
@@ -219,13 +221,12 @@ function update(resize) {
         return path;
     });
     var common_path_prefixes = get_common_path_prefixes(all_paths);
-    console.log(all_paths);
-    console.log("prefixes: ", common_path_prefixes);
     // Shorten path strings
     var paths = d3.selectAll('.path')
         .classed('path', false).classed('shortpath', true)
-        .text(function (path) {
-        return get_unique_path_part(common_path_prefixes, path);
+        .text(function (path) { return get_unique_path_part(common_path_prefixes, path); })
+        .attr('title', function (datum, index, outerIndex) {
+        return datum;
     });
 }
 // Set a handler for the load profile button
