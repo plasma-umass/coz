@@ -6,130 +6,74 @@ var current_profile = undefined;
 function get_min_points() {
     return d3.select('#minpoints_field').node().value;
 }
-// Returns the longest common path prefix between all strings in an array
-// Ex: get_common_path_prefix(["/a/b/c/", "/a/b/d", "/a/e/d/"]) => "/a/"
-// Ex: get_common_path_prefix(["/a/b/test.c:44", "/a/b/util.c:123"]) => "/a/b/"
-function get_common_path_prefix(paths) {
-    if (paths.length === 1) {
-        return "";
+// Returns the minimum number of path parts to include starting from the
+// end of the path, in order for the resulting string to be unique.
+function get_minimum_parts_for_unique_path(paths) {
+    if (paths.length <= 1) {
+        return 1;
     }
-    var A = paths.concat().sort();
-    var shortest = paths.reduce(function (min, str) { return min < str ? min : str; }, paths[0]);
-    var longest = paths.reduce(function (min, str) { return min > str ? min : str; }, paths[0]);
-    var last_slash_index = shortest.lastIndexOf("/");
-    var i = 0;
-    var end = shortest.length;
-    // If there is a last slash, then we will stop there, so that we do not
-    // cut off the name of the file.
-    if (last_slash_index !== -1) {
-        end = last_slash_index + 1;
+    var minimum = 1;
+    var shortest_parts = Infinity;
+    var is_unique = false;
+    // Remove line numbers from paths
+    paths = paths.map(function (path) { return path.replace(/:[0-9]*/, ''); });
+    // Remove duplicate fully qualified path names
+    paths = remove_duplicates(paths);
+    // Special case: all of the paths are the same file. In that case, then we
+    // only need to return the file name.
+    var all_identical_paths = paths.every(function (path) { return path == paths[0]; });
+    if (all_identical_paths) {
+        return 1;
     }
-    while (i < end && shortest.charAt(i) === longest.charAt(i)) {
-        i++;
-    }
-    var prefix = shortest.substring(0, i);
-    // Check if the string slicing produced a path with a cutoff word.
-    // Ex: "/a/b/c/some_path" => "/a/b/c/some"
-    // We want to turn that into "/a/b/c/" in that case.
-    var last_slash = prefix.lastIndexOf("/");
-    if (last_slash !== -1 && last_slash < prefix.length - 1) {
-        prefix = prefix.substring(0, last_slash + 1);
-    }
-    return prefix;
-}
-// Returns a set of the common path prefixes among a set of strings. The number
-// of prefixes is determined by how many unique path prefixes there are within
-// the first slash.
-// Ex: get_common_path_prefixes([
-//    "file.c:123",
-//    "file.c:123",
-//    "a/file.c:123",
-//    "a/file.c:123",
-//    "/test/a/b/c/d/file.c:123",
-//    "/test/a/b/c/f/file.c:123",
-//    "/other/a/b/c/d/file.c:123",
-//    "/other/a/c/file.c:321",
-//    "/a/b/c/file.c:100",
-//    "/a/b/d/file.c:123",
-// ]) => ["/test/a/b/c/", "/other/a/", "/a/b/"]
-function get_common_path_prefixes(paths) {
-    // Paths grouped by the first path part
-    var grouped_paths = {};
-    for (var _i = 0, paths_1 = paths; _i < paths_1.length; _i++) {
-        var path = paths_1[_i];
-        var first_slash = path.indexOf("/");
-        var second_slash = path.indexOf("/", first_slash + 1);
-        var has_leading_slash = first_slash === 0;
-        var has_second_slash = second_slash !== -1;
-        // Includes paths that have two slashes like:
-        // * /a/b/c/file.c:123
-        // * /a/file.c:123
-        // * a/b/file.c:123
-        // Does not include paths like:
-        // * a/file.c:123
-        // * file.c:123
-        // * /file.c:123
-        if (has_second_slash) {
+    while (true) {
+        var trimmed_paths = paths
+            .map(function (path) {
             var parts = path.split('/');
-            // Includes paths that have a leading slash like:
-            // * /a/b/c/file.c:123
-            // * /a/file.c:123
-            // Does not include paths like:
-            // * a/b/file.c:123
-            var initial_prefix = parts[0];
-            if (has_leading_slash) {
-                // If path is "/a/b/c/file.c:123", then prefix is "/a"
-                initial_prefix = "/" + parts[1];
-            }
-            if (grouped_paths[initial_prefix] === undefined) {
-                grouped_paths[initial_prefix] = [path];
-            }
-            else {
-                grouped_paths[initial_prefix].push(path);
-            }
+            shortest_parts = Math.min(shortest_parts, parts.length);
+            return parts.slice(parts.length - minimum, parts.length).join('/');
+        });
+        is_unique = !has_duplicates(trimmed_paths);
+        if (is_unique) {
+            return minimum;
+        }
+        else if (minimum >= shortest_parts) {
+            // We can't possibly return a minimum parts needed that is greater than
+            // the smallest parts possible
+            return shortest_parts;
+        }
+        else {
+            minimum += 1;
         }
     }
-    // Get the largest common path prefix for each different group of paths
-    var common_prefixes = [];
-    for (var prefix in grouped_paths) {
-        var paths_2 = grouped_paths[prefix];
-        common_prefixes.push(get_common_path_prefix(paths_2));
+}
+// Returns the last number of parts of a slash-separated path.
+function get_last_path_parts(num_parts, path) {
+    // Just return the path if it does not have any slash-separated parts
+    if (path.indexOf('/') === -1) {
+        return path;
     }
-    return common_prefixes;
+    var parts = path.split('/');
+    return parts.slice(parts.length - num_parts, parts.length).join('/');
 }
-{
-    var common_path_prefixes = get_common_path_prefixes([
-        "file.c:123",
-        "file.c:123",
-        "a/file.c:123",
-        "a/file.c:123",
-        "/test/a/b/c/d/file.c:123",
-        "/test/a/b/c/f/file.c:123",
-        "/other/a/b/c/d/file.c:123",
-        "/other/a/c/file.c:321",
-        "/a/b/c/file.c:100",
-        "/a/b/d/file.c:123",
-    ]);
-    console.log("expected:", ["/test/a/b/c/", "/other/a/", "/a/b/"]);
-    console.log("got:", common_path_prefixes);
-}
-// Given the common path prefix (from get_common_prefix), this will return the
-// unique part of the path which should be displayable. This also checks
-// for leading slashes after the slicing, which will be removed.
-// Ex: get_unique_path_part("/a/b/c/", "/a/b/c/test.cpp") => "test.cpp"
-// Ex: get_unique_path_aprt("/a/b/c/", "util.c") => "util.c"
-function get_unique_path_part(common_paths, path) {
-    // For the same reasons as the common path collection logic, we will
-    // not shorten any paths which do not contain a slash, which is hopefully
-    // just paths that are only a file name.
-    for (var _i = 0, common_paths_1 = common_paths; _i < common_paths_1.length; _i++) {
-        var common_path = common_paths_1[_i];
-        // Check if the prefix applies to this path
-        if (path.indexOf(common_path) !== -1) {
-            return path.substr(common_path.length, path.length);
+// This could be made simpler by using ES2015 Set instead.
+function has_duplicates(array) {
+    var seen = Object.create(null);
+    for (var _i = 0, array_1 = array; _i < array_1.length; _i++) {
+        var value = array_1[_i];
+        if (value in seen) {
+            return true;
         }
+        seen[value] = true;
     }
-    return path;
+    return false;
+}
+function remove_duplicates(array) {
+    var uniq = {};
+    for (var _i = 0, array_2 = array; _i < array_2.length; _i++) {
+        var value = array_2[_i];
+        uniq[value + '::' + typeof value] = value;
+    }
+    return Object.keys(uniq).map(function (key) { return uniq[key]; });
 }
 {
     var test_data = [
@@ -138,11 +82,8 @@ function get_unique_path_part(common_paths, path) {
         "/home/fitzgen/rayon/src/lib.rs",
         "/home/fitzgen/rayon/src/spawner/mod.rs"
     ];
-    var common_paths = get_common_path_prefixes(test_data);
-    console.log(common_paths);
-    console.log(common_paths[0] === "/home/fitzgen/");
-    console.log(get_unique_path_part(common_paths, "/home/fitzgen/walrus/src/lib.rs") === "walrus/src/lib.rs");
-    console.log(get_unique_path_part(common_paths, "/home/fitzgen/rayon/src/lib.rs") === "rayon/src/lib.rs");
+    console.log(test_data);
+    console.log(get_minimum_parts_for_unique_path(test_data));
 }
 {
     var test_data = [
@@ -150,12 +91,8 @@ function get_unique_path_part(common_paths, path) {
         "/a/b/c/test.cpp:145",
         "/a/b/c/test.cpp:251",
     ];
-    var common_paths = get_common_path_prefixes(test_data);
-    console.log(common_paths);
-    console.log(common_paths[0] === "/a/b/c/");
-    console.log(get_unique_path_part(common_paths, "/a/b/c/test.cpp:135") === "test.cpp:135");
-    console.log(get_unique_path_part(common_paths, "/a/b/c/d/util.c:12") === "d/util.c:12");
-    console.log(get_unique_path_part(common_paths, "/a/b/c/test.cpp:23094345") === "test.cpp:23094345");
+    console.log(test_data);
+    console.log(get_minimum_parts_for_unique_path(test_data));
 }
 {
     var test_data = [
@@ -170,13 +107,40 @@ function get_unique_path_part(common_paths, path) {
         "/home/cmchenry/.cargo/registry/src/github.com-1ecc6299db9ec823/parse_wiki_text-0.1.5/src/table.rs:288",
         "/home/cmchenry/.cargo/registry/src/github.com-1ecc6299db9ec823/quick-xml-0.16.1/src/reader.rs:0",
     ];
-    var common_paths = get_common_path_prefixes(test_data);
-    console.log(common_paths);
-    console.log(common_paths.indexOf("/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/") !== -1);
-    console.log(common_paths.indexOf("/home/cmchenry/.cargo/registry/src/github.com-1ecc6299db9ec823/") !== -1);
-    console.log(common_paths.indexOf("src/") === -1);
-    console.log(get_unique_path_part(common_paths, "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/slice/mod.rs:3261") === "libcore/slice/mod.rs:3261");
-    console.log(get_unique_path_part(common_paths, "/home/cmchenry/.cargo/registry/src/github.com-1ecc6299db9ec823/memchr-2.2.1/src/x86/sse2.rs:0") === "memchr-2.2.1/src/x86/sse2.rs:0");
+    console.log(test_data);
+    console.log(get_minimum_parts_for_unique_path(test_data));
+}
+{
+    var test_data = [
+        "/home/cmchenry/.cargo/registry/src/github.com-1ecc6299db9ec823/failure-0.1.5/src/error/error_impl.rs:23",
+        "/home/cmchenry/.cargo/registry/src/github.com-1ecc6299db9ec823/regex-1.3.1/src/dfa.rs:1742",
+        "/home/cmchenry/workspace/rust/walrus/src/ir/mod.rs:209",
+        "/home/cmchenry/workspace/rust/walrus/src/module/functions/local_function/context.rs:0",
+        "/home/cmchenry/workspace/rust/walrus/src/module/functions/local_function/context.rs:175",
+        "/home/cmchenry/workspace/rust/walrus/src/module/functions/local_function/context.rs:178",
+        "/home/cmchenry/workspace/rust/walrus/src/module/functions/local_function/context.rs:192",
+        "/home/cmchenry/workspace/rust/walrus/src/module/functions/local_function/context.rs:200",
+        "/home/cmchenry/workspace/rust/walrus/src/module/functions/mod.rs:306",
+        "/home/cmchenry/workspace/rust/walrus/src/tombstone_arena.rs:62",
+        "/home/cmchenry/workspace/rust/walrus/src/tombstone_arena.rs:67",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/alloc.rs:208",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/alloc.rs:82",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/boxed.rs:116",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/raw_vec.rs:0",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/raw_vec.rs:230",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/raw_vec.rs:492",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/vec.rs:1101",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/vec.rs:2003",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/alloc.rs:242",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/cmp.rs:978",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/num/mod.rs:3399",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/ptr/mod.rs:197",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/ptr/mod.rs:783",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/result.rs:800",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/stdsimd/crates/core_arch/src/x86/sse2.rs:1401"
+    ];
+    console.log(test_data);
+    console.log(get_minimum_parts_for_unique_path(test_data));
 }
 function display_warning(title, text) {
     var warning = $("<div class=\"alert alert-warning alert-dismissible\" role=\"alert\">\n      <button type=\"button\" class=\"close\" data-dismiss=\"alert\" aria-label=\"Close\"><span aria-hidden=\"true\">&times;</span></button>\n      <strong>" + title + ":</strong> " + text + "\n    </div>");
@@ -211,20 +175,18 @@ function update(resize) {
     var all_paths = [];
     // Collect all of the paths that we have, in order to calculate what the
     // common path prefix is among all of the paths.
-    d3.selectAll('.path')
-        .text(function (path) {
-        // Do not consider any paths which do not contain a slash as a way of
-        // filtering out paths which are already just the file name.
-        if (path.indexOf("/") !== -1) {
+    d3.selectAll('.path').text(function (path) {
+        // Filter out any paths which do not contain slash-separated parts
+        if (path.indexOf('/') !== -1) {
             all_paths.push(path);
         }
         return path;
     });
-    var common_path_prefixes = get_common_path_prefixes(all_paths);
+    var minimum_parts = get_minimum_parts_for_unique_path(all_paths);
     // Shorten path strings
     var paths = d3.selectAll('.path')
         .classed('path', false).classed('shortpath', true)
-        .text(function (path) { return get_unique_path_part(common_path_prefixes, path); })
+        .text(function (path) { return get_last_path_parts(minimum_parts, path); })
         .attr('title', function (datum, index, outerIndex) {
         return datum;
     });
