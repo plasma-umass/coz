@@ -6,6 +6,142 @@ var current_profile = undefined;
 function get_min_points() {
     return d3.select('#minpoints_field').node().value;
 }
+// Returns the minimum number of path parts to include starting from the
+// end of the path, in order for the resulting string to be unique.
+function get_minimum_parts_for_unique_path(paths) {
+    if (paths.length <= 1) {
+        return 1;
+    }
+    var minimum = 1;
+    var shortest_parts = Infinity;
+    var is_unique = false;
+    // Remove line numbers from paths
+    paths = paths.map(function (path) { return path.replace(/:[0-9]*/, ''); });
+    // Remove duplicate fully qualified path names
+    paths = remove_duplicates(paths);
+    // Special case: all of the paths are the same file. In that case, then we
+    // only need to return the file name.
+    var all_identical_paths = paths.every(function (path) { return path == paths[0]; });
+    if (all_identical_paths) {
+        return 1;
+    }
+    while (true) {
+        var trimmed_paths = paths
+            .map(function (path) {
+            var parts = path.split('/');
+            shortest_parts = Math.min(shortest_parts, parts.length);
+            return parts.slice(parts.length - minimum, parts.length).join('/');
+        });
+        is_unique = !has_duplicates(trimmed_paths);
+        if (is_unique) {
+            return minimum;
+        }
+        else if (minimum >= shortest_parts) {
+            // We can't possibly return a minimum parts needed that is greater than
+            // the smallest parts possible
+            return shortest_parts;
+        }
+        else {
+            minimum += 1;
+        }
+    }
+}
+// Returns the last number of parts of a slash-separated path.
+function get_last_path_parts(num_parts, path) {
+    // Just return the path if it does not have any slash-separated parts
+    if (path.indexOf('/') === -1) {
+        return path;
+    }
+    var parts = path.split('/');
+    return parts.slice(parts.length - num_parts, parts.length).join('/');
+}
+// This could be made simpler by using ES2015 Set instead.
+function has_duplicates(array) {
+    var seen = Object.create(null);
+    for (var _i = 0, array_1 = array; _i < array_1.length; _i++) {
+        var value = array_1[_i];
+        if (value in seen) {
+            return true;
+        }
+        seen[value] = true;
+    }
+    return false;
+}
+function remove_duplicates(array) {
+    var uniq = {};
+    for (var _i = 0, array_2 = array; _i < array_2.length; _i++) {
+        var value = array_2[_i];
+        uniq[value + '::' + typeof value] = value;
+    }
+    return Object.keys(uniq).map(function (key) { return uniq[key]; });
+}
+{
+    var test_data = [
+        "/home/fitzgen/walrus/src/lib.rs",
+        "/home/fitzgen/walrus/src/passes/mod.rs",
+        "/home/fitzgen/rayon/src/lib.rs",
+        "/home/fitzgen/rayon/src/spawner/mod.rs"
+    ];
+    console.log(test_data);
+    console.log(get_minimum_parts_for_unique_path(test_data));
+}
+{
+    var test_data = [
+        "/a/b/c/test.cpp:135",
+        "/a/b/c/test.cpp:145",
+        "/a/b/c/test.cpp:251",
+    ];
+    console.log(test_data);
+    console.log(get_minimum_parts_for_unique_path(test_data));
+}
+{
+    var test_data = [
+        "src/lib.rs:330",
+        "src/lib.rs:367",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/slice/mod.rs:3261",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/slice/mod.rs:5348",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/ptr/mod.rs:197",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/vec.rs:1563",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/vec.rs:1787",
+        "/home/cmchenry/.cargo/registry/src/github.com-1ecc6299db9ec823/memchr-2.2.1/src/x86/sse2.rs:0",
+        "/home/cmchenry/.cargo/registry/src/github.com-1ecc6299db9ec823/parse_wiki_text-0.1.5/src/table.rs:288",
+        "/home/cmchenry/.cargo/registry/src/github.com-1ecc6299db9ec823/quick-xml-0.16.1/src/reader.rs:0",
+    ];
+    console.log(test_data);
+    console.log(get_minimum_parts_for_unique_path(test_data));
+}
+{
+    var test_data = [
+        "/home/cmchenry/.cargo/registry/src/github.com-1ecc6299db9ec823/failure-0.1.5/src/error/error_impl.rs:23",
+        "/home/cmchenry/.cargo/registry/src/github.com-1ecc6299db9ec823/regex-1.3.1/src/dfa.rs:1742",
+        "/home/cmchenry/workspace/rust/walrus/src/ir/mod.rs:209",
+        "/home/cmchenry/workspace/rust/walrus/src/module/functions/local_function/context.rs:0",
+        "/home/cmchenry/workspace/rust/walrus/src/module/functions/local_function/context.rs:175",
+        "/home/cmchenry/workspace/rust/walrus/src/module/functions/local_function/context.rs:178",
+        "/home/cmchenry/workspace/rust/walrus/src/module/functions/local_function/context.rs:192",
+        "/home/cmchenry/workspace/rust/walrus/src/module/functions/local_function/context.rs:200",
+        "/home/cmchenry/workspace/rust/walrus/src/module/functions/mod.rs:306",
+        "/home/cmchenry/workspace/rust/walrus/src/tombstone_arena.rs:62",
+        "/home/cmchenry/workspace/rust/walrus/src/tombstone_arena.rs:67",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/alloc.rs:208",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/alloc.rs:82",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/boxed.rs:116",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/raw_vec.rs:0",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/raw_vec.rs:230",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/raw_vec.rs:492",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/vec.rs:1101",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/liballoc/vec.rs:2003",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/alloc.rs:242",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/cmp.rs:978",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/num/mod.rs:3399",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/ptr/mod.rs:197",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/ptr/mod.rs:783",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/libcore/result.rs:800",
+        "/rustc/eae3437dfe991621e8afdc82734f4a172d7ddf9b/src/stdsimd/crates/core_arch/src/x86/sse2.rs:1401"
+    ];
+    console.log(test_data);
+    console.log(get_minimum_parts_for_unique_path(test_data));
+}
 function display_warning(title, text) {
     var warning = $("<div class=\"alert alert-warning alert-dismissible\" role=\"alert\">\n      <button type=\"button\" class=\"close\" data-dismiss=\"alert\" aria-label=\"Close\"><span aria-hidden=\"true\">&times;</span></button>\n      <strong>" + title + ":</strong> " + text + "\n    </div>");
     $('#warning-area').append(warning);
@@ -36,13 +172,23 @@ function update(resize) {
         .style("position", "absolute")
         .style("z-index", "10")
         .style("visibility", "hidden");
+    var all_paths = [];
+    // Collect all of the paths that we have, in order to calculate what the
+    // common path prefix is among all of the paths.
+    d3.selectAll('.path').text(function (path) {
+        // Filter out any paths which do not contain slash-separated parts
+        if (path.indexOf('/') !== -1) {
+            all_paths.push(path);
+        }
+        return path;
+    });
+    var minimum_parts = get_minimum_parts_for_unique_path(all_paths);
     // Shorten path strings
     var paths = d3.selectAll('.path')
         .classed('path', false).classed('shortpath', true)
-        .text(function (d) {
-        var parts = d.split('/');
-        var filename = parts[parts.length - 1];
-        return filename;
+        .text(function (path) { return get_last_path_parts(minimum_parts, path); })
+        .attr('title', function (datum, index, outerIndex) {
+        return datum;
     });
 }
 // Set a handler for the load profile button

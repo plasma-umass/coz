@@ -9,6 +9,84 @@ function get_min_points(): number {
   return (<any> d3.select('#minpoints_field').node()).value;
 }
 
+// Returns the minimum number of path parts to include starting from the
+// end of the path, in order for the resulting string to be unique.
+function get_minimum_parts_for_unique_path(paths: string[]): number {
+  if (paths.length <= 1) {
+    return 1;
+  }
+
+  let minimum = 1;
+  let shortest_parts = Infinity;
+  let is_unique = false;
+
+  // Remove line numbers from paths
+  paths = paths.map(path => path.replace(/:[0-9]*/, ''));
+
+  // Remove duplicate fully qualified path names
+  paths = remove_duplicates(paths);
+
+  // Special case: all of the paths are the same file. In that case, then we
+  // only need to return the file name.
+  const all_identical_paths = paths.every(path => path == paths[0]);
+  if (all_identical_paths) {
+    return 1;
+  }
+
+  while (true) {
+    const trimmed_paths = paths
+      .map(path => {
+        const parts: string[] = path.split('/');
+        shortest_parts = Math.min(shortest_parts, parts.length);
+        return parts.slice(parts.length - minimum, parts.length).join('/');
+      })
+    
+    is_unique = !has_duplicates(trimmed_paths);
+
+    if (is_unique) {
+      return minimum;
+    } else if (minimum >= shortest_parts) {
+      // We can't possibly return a minimum parts needed that is greater than
+      // the smallest parts possible
+      return shortest_parts;
+    } else {
+      minimum += 1;
+    }
+  }
+}
+
+// Returns the last number of parts of a slash-separated path.
+function get_last_path_parts(num_parts: number, path: string) {
+  // Just return the path if it does not have any slash-separated parts
+  if (path.indexOf('/') === -1) {
+    return path;
+  }
+  const parts = path.split('/');
+  return parts.slice(parts.length - num_parts, parts.length).join('/');
+}
+
+// This could be made simpler by using ES2015 Set instead.
+function has_duplicates(array: string[]) {
+  var seen = Object.create(null);
+  for (let value of array) {
+    if (value in seen) {
+      return true;
+    }
+    seen[value] = true;
+  }
+  return false;
+}
+
+function remove_duplicates(array: string[]) {
+  var uniq: {[key: string]: string} = {};
+
+  for (let value of array) {
+    uniq[value + '::' + typeof value] = value;
+  }
+
+  return Object.keys(uniq).map(key => uniq[key]);
+}
+
 function display_warning(title: string, text: string): void {
   const warning = $(
     `<div class="alert alert-warning alert-dismissible" role="alert">
@@ -51,13 +129,26 @@ function update(resize?: boolean) {
   	.style("z-index", "10")
   	.style("visibility", "hidden");
 
+  let all_paths: string[] = [];
+
+  // Collect all of the paths that we have, in order to calculate what the
+  // common path prefix is among all of the paths.
+  d3.selectAll('.path').text(path => {
+    // Filter out any paths which do not contain slash-separated parts
+    if (path.indexOf('/') !== -1) {
+      all_paths.push(path)
+    }
+    return path;
+  });
+  
+  let minimum_parts = get_minimum_parts_for_unique_path(all_paths);
+
   // Shorten path strings
   let paths = d3.selectAll('.path')
     .classed('path', false).classed('shortpath', true)
-    .text(function(d) {
-      let parts = d.split('/');
-      let filename = parts[parts.length-1];
-      return filename;
+    .text((path: string) => get_last_path_parts(minimum_parts, path))
+    .attr('title', (datum: string, index: number, outerIndex: number) => {
+      return datum;
     });
 }
 
