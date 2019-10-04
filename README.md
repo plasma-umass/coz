@@ -5,6 +5,11 @@ Full details of Coz are available in our paper, [Coz: Finding Code that Counts w
 
 [![Coz presentation at SOSP 2015](http://img.youtube.com/vi/jE0V-p1odPg/0.jpg)](http://www.youtube.com/watch?v=jE0V-p1odPg&t=0m28s "Coz presentation at SOSP 2015")
 
+## Java version
+
+There is a Java version of Coz for profiling Java programs called [JCoz](https://github.com/Decave/JCoz).
+
+
 ## Installation
 To run Coz, you will need a Linux machine with kernel version 2.6.32 or later (it must support the `perf_event_open` system call) and a Python 3 interpreter. Coz is available as a Debian package. If you use a Debian-based distribution, you can install Coz with the line:
 
