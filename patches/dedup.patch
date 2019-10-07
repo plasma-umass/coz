@@ -1,0 +1,8 @@
+64,66c64,66
+<   unsigned char* sha1name = ((CacheKey*)k)->sha1name;
+<   for (i = 0; i < SHA1_LEN; i++) {
+<     hash += *(((unsigned char*)sha1name) + i);
+---
+>   /*uint32_t* sha1name = ((CacheKey*)k)->sha1name;*/ unsigned char* sha1name = ((CacheKey*)k)->sha1name;
+>   for (i = 0; /* i*4 */ i < SHA1_LEN; i++) {
+>     /*hash ^= sha1name[i];*/ hash += *(((unsigned char*)sha1name) + i);

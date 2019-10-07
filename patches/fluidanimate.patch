@@ -1,0 +1,52 @@
+6a7
+> #include <causal.h>
+612a614,619
+>                     /*float* dest = &cell.density[j];
+>                     float expected = *dest;
+>                     float newval = expected + tc;
+>                     while(!__atomic_compare_exchange((uint32_t*)dest, (uint32_t*)&expected, (uint32_t*)&newval, true, __ATOMIC_RELEASE, __ATOMIC_ACQUIRE)) {
+>                       newval = expected + tc;
+>                     }*/
+621a629,634
+>                     /*float* dest = &neigh.density[iparNeigh];
+>                     float expected = *dest;
+>                     float newval = expected + tc;
+>                     while(!__atomic_compare_exchange((uint32_t*)dest, (uint32_t*)&expected, (uint32_t*)&newval, true, __ATOMIC_RELEASE, __ATOMIC_ACQUIRE)) {
+>                       newval = expected + tc;
+>                     }*/
+783c796
+< 
+---
+> void wait_at_barrier() { pthread_barrier_wait(&barrier); CAUSAL_PROGRESS; }
+787c800
+< 	pthread_barrier_wait(&barrier);
+---
+> 	wait_at_barrier(); //pthread_barrier_wait(&barrier);
+789c802
+< 	pthread_barrier_wait(&barrier);
+---
+> 	wait_at_barrier(); //pthread_barrier_wait(&barrier);
+791c804
+< 	pthread_barrier_wait(&barrier);
+---
+> 	wait_at_barrier(); //pthread_barrier_wait(&barrier);
+793c806
+< 	pthread_barrier_wait(&barrier);
+---
+> 	wait_at_barrier(); //pthread_barrier_wait(&barrier);
+795c808
+< 	pthread_barrier_wait(&barrier);
+---
+> 	wait_at_barrier(); //pthread_barrier_wait(&barrier);
+797c810
+< 	pthread_barrier_wait(&barrier);
+---
+> 	wait_at_barrier(); //pthread_barrier_wait(&barrier);
+799c812
+< 	pthread_barrier_wait(&barrier);
+---
+> 	wait_at_barrier(); //pthread_barrier_wait(&barrier);
+801c814
+< 	pthread_barrier_wait(&barrier);
+---
+> 	wait_at_barrier(); //pthread_barrier_wait(&barrier);
