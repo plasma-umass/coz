@@ -1,0 +1,19 @@
+
+
+SET(COZDIR destdir)
+
+find_path(COZ_INCLUDE_DIR
+    NAMES coz.h
+    PATHS ${COZ_DIR}
+)
+
+find_file(COZ_LIBRARY
+    NAMES libcoz.so
+    PATHS ${COZ_DIR}
+)
+
+set(COZ_FOUND (COZ_INCLUDE_DIR AND COZ_LIBRARY))
+
+message(INFO " ${COZ_INCLUDE_DIR} ${COZ_LIBRARY} ${COZ_FOUND}")
+
+mark_as_advanced(COZ_FOUND COZ_INCLUDE_DIR COZ_LIBRARY)
