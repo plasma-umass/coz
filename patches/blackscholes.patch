@@ -1,0 +1,141 @@
+8a9
+> #include <causal.h>
+84,87d84
+<     fptype OutputX;
+<     fptype xInput;
+<     fptype xNPrimeofX;
+<     fptype expValues;
+89,92d85
+<     fptype xK2_2, xK2_3;
+<     fptype xK2_4, xK2_5;
+<     fptype xLocal, xLocal_1;
+<     fptype xLocal_2, xLocal_3;
+96,129c89,95
+<         InputX = -InputX;
+<         sign = 1;
+<     } else 
+<         sign = 0;
+< 
+<     xInput = InputX;
+<  
+<     // Compute NPrimeX term common to both four & six decimal accuracy calcs
+<     expValues = exp(-0.5f * InputX * InputX);
+<     xNPrimeofX = expValues;
+<     xNPrimeofX = xNPrimeofX * inv_sqrt_2xPI;
+< 
+<     xK2 = 0.2316419 * xInput;
+<     xK2 = 1.0 + xK2;
+<     xK2 = 1.0 / xK2;
+<     xK2_2 = xK2 * xK2;
+<     xK2_3 = xK2_2 * xK2;
+<     xK2_4 = xK2_3 * xK2;
+<     xK2_5 = xK2_4 * xK2;
+<     
+<     xLocal_1 = xK2 * 0.319381530;
+<     xLocal_2 = xK2_2 * (-0.356563782);
+<     xLocal_3 = xK2_3 * 1.781477937;
+<     xLocal_2 = xLocal_2 + xLocal_3;
+<     xLocal_3 = xK2_4 * (-1.821255978);
+<     xLocal_2 = xLocal_2 + xLocal_3;
+<     xLocal_3 = xK2_5 * 1.330274429;
+<     xLocal_2 = xLocal_2 + xLocal_3;
+< 
+<     xLocal_1 = xLocal_2 + xLocal_1;
+<     xLocal   = xLocal_1 * xNPrimeofX;
+<     xLocal   = 1.0 - xLocal;
+< 
+<     OutputX  = xLocal;
+---
+>       InputX = -InputX;
+>       sign = 1;
+>     } else {
+>       sign = 0;
+>     }
+>                       
+>     xK2 = 1.0 / (1.0 + 0.2316419 * InputX);
+132c98,100
+<         OutputX = 1.0 - OutputX;
+---
+>       return (0.319381530*xK2 - 0.356563782*xK2*xK2 + 1.781477937*xK2*xK2*xK2 - 1.821255978*xK2*xK2*xK2*xK2 + 1.330274429*xK2*xK2*xK2*xK2*xK2) * exp(-0.5f * InputX * InputX) * inv_sqrt_2xPI;
+>     } else {
+>       return 1.0 - (0.319381530*xK2 - 0.356563782*xK2*xK2 + 1.781477937*xK2*xK2*xK2 - 1.821255978*xK2*xK2*xK2*xK2 + 1.330274429*xK2*xK2*xK2*xK2*xK2) * exp(-0.5f * InputX * InputX) * inv_sqrt_2xPI;
+134,135d101
+<     
+<     return OutputX;
+151,152d116
+<     fptype OptionPrice;
+< 
+154,162d117
+<     fptype xStockPrice;
+<     fptype xStrikePrice;
+<     fptype xRiskFreeRate;
+<     fptype xVolatility;
+<     fptype xTime;
+<     fptype xSqrtTime;
+< 
+<     fptype logValues;
+<     fptype xLogTerm;
+165,178c120
+<     fptype xPowerTerm;
+<     fptype xDen;
+<     fptype d1;
+<     fptype d2;
+<     fptype FutureValueX;
+<     fptype NofXd1;
+<     fptype NofXd2;
+<     fptype NegNofXd1;
+<     fptype NegNofXd2;    
+<     
+<     xStockPrice = sptprice;
+<     xStrikePrice = strike;
+<     xRiskFreeRate = rate;
+<     xVolatility = volatility;
+---
+>     fptype xDen; 
+180,181c122
+<     xTime = time;
+<     xSqrtTime = sqrt(xTime);
+---
+>     xD1 = (rate + volatility * volatility * 0.5) * time + log( sptprice / strike );
+183,195c124
+<     logValues = log( sptprice / strike );
+<         
+<     xLogTerm = logValues;
+<         
+<     
+<     xPowerTerm = xVolatility * xVolatility;
+<     xPowerTerm = xPowerTerm * 0.5;
+<         
+<     xD1 = xRiskFreeRate + xPowerTerm;
+<     xD1 = xD1 * xTime;
+<     xD1 = xD1 + xLogTerm;
+< 
+<     xDen = xVolatility * xSqrtTime;
+---
+>     xDen = volatility * sqrt(time);
+198,205c127
+< 
+<     d1 = xD1;
+<     d2 = xD2;
+<     
+<     NofXd1 = CNDF( d1 );
+<     NofXd2 = CNDF( d2 );
+< 
+<     FutureValueX = strike * ( exp( -(rate)*(time) ) );        
+---
+>         
+207c129
+<         OptionPrice = (sptprice * NofXd1) - (FutureValueX * NofXd2);
+---
+>         return (sptprice * CNDF( xD1 )) - (strike * ( exp( -(rate)*(time) ) ) * CNDF( xD2 ));
+209,211c131
+<         NegNofXd1 = (1.0 - NofXd1);
+<         NegNofXd2 = (1.0 - NofXd2);
+<         OptionPrice = (FutureValueX * NegNofXd2) - (sptprice * NegNofXd1);
+---
+>         return (strike * ( exp( -(rate)*(time) ) ) * (1.0 - CNDF( xD1 ))) - (sptprice * (1.0 - CNDF( xD2 )));
+213,214d132
+<     
+<     return OptionPrice;
+256a175
+>         CAUSAL_PROGRESS;

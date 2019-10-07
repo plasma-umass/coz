@@ -1,0 +1,110 @@
+*** /home/charlie/Projects/benchmarks/parsec2.1-unmodified/pkgs/apps/swaptions/src/HJM_SimPath_Forward_Blocking.cpp	2008-11-11 15:23:28.000000000 -0500
+--- HJM_SimPath_Forward_Blocking.cpp	2015-03-23 12:37:56.687945058 -0400
+***************
+*** 62,69 ****
+  
+    
+    for(int l=0;l<=iFactors-1;++l){
+!     for(int b=0; b<BLOCKSIZE; b++){
+!       for (int j=1;j<=iN-1;++j){
+  	pdZ[l][BLOCKSIZE*j + b]= CumNormalInv(randZ[l][BLOCKSIZE*j + b]);  /* 18% of the total executition time */
+        }
+      }
+--- 62,69 ----
+  
+    
+    for(int l=0;l<=iFactors-1;++l){
+!     for (int j=1;j<=iN-1;++j){
+!       for(int b=0; b<BLOCKSIZE; b++){
+  	pdZ[l][BLOCKSIZE*j + b]= CumNormalInv(randZ[l][BLOCKSIZE*j + b]);  /* 18% of the total executition time */
+        }
+      }
+***************
+*** 99,122 ****
+  	// t=0 forward curve stored iN first row of ppdHJMPath
+  	// At time step 0: insert expected drift 
+  	// rest reset to 0
+! 	for(int b=0; b<BLOCKSIZE; b++){
+  	  for(j=0;j<=iN-1;j++){
+  	    ppdHJMPath[0][BLOCKSIZE*j + b] = pdForward[j]; 
+  
+  	    for(i=1;i<=iN-1;++i)
+  	      { ppdHJMPath[i][BLOCKSIZE*j + b]=0; } //initializing HJMPath to zero
+  	  }
+! 	}
+  	// -----------------------------------------------------
+  	
+          // =====================================================
+          // sequentially generating random numbers
+  
+! 
+!         for(int b=0; b<BLOCKSIZE; b++){
+!           for(int s=0; s<1; s++){
+!             for (j=1;j<=iN-1;++j){
+!               for (l=0;l<=iFactors-1;++l){
+                  //compute random number in exact same sequence
+                  randZ[l][BLOCKSIZE*j + b + s] = RanUnif(lRndSeed);  /* 10% of the total executition time */
+                }
+--- 99,136 ----
+  	// t=0 forward curve stored iN first row of ppdHJMPath
+  	// At time step 0: insert expected drift 
+  	// rest reset to 0
+! 	/*for(int b=0; b<BLOCKSIZE; b++){
+  	  for(j=0;j<=iN-1;j++){
+  	    ppdHJMPath[0][BLOCKSIZE*j + b] = pdForward[j]; 
+  
+  	    for(i=1;i<=iN-1;++i)
+  	      { ppdHJMPath[i][BLOCKSIZE*j + b]=0; } //initializing HJMPath to zero
+  	  }
+! 	}*/
+!   for(j=0;j<=iN-1;j++) {
+!     for(int b=0; b<BLOCKSIZE; b++) {
+!       ppdHJMPath[0][BLOCKSIZE*j + b] = pdForward[j];
+!     }
+!   }
+!   
+!   for(i=1;i<=iN-1;++i) {
+!     memset(ppdHJMPath[i], 0, BLOCKSIZE*iN*sizeof(FTYPE));
+!     //for(j=0;j<=iN-1;j++) {
+!       //memset(&ppdHJMPath[i][BLOCKSIZE*j], BLOCKSIZE, sizeof(FTYPE));
+!       //for(int b=0; b<BLOCKSIZE; b++) {
+!       //  ppdHJMPath[i][BLOCKSIZE*j + b]=0;
+!       //}
+!     //}
+!   }
+  	// -----------------------------------------------------
+  	
+          // =====================================================
+          // sequentially generating random numbers
+  
+!         for (l=0;l<=iFactors-1;++l){
+!           for (j=1;j<=iN-1;++j){
+!             for(int b=0; b<BLOCKSIZE; b++){
+!               for(int s=0; s<1; s++){
+                  //compute random number in exact same sequence
+                  randZ[l][BLOCKSIZE*j + b + s] = RanUnif(lRndSeed);  /* 10% of the total executition time */
+                }
+***************
+*** 141,150 ****
+  
+  	// =====================================================
+  	// Generation of HJM Path1
+! 	for(int b=0; b<BLOCKSIZE; b++){ // b is the blocks
+! 	  for (j=1;j<=iN-1;++j) {// j is the timestep
+  	    
+! 	    for (l=0;l<=iN-(j+1);++l){ // l is the future steps
+  	      dTotalShock = 0;
+  	      
+  	      for (i=0;i<=iFactors-1;++i){// i steps through the stochastic factors
+--- 155,165 ----
+  
+  	// =====================================================
+  	// Generation of HJM Path1
+! 	
+! 	for (j=1;j<=iN-1;++j) {// j is the timestep
+  	    
+! 	  for (l=0;l<=iN-(j+1);++l){ // l is the future steps
+!       for(int b=0; b<BLOCKSIZE; b++){ // b is the blocks
+  	      dTotalShock = 0;
+  	      
+  	      for (i=0;i<=iFactors-1;++i){// i steps through the stochastic factors
