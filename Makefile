@@ -9,9 +9,9 @@ update-gh-pages:: all
 
 install:: all
 	@echo $(LOG_PREFIX) Installing coz to prefix $(prefix) $(LOG_SUFFIX)
-	@sed 's@destdir@"${DESTDIR}${prefix}"@g' FindCoz.cmake.in > FindCoz.cmake
+	@sed 's@destdir@"${DESTDIR}${prefix}"@g' coz-profilerConfig.cmake.in > coz-profilerConfig.cmake
 	@$(INSTALL) -D coz $(DESTDIR)$(bindir)/coz
-	@$(INSTALL) -D FindCoz.cmake $(DESTDIR)$(bindir)/FindCoz.cmake
+	@$(INSTALL) -D coz-profilerConfig.cmake $(DESTDIR)$(pkglibdir)/coz-profilerConfig.cmake
 	@$(INSTALL) -D libcoz/libcoz.so $(DESTDIR)$(pkglibdir)/libcoz.so
 	@$(INSTALL) -D include/coz.h $(DESTDIR)$(incdir)/coz.h
 	@mkdir -p $(DESTDIR)$(man1dir)
