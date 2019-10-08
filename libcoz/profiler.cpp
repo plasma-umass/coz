@@ -466,6 +466,8 @@ void* profiler::start_profiler_thread(void* arg) {
   spinlock* l = (spinlock*)arg;
   profiler::get_instance().profiler_thread(*l);
   real::pthread_exit(nullptr);
+  // Unreachable return silences compiler warning
+  return nullptr;
 }
 
 void profiler::samples_ready(int signum, siginfo_t* info, void* p) {

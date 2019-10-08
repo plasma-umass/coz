@@ -76,7 +76,9 @@ perf_event::perf_event(struct perf_event_attr& pe, pid_t pid, int cpu) :
   // If sampling, map the perf event file
   if(pe.sample_type != 0 && pe.sample_period != 0) {
     void* ring_buffer = mmap(NULL, MmapSize, PROT_READ | PROT_WRITE, MAP_SHARED, _fd, 0);
-    REQUIRE(ring_buffer != MAP_FAILED) << "Failed to mmap perf event file";
+    REQUIRE(ring_buffer != MAP_FAILED) << "Mapping perf_event ring buffer failed. "
+        << "Make sure the current user has permission to invoke the perf tool, and that "
+        << "the program being profiled does not use an excessive number of threads (>1000).\n";
 
     _mapping = reinterpret_cast<struct perf_event_mmap_page*>(ring_buffer);
   }
