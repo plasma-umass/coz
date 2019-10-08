@@ -43,7 +43,7 @@ void profiler::startup(const string& outfile,
   struct sigaction sa;
   memset(&sa, 0, sizeof(sa));
   sa.sa_sigaction = profiler::samples_ready;
-  sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+  sa.sa_flags = SA_SIGINFO;
   real::sigaction(SampleSignal, &sa, nullptr);
 
   // Set up handlers for errors
