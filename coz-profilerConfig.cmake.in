@@ -21,3 +21,6 @@ set_target_properties(coz::coz PROPERTIES
     IMPORTED_LINK_INTERFACE_LANGUAGES "C"
     IMPORTED_LOCATION "${COZ_INCLUDE_DIR}")
 
+add_executable(coz::profiler IMPORTED)
+
+set_property(TARGET coz::profiler PROPERTY IMPORTED_LOCATION ${COZ_BIN})
