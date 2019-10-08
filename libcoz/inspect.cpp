@@ -246,7 +246,7 @@ unordered_map<string, uintptr_t> get_loaded_files() {
 
     // If this is an executable mapping of an absolute path, include it
     if(perms[2] == 'x' && path[0] == '/') {
-      result[path] = base;
+      result[path] = base - offset;
     }
   }
 
