@@ -30,7 +30,7 @@ SRCS ?= $(wildcard *.cpp) $(wildcard *.c)
 OBJS ?= $(addprefix obj/,$(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS))))
 
 # Prevent errors if files named all, clean, distclean, bench, or test exist
-.PHONY: all clean distclean bench test
+.PHONY: all clean distclean bench bench_small bench_large test
 
 # Targets to build recirsively into $(DIRS)
 RECURSIVE_TARGETS  ?= all clean bench bench_large bench_small test install check

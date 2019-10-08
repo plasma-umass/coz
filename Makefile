@@ -15,5 +15,5 @@ install:: all
 	@mkdir -p $(DESTDIR)$(man1dir)
 	@$(RST2MAN) docs/coz.rst $(DESTDIR)$(man1dir)/coz.1
 
-bench::
-	@$(MAKE) -C benchmarks bench
+bench bench_small bench_large::
+	@$(MAKE) -C benchmarks $@
