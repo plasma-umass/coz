@@ -477,57 +477,41 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
 
   // Walk through the compilation units (source files) in the executable
   for(auto unit : d.compilation_units()) {
-    auto& lineTable = unit.get_line_table();
-    int fileIndex = 0;
-    bool needProcess = false;
-    //check if files using by lineTable are in source_scope
-    while(true){
-      try{
-	if(in_scope(lineTable.get_file(fileIndex)->path, source_scope)){
-	  needProcess = true;
-	  break;
-        }  
-	fileIndex++;
-     }catch (out_of_range &e){
-	break;
-     }
-   }
-   if(needProcess){
-      try {
-        string prev_filename;
-        size_t prev_line;
-        uintptr_t prev_address = 0;
-        set<string> included_files;
-        // Walk through the line instructions in the DWARF line table
-        for(auto& line_info : unit.get_line_table()) {
-          // Insert an entry if this isn't the first line command in the sequence
-          if(in_scope(prev_filename, source_scope)) {
-            if(prev_address != 0) {
-              included_files.insert(prev_filename);
-              add_range(prev_filename,
-                        prev_line,
-                        interval(prev_address, line_info.address) + load_address);
-            }
-          }
 
-          if(line_info.end_sequence) {
-            prev_address = 0;
-          } else {
-            prev_filename = canonicalize_path(line_info.file->path);
-            prev_line = line_info.line;
-            prev_address = line_info.address;
+    try {
+      string prev_filename;
+      size_t prev_line;
+      uintptr_t prev_address = 0;
+      set<string> included_files;
+      // Walk through the line instructions in the DWARF line table
+      for(auto& line_info : unit.get_line_table()) {
+        // Insert an entry if this isn't the first line command in the sequence
+        if(in_scope(prev_filename, source_scope)) {
+          if(prev_address != 0) {
+            included_files.insert(prev_filename);
+            add_range(prev_filename,
+                      prev_line,
+                      interval(prev_address, line_info.address) + load_address);
           }
         }
-        process_inlines(unit.root(), unit.get_line_table(), source_scope, load_address);
 
-        for(const string& filename : included_files) {
-          INFO << "Included source file " << filename;
+        if(line_info.end_sequence) {
+          prev_address = 0;
+        } else {
+          prev_filename = canonicalize_path(line_info.file->path);
+          prev_line = line_info.line;
+          prev_address = line_info.address;
         }
-
-      } catch(dwarf::format_error e) {
-        WARNING << "Ignoring DWARF format error when reading line table: " << e.what();
       }
-    }//if needProcess
+      process_inlines(unit.root(), unit.get_line_table(), source_scope, load_address);
+
+      for(const string& filename : included_files) {
+        INFO << "Included source file " << filename;
+      }
+
+    } catch(dwarf::format_error e) {
+      WARNING << "Ignoring DWARF format error when reading line table: " << e.what();
+    }
   }
 
   return true;
