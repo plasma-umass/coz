@@ -1,6 +1,6 @@
 ROOT    := ../..
 TARGETS := matrix_multiply
-LIBS    := pthread
+LIBS    := -lpthread
 CFLAGS  := -g -O2 -Wno-format
 
 include $(ROOT)/benchmark.mk

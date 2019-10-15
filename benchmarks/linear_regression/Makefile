@@ -1,6 +1,6 @@
 ROOT    := ../..
 TARGETS := linear_regression
-LIBS    := pthread
+LIBS    := -lpthread
 CFLAGS  := -g -O2
 
 include $(ROOT)/benchmark.mk

@@ -1,6 +1,6 @@
 ROOT     := ../..
 TARGETS  := pbzip2
-LIBS     := bz2 pthread
+LIBS     := -lbz2 -lpthread
 CXXFLAGS := -g -O2 -Wno-format -Ibzip2-1.0.6
 LDFLAGS  := -Lbzip2-1.0.6
 
