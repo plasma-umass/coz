@@ -1,7 +1,8 @@
 ROOT 		 := ..
 TARGETS  := libcoz.so
 LIBS     := -ldl -lrt -lpthread $(shell pkg-config --libs libelf++ libdwarf++)
-CXXFLAGS := --std=c++0x -g -O2 -fPIC -I$(ROOT)/include -I.
+CXXFLAGS := --std=c++0x -g -O2 -fPIC -I$(ROOT)/include -I. \
+            $(shell pkg-config --cflags libelf++ libdwarf++)
 
 include $(ROOT)/common.mk
 
