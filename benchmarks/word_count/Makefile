@@ -1,6 +1,6 @@
 ROOT    := ../..
 TARGETS := word_count
-LIBS    := pthread
+LIBS    := -lpthread
 CFLAGS  := -g -O2
 
 include $(ROOT)/benchmark.mk

@@ -1,6 +1,6 @@
 ROOT     := ../..
 TARGETS  := producer_consumer
-LIBS     := pthread
+LIBS     := -lpthread
 CXXFLAGS := -g -O2
 
 include $(ROOT)/benchmark.mk

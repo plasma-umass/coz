@@ -23,7 +23,6 @@ endif
 # Default flags
 CFLAGS   ?= -g -O2
 CXXFLAGS ?= $(CFLAGS)
-LDLIBS   += $(addprefix -l,$(LIBS))
 
 # Default source and object files
 SRCS ?= $(wildcard *.cpp) $(wildcard *.c)
@@ -79,7 +78,7 @@ obj/%.o: %.c $(PREREQS)
 # Link a shared library
 $(SHARED_LIB_TARGETS): $(OBJS)
 	@echo $(LOG_PREFIX) Linking $@ $(LOG_SUFFIX)
-	@$(CXX) -shared $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	@$(CXX) -shared $(LDFLAGS) -o $@ $^ $(LIBS)
 
 $(STATIC_LIB_TARGETS): $(OBJS)
 	@echo $(LOG_PREFIX) Linking $@ $(LOG_SUFFIX)
@@ -88,7 +87,7 @@ $(STATIC_LIB_TARGETS): $(OBJS)
 # Link binary targets
 $(OTHER_TARGETS): $(OBJS)
 	@echo $(LOG_PREFIX) Linking $@ $(LOG_SUFFIX)
-	@$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	@$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 # Include dependency rules for all objects
 -include $(OBJS:.o=.d)
