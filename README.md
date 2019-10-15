@@ -68,7 +68,7 @@ To plot profile results, go to http://plasma-umass.github.io/coz/ and load your 
 The `benchmarks` directory in this repository includes several small benchmarks with progress points added at appropriate locations. To build and run one of these benchmarks with `coz`, just browse to `benchmarks/{bench name}` and type `make bench` (or `make test` for a smaller input size). These programs may require several runs before coz has enough measurements to generate a useful profile. Once you have profiled these programs for several minutes, go to http://plasma-umass.github.io/coz/ to load and plot your profile.
 
 ## CMake
-When you install coz it installs a cmake config file. To add coz to a cmake project simply use the command `find_package(coz-profiler)`. This will import a target for the library and includes called `coz::coz` and a target for the coz binary `coz::profiler`.
+When you install coz it installs a cmake config file. To add coz to a cmake project simply use the command `find_package(coz-profiler)`. This will import a target for the library and includes called `coz::coz` and a target for the coz binary `coz::profiler`. For guidance on how to use these targets refer to the CMake documentation.
 
 ## Limitations
 Coz currently does not support interpreted or JIT-compiled languages such as Python, Ruby, or JavaScript. Interpreted languages will likely not be supported at any point, but support for JIT-compiled languages that produce debug information could be added in the future.
