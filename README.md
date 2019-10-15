@@ -23,7 +23,7 @@ To build Coz from source, you will need:
 - A copy of the source code for this project
 - A compiler with C++0x support (clang++ or g++)
 - A Python interpreter (python 3 is recommended)
-- The libelfin development libraries
+- The libelfin development libraries (some users report issue with release 0.3. Use version 0.2 or the latest code from <https://github.com/aclements/libelfin>)
 - The `rst2man` command (for building documentation
 - NodeJS and npm (for building the profiler viewer)
 
