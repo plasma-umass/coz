@@ -146,7 +146,7 @@ void init_coz(void) {
   shared_ptr<line> fixed_line;
   if(fixed_line_name != "") {
     fixed_line = memory_map::get_instance().find_line(fixed_line_name);
-    PREFER(fixed_line) << "Fixed line \"" << fixed_line_name << "\" was not found.";
+    REQUIRE(fixed_line) << "Fixed line \"" << fixed_line_name << "\" was not found.";
   }
 
   // Create an end-to-end progress point and register it if running in
