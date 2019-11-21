@@ -24,7 +24,7 @@ To build Coz from source, you will need:
 - A compiler with C++0x support (clang++ or g++)
 - A Python interpreter (python 3 is recommended)
 - The libelfin development libraries (Use release 0.2 or the latest from <https://github.com/aclements/libelfin>. Version 0.3 does not work.)
-- The `rst2man` command (for building documentation
+- The `rst2man` command (for building documentation)
 - NodeJS and npm (for building the profiler viewer)
 
 Once you have all dependencies in place, run `make` to build Coz. On Debian-based distributions, the following commands should take care of the entire process:
@@ -56,7 +56,7 @@ By default, Coz uses the source file and line number as the name for your progre
 #### Latency Profiling: Specifying Progress Points
 To profile latency, you must place two progress points that correspond to the start and end of an event of interest, such as when a transaction begins and completes. Simply  mark the beginning of a transaction with the `COZ_BEGIN("transaction name")` macro, and the end with the `COZ_END("transaction name")` macro. Unlike regular progress points, you always need to specify a name for your latency progress points. Don't forget to link your program with libdl: use the `-ldl` option.
 
-When coz tests a hypothetical optimization it will report the effect of that optimization on the average latency between these two points. Coz can track this information with any knowledge of individual transactions thanks to [Little's Law](https://en.wikipedia.org/wiki/Little%27s_law).
+When coz tests a hypothetical optimization it will report the effect of that optimization on the average latency between these two points. Coz can track this information without any knowledge of individual transactions thanks to [Little's Law](https://en.wikipedia.org/wiki/Little%27s_law).
 
 ### Specifying Progress Points on the Command Line
 Coz has command line options to specify progress points when profiling the application instead of modifying its source. This feature is currently disabled because it did not work particularly well. Adding support for better command line-specified progress points is planned in the near future.
