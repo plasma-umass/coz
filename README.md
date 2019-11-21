@@ -11,11 +11,9 @@ There is a Java version of Coz for profiling Java programs called [JCoz](https:/
 
 
 ## Installation
-To run Coz, you will need a Linux machine with kernel version 2.6.32 or later (it must support the `perf_event_open` system call) and a Python 3 interpreter. Coz is available as a Debian package. If you use a Debian-based distribution, you can install Coz with the line:
+To run Coz, you will need a Linux machine with kernel version 2.6.32 or later (it must support the `perf_event_open` system call) and a Python interpreter.
 
-```
-$ sudo apt-get install coz-profiler
-```
+Coz is available in the `coz-profiler` package on Debian (and its derivatives), Fedora, and OpenSUSE. The Debian package is officially supported. The OpenSUSE package was prepared by user [@zethra](https://github.com/zethra) but is not part of our regular testing.
 
 ## Building Coz From Source
 To build Coz from source, you will need:
