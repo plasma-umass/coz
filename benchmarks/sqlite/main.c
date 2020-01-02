@@ -7,7 +7,7 @@
 
 #include <coz.h>
 
-#define THREAD_COUNT 32
+#define THREAD_COUNT 64
 #define INSERTIONS_PER_THREAD 10000
 
 void* thread_fn(void* arg) {
