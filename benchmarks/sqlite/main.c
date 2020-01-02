@@ -5,7 +5,7 @@
 #include <string.h>
 #include <sqlite3.h>
 
-#include <coz.h>
+#include "coz.h"
 
 #define THREAD_COUNT 64
 #define INSERTIONS_PER_THREAD 10000

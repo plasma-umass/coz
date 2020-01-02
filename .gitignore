@@ -13,6 +13,8 @@ benchmarks/pbzip2/pbzip2
 benchmarks/pca/pca
 benchmarks/producer_consumer/producer_consumer
 benchmarks/string_match/string_match
+benchmarks/sqlite/sqlite-bench
+benchmarks/sqlite-modified/sqlite-bench
 benchmarks/toy/toy
 benchmarks/word_count/word_count
 
