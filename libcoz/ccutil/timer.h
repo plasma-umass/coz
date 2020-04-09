@@ -3,9 +3,9 @@
 
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "log.h"
-#include "thread.h"
 
 class timer {
 public:
