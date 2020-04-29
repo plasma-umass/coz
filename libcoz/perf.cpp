@@ -25,7 +25,6 @@
 
 #include "ccutil/log.h"
 #include "ccutil/spinlock.h"
-#include "ccutil/thread.h"
 #include "ccutil/wrapped_array.h"
 
 using ccutil::wrapped_array;

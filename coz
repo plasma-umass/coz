@@ -44,32 +44,34 @@ def _coz_run(args):
     sys.exit(1)
 
   env = copy.deepcopy(os.environ)
-  
-  # Find libcoz
+
+  # Find coz
   coz_prefix = dirname(realpath(sys.argv[0]))
-  
+
   # Candidate runtime library locations
   library_locations = [
     # Check for library adjacent to this script
+    os.path.join(coz_prefix, '..', 'lib64', 'libcoz.so'),
     os.path.join(coz_prefix, '..', 'lib', 'libcoz.so'),
-    
+
     # Check for library under the coz-profiler subdirectory
+    os.path.join(coz_prefix, '..', 'lib64', 'coz-profiler', 'libcoz.so'),
     os.path.join(coz_prefix, '..', 'lib', 'coz-profiler', 'libcoz.so'),
-    
+
     # Local library under development directory
     os.path.join(coz_prefix, 'libcoz', 'libcoz.so')      # Local library during development
   ]
-  
+
   # Find the first library location that exists
   coz_runtime_found = False
   coz_runtime = None
-  
+
   while len(library_locations) > 0 and not coz_runtime_found:
     candidate = library_locations.pop(0)
     if os.path.exists(candidate):
       coz_runtime_found = True
       coz_runtime = candidate
-  
+
   if not coz_runtime_found:
     sys.stderr.write('error: unable to locate coz runtime library\n')
     sys.exit(1)
@@ -112,7 +114,7 @@ def _coz_run(args):
   exit(result)
 
 def _coz_plot(args):
-  sys.stdout.write('Plot your profile at http://plasma-umass.github.io/coz.\n')
+  sys.stdout.write('Plot your profile at http://plasma-umass.github.io/coz .\n')
 
 # Special format handler for line reference arguments
 def line_ref(val):
