@@ -43,13 +43,11 @@ If you'd like to profile the latency of an operation you can instead use:
 ```rust
 // Boy I wish this function executed more quickly...
 fn foo() {
-    coz::begin!("foo");
-
-    // ...
-
-    coz::end!("foo");
+    coz::scope!("foo");
 }
 ```
+
+Instead of `scope!` you may also use `coz::begin!("foo"); ... coz::end!("foo");`.
 
 After you've instrumented your code, you need to also ensure that you're
 compiling with DWARF debug information. To do this you'll want to configure
