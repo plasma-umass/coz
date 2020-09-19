@@ -5,23 +5,34 @@ Full details of Coz are available in our paper, [Coz: Finding Code that Counts w
 
 [![Coz presentation at SOSP 2015](http://img.youtube.com/vi/jE0V-p1odPg/0.jpg)](http://www.youtube.com/watch?v=jE0V-p1odPg&t=0m28s "Coz presentation at SOSP 2015")
 
+## Installation
+
+On Debian, Ubuntu, Fedora, you can install Coz via apt:
+
+```
+  % sudo apt install coz-profiler
+```
+
+An OpenSUSE package was prepared by user
+[@zethra](https://github.com/zethra) and is available at
+<https://build.opensuse.org/package/show/home:zethra/coz-profiler>.
+
+Coz should work on any modern Linux system (specifically, running
+version 2.6.32 or later, with support for the `perf_event_open` system
+call) with a Python interpreter.
+
 ## Java version
 
-There is a Java version of Coz for profiling Java programs called [JCoz](https://github.com/Decave/JCoz).
-
-
-## Installation
-To run Coz, you will need a Linux machine with kernel version 2.6.32 or later (it must support the `perf_event_open` system call) and a Python interpreter.
-
-Coz is available in the `coz-profiler` package on Debian (and its derivatives), Fedora, and OpenSUSE. The Debian package is officially supported. The OpenSUSE package was prepared by user [@zethra](https://github.com/zethra) and is available at <https://build.opensuse.org/package/show/home:zethra/coz-profiler>.
+There is now a Java version of Coz for profiling Java programs called [JCoz](https://github.com/Decave/JCoz).
 
 ## Building Coz From Source
+
 To build Coz from source, you will need:
 
 - A copy of the source code for this project
 - A compiler with C++0x support (clang++ or g++)
-- A Python interpreter (python 3 is recommended)
-- The libelfin development libraries (Use release 0.2 or the latest from <https://github.com/aclements/libelfin>. Version 0.3 does not work.)
+- A Python interpreter (Python 3 is recommended)
+- The libelfin development libraries (Use release 0.2 or the latest from <https://github.com/aclements/libelfin>. _Version 0.3 does not work_.)
 - The `rst2man` command (for building documentation)
 - NodeJS and npm (for building the profiler viewer)
 
