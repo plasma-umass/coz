@@ -18,6 +18,11 @@
 #include "ccutil/log.h"
 #include "ccutil/wrapped_array.h"
 
+#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 30
+#include <sys/syscall.h>
+#define gettid() syscall(SYS_gettid)
+#endif
+
 // Workaround for missing hw_breakpoint.h include file:
 //   This include file just defines constants used to configure watchpoint registers.
 //   This will be constant across x86 systems.
