@@ -19,3 +19,6 @@ install:: all
 
 bench bench_small bench_large::
 	@$(MAKE) -C benchmarks $@
+
+check::
+	@$(MAKE) -C benchmarks check
