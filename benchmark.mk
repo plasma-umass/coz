@@ -1,5 +1,7 @@
 include $(ROOT)/common.mk
 
+LIBS += -Wl,--push-state,--no-as-needed -ldl -Wl,--pop-state
+
 RECURSIVE_TARGETS += bench bench_large bench_small
 
 ifeq ($(USE_SYSTEM_COZ),)
