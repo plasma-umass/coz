@@ -447,7 +447,7 @@ class Profile {
     const div_height = 190;
     const svg_width = div_width - 10;
     const svg_height = div_height - 40;
-    const margins = {left: 55, right: 20, top: 10, bottom: 35};
+    const margins = {left: 60, right: 20, top: 10, bottom: 35};
     const plot_width = svg_width - margins.left - margins.right;
     const plot_height = svg_height - margins.top - margins.bottom;
     const radius = 3;
@@ -619,8 +619,8 @@ class Profile {
     /****** Add or update y-axis title ******/
     let ytitle_sel = plot_area_sel.selectAll('text.ytitle').data([0]);
     ytitle_sel.enter().append('text').attr('class', 'ytitle');
-    ytitle_sel.attr('x', -yscale(0)) // x and y are flipped because of rotation
-              .attr('y', -50) // Approximate width of y-axis
+    ytitle_sel.attr('x', - ( svg_height - margins.bottom) / 2)
+              .attr('y', -45) // Approximate width of y-axis
               .attr('transform', 'rotate(-90)')
               .style('text-anchor', 'middle')
               .style('alignment-baseline', 'central')
