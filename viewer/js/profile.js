@@ -328,6 +328,7 @@ var Profile = /** @class */ (function () {
             }
             _this.drawPlots(true);
             _this.drawLegend();
+            update();
         });
         legend_entries_sel.append('span')
             .attr('class', 'path')

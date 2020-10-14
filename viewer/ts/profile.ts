@@ -405,6 +405,7 @@ class Profile {
         }
         this.drawPlots(true);
         this.drawLegend();
+        update();
       });
     legend_entries_sel.append('span')
       .attr('class', 'path')
