@@ -446,6 +446,7 @@ var Profile = /** @class */ (function () {
         plot_title_sel.enter().append('div').attr('class', 'plot-title');
         plot_title_sel.text(function (d) { return d; })
             .classed('path', true)
+            .attr('title', function (d) { return d; })
             .style('width', div_width + 'px');
         plot_title_sel.exit().remove();
         /****** Update scales ******/
