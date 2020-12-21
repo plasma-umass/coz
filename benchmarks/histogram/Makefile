@@ -1,7 +1,7 @@
 ROOT    := ../..
 TARGETS := histogram
-LIBS    := -lpthread
-CFLAGS  := -g -O2
+LIBS     := -lpthread -Wl,--no-as-needed -ldl
+CFLAGS  := -g -O2 -gdwarf-3
 
 include $(ROOT)/benchmark.mk
 
