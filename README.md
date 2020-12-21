@@ -19,7 +19,7 @@ An OpenSUSE package was prepared by user
 
 Coz should work on any modern Linux system (specifically, running
 version 2.6.32 or later, with support for the `perf_event_open` system
-call) with a Python interpreter.
+call) with a Python 3.x interpreter.
 
 ## Java version
 
@@ -31,7 +31,7 @@ To build Coz from source, you will need:
 
 - A copy of the source code for this project
 - A compiler with C++0x support (clang++ or g++)
-- A Python interpreter (Python 3 is recommended)
+- A Python interpreter (Python 3.x is required)
 - The libelfin development libraries (Use release 0.2 or the latest from <https://github.com/aclements/libelfin>. _Version 0.3 does not work_.)
 - The `rst2man` command (for building documentation)
 - NodeJS and npm (for building the profiler viewer)

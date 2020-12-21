@@ -328,6 +328,7 @@ var Profile = /** @class */ (function () {
             }
             _this.drawPlots(true);
             _this.drawLegend();
+            update();
         });
         legend_entries_sel.append('span')
             .attr('class', 'path')
@@ -365,7 +366,7 @@ var Profile = /** @class */ (function () {
         var div_height = 190;
         var svg_width = div_width - 10;
         var svg_height = div_height - 40;
-        var margins = { left: 55, right: 20, top: 10, bottom: 35 };
+        var margins = { left: 60, right: 20, top: 10, bottom: 35 };
         var plot_width = svg_width - margins.left - margins.right;
         var plot_height = svg_height - margins.top - margins.bottom;
         var radius = 3;
@@ -446,6 +447,7 @@ var Profile = /** @class */ (function () {
         plot_title_sel.enter().append('div').attr('class', 'plot-title');
         plot_title_sel.text(function (d) { return d; })
             .classed('path', true)
+            .attr('title', function (d) { return d; })
             .style('width', div_width + 'px');
         plot_title_sel.exit().remove();
         /****** Update scales ******/
@@ -512,8 +514,8 @@ var Profile = /** @class */ (function () {
         /****** Add or update y-axis title ******/
         var ytitle_sel = plot_area_sel.selectAll('text.ytitle').data([0]);
         ytitle_sel.enter().append('text').attr('class', 'ytitle');
-        ytitle_sel.attr('x', -yscale(0)) // x and y are flipped because of rotation
-            .attr('y', -50) // Approximate width of y-axis
+        ytitle_sel.attr('x', -(svg_height - margins.bottom) / 2) // x and y are flipped because of rotation
+            .attr('y', -45) // Approximate width of y-axis
             .attr('transform', 'rotate(-90)')
             .style('text-anchor', 'middle')
             .style('alignment-baseline', 'central')
