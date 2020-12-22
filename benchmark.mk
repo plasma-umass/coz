@@ -5,8 +5,8 @@ LIBS += -Wl,--push-state,--no-as-needed -ldl -Wl,--pop-state
 RECURSIVE_TARGETS += bench bench_large bench_small
 
 ifeq ($(USE_SYSTEM_COZ),)
-CFLAGS   += -I$(ROOT)/include
-CXXFLAGS += -I$(ROOT)/include
+CFLAGS   += -gdwarf-3 -I$(ROOT)/include
+CXXFLAGS += -gdwarf-3 -I$(ROOT)/include
 endif
 
 # Set up build targets for benchmarking
