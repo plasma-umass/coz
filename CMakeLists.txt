@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.1)
 project(coz C CXX)
 
+enable_testing()
+
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -20,6 +22,9 @@ add_subdirectory(libcoz)
 
 option(BUILD_BENCHMARKS "Build benchmarks" OFF)
 if(BUILD_BENCHMARKS)
+    if(NOT (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
+        message(FATAL_ERROR "Build benchmarks with debug information - use Debug or RelWithDebInfo")
+    endif()
     find_package(SQLite3 REQUIRED)
     find_package(BZip2 REQUIRED)
     add_subdirectory(benchmarks)

@@ -17,16 +17,17 @@ branches:
 # Install dependencies
 before_install:
   - sudo apt-get update
-  - sudo apt-get install -y --install-recommends docutils-common libelfin-dev nodejs npm
+  - sudo apt-get install -y --install-recommends build-essential cmake ninja-build docutils-common nodejs npm
+  - sudo pip install conan
 
 # Make and install
 install:
-  - make
-  - sudo make install
-
-# Run the make check target (add tests later)
-script:
-  - make check USE_SYSTEM_COZ=1
+  - mkdir build && cd build
+  - conan install ..
+  - cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_BENCHMARKS=ON -G Ninja
+  - ninja
+  - CTEST_OUTPUT_ON_FAILURE=1 ninja test
+  - sudo ninja install
 
 # Test the Rust support as well
 matrix:
