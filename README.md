@@ -32,16 +32,20 @@ To build Coz from source, you will need:
 - A copy of the source code for this project
 - A compiler with C++0x support (clang++ or g++)
 - A Python interpreter (Python 3.x is required)
-- The libelfin development libraries (Use release 0.2 or the latest from <https://github.com/aclements/libelfin>. _Version 0.3 does not work_.)
+- The libelfin development libraries (Use latest from <https://github.com/aclements/libelfin>. _Version 0.3 does not work_.)
 - The `rst2man` command (for building documentation)
 - NodeJS and npm (for building the profiler viewer)
 
-Once you have all dependencies in place, run `make` to build Coz. On Debian-based distributions, the following commands should take care of the entire process:
+Once you have all dependencies in place, build Coz with CMake. On Debian-based distributions, the following commands should take care of the entire process:
 
 ```
-$ sudo apt-get install clang docutils-common libelfin-dev nodejs npm python3
+$ sudo apt-get install build-essential cmake docutils-common libelfin-dev nodejs npm python3
+$ pip install conan --user
 $ git clone https://github.com/plasma-umass/coz.git
 $ cd coz
+$ mkdir build && cd build
+$ conan install ..
+$ cmake ..
 $ make
 ```
 

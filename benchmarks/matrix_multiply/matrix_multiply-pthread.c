@@ -171,7 +171,7 @@ int main(int argc, char *argv[]) {
     char * fdata_A, *fdata_B;
     int matrix_len;
     struct stat finfo_A, finfo_B;
-    char * fname_A, *fname_B,*fname_out;
+    char fname_A[512], fname_B[512], fname_out[512];
     int *matrix_A_ptr, *matrix_B_ptr;
 
     struct timeval starttime,endtime;
@@ -181,14 +181,14 @@ int main(int argc, char *argv[]) {
     // Make sure a filename is specified
     if (argv[1] == NULL)
     {
-        printf("USAGE: %s [side of matrix] [size of Row block]\n", argv[0]);
+        printf("USAGE: %s size_of_matrix [-create_files]\n", argv[0]);
         exit(1);
     }
 
-    fname_A = "matrix_file_A.txt";
-    fname_B = "matrix_file_B.txt";
-    fname_out = "matrix_file_out_pthreads.txt";
     CHECK_ERROR ( (matrix_len = atoi(argv[1])) < 0);
+    sprintf(fname_A, "matrix_file_A_%d.txt", matrix_len);
+    sprintf(fname_B, "matrix_file_B_%d.txt", matrix_len);
+    sprintf(fname_out, "matrix_file_out_pthreads_%d.txt", matrix_len);
     file_size = ((matrix_len*matrix_len))*sizeof(int);
 
     fprintf(stderr, "***** file size is %d\n", file_size);

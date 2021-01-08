@@ -1,0 +1,9 @@
+[requires]
+libelfin/[>=0.3]
+
+[build_requires]
+bzip2/[>=1.0.8]
+sqlite3/[>=3.33.0]
+
+[generators]
+cmake_find_package
