@@ -20,4 +20,4 @@ target_include_directories(coz-instrumentation
     INTERFACE
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include/coz>)
-target_link_options(coz-instrumentation INTERFACE -Wl,--push-state,--no-as-needed -ldl -Wl,--pop-state)
+target_link_libraries(coz-instrumentation INTERFACE -Wl,--push-state,--no-as-needed -ldl -Wl,--pop-state)
