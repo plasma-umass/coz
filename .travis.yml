@@ -26,8 +26,11 @@ install:
   - conan install .. -s compiler.libcxx=libstdc++11 -s compiler.cppstd=11 --build=outdated
   - cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_BENCHMARKS=ON -G Ninja
   - ninja
-  - CTEST_OUTPUT_ON_FAILURE=1 ninja test
   - sudo ninja install
+
+# Run tests
+script:
+  - CTEST_OUTPUT_ON_FAILURE=1 ninja test
 
 # Test the Rust support as well
 matrix:
