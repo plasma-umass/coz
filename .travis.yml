@@ -23,8 +23,7 @@ before_install:
 # Make and install
 install:
   - mkdir build && cd build
-  - conan profile update settings.compiler.libcxx=libstdc++11 default
-  - conan install ..
+  - conan install .. -s compiler.libcxx=libstdc++11 -s compiler.cppstd=11
   - cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_BENCHMARKS=ON -G Ninja
   - ninja
   - CTEST_OUTPUT_ON_FAILURE=1 ninja test
