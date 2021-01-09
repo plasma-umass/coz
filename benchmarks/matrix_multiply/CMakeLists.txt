@@ -1,5 +1,6 @@
 add_executable(matrix_multiply matrix_multiply-pthread.c)
 target_link_libraries(matrix_multiply PRIVATE coz-instrumentation pthread)
+target_compile_options(matrix_multiply PRIVATE -Wno-format)
 
 add_custom_command(
     COMMENT "Generating bench input"

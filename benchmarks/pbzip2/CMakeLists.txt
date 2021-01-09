@@ -1,5 +1,6 @@
-ADd_executable(pbzip2 BZ2StreamScanner.cpp ErrorContext.cpp pbzip2.cpp)
+add_executable(pbzip2 BZ2StreamScanner.cpp ErrorContext.cpp pbzip2.cpp)
 target_link_libraries(pbzip2 PRIVATE BZip2::BZip2 coz-instrumentation pthread)
+target_compile_options(pbzip2 PRIVATE -Wno-format)
 
 set(datafiles ${CMAKE_CURRENT_BINARY_DIR}/../linear_regression/linear_regression_datafiles)
 
