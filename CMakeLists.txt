@@ -18,6 +18,8 @@ file(GLOB_RECURSE headers include/*.h)
 install(PROGRAMS coz DESTINATION bin)
 install(FILES LICENSE.md DESTINATION licenses)
 
+add_compile_options(-gdwarf-3)
+
 add_subdirectory(libcoz)
 
 option(BUILD_BENCHMARKS "Build benchmarks" OFF)
