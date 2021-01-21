@@ -1,3 +1,12 @@
+set(sources
+    inspect.cpp
+    libcoz.cpp
+    perf.cpp
+    profiler.cpp
+    real.cpp)
+set(headers
+    ${PROJECT_SOURCE_DIR}/include/coz.h)
+
 add_library(coz MODULE ${sources})
 set_target_properties(coz PROPERTIES PUBLIC_HEADER "${headers}")
 if(CONAN_PACKAGE_VERSION)

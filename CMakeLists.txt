@@ -12,9 +12,6 @@ include(GNUInstallDirs)
 find_package(Threads REQUIRED)
 find_package(libelfin REQUIRED)
 
-file(GLOB_RECURSE sources libcoz/*.cpp)
-file(GLOB_RECURSE headers include/*.h)
-
 install(PROGRAMS coz DESTINATION bin)
 install(FILES LICENSE.md DESTINATION licenses)
 
