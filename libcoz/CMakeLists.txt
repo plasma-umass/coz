@@ -1,4 +1,5 @@
 set(sources
+    ${PROJECT_SOURCE_DIR}/include/coz.h
     inspect.cpp
     inspect.h
     libcoz.cpp
@@ -12,11 +13,8 @@ set(sources
     thread_state.h
     util.h
     )
-set(public_headers
-    ${PROJECT_SOURCE_DIR}/include/coz.h)
 
 add_library(coz MODULE ${sources} ${public_headers})
-set_target_properties(coz PROPERTIES PUBLIC_HEADER "${public_headers}")
 if(CONAN_PACKAGE_VERSION)
     set_target_properties(coz PROPERTIES VERSION ${CONAN_PACKAGE_VERSION})
 endif()
@@ -37,6 +35,6 @@ if(INSTALL_COZ)
     install(TARGETS coz
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/coz)
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/. TYPE INCLUDE)
 endif()
