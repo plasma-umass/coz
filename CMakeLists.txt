@@ -8,12 +8,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_BINARY_DIR})
 
-include(GNUInstallDirs)
 find_package(Threads REQUIRED)
 find_package(libelfin REQUIRED)
-
-install(PROGRAMS coz DESTINATION bin)
-install(FILES LICENSE.md DESTINATION licenses)
 
 add_compile_options(-gdwarf-3)
 
@@ -29,4 +25,10 @@ if(BUILD_BENCHMARKS)
     add_subdirectory(benchmarks)
 endif()
 
-install(FILES coz-profilerConfig.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake)
+option(INSTALL_COZ "Enable installation of coz. (Projects embedding coz may want to turn this OFF.)" ON)
+if(INSTALL_COZ)
+    include(GNUInstallDirs)
+    install(PROGRAMS coz DESTINATION bin)
+    install(FILES LICENSE.md DESTINATION licenses)
+    install(FILES coz-profilerConfig.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake)
+endif()
