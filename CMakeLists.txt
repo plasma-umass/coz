@@ -32,5 +32,4 @@ if(BUILD_BENCHMARKS)
     add_subdirectory(benchmarks)
 endif()
 
-configure_file(coz-profilerConfig.cmake.in coz-profilerConfig.cmake @ONLY)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/coz-profilerConfig.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake)
+install(FILES coz-profilerConfig.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake)
