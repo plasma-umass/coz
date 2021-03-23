@@ -14,6 +14,8 @@ find_package(libelfin REQUIRED)
 
 add_compile_options(-gdwarf-3)
 
+option(INSTALL_COZ "Enable installation of coz. (Projects embedding coz may want to turn this OFF.)" ON)
+
 add_subdirectory(libcoz)
 
 option(BUILD_BENCHMARKS "Build benchmarks" OFF)
@@ -26,7 +28,6 @@ if(BUILD_BENCHMARKS)
     add_subdirectory(benchmarks)
 endif()
 
-option(INSTALL_COZ "Enable installation of coz. (Projects embedding coz may want to turn this OFF.)" ON)
 if(INSTALL_COZ)
     include(GNUInstallDirs)
     install(PROGRAMS coz DESTINATION bin)
