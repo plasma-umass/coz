@@ -16,6 +16,13 @@ add_compile_options(-gdwarf-3)
 
 option(INSTALL_COZ "Enable installation of coz. (Projects embedding coz may want to turn this OFF.)" ON)
 
+if(INSTALL_COZ)
+    include(GNUInstallDirs)
+    install(PROGRAMS coz DESTINATION bin)
+    install(FILES LICENSE.md DESTINATION licenses)
+    install(FILES cmake/coz-profilerConfig.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake)
+endif()
+
 add_subdirectory(libcoz)
 
 option(BUILD_BENCHMARKS "Build benchmarks" OFF)
@@ -28,9 +35,3 @@ if(BUILD_BENCHMARKS)
     add_subdirectory(benchmarks)
 endif()
 
-if(INSTALL_COZ)
-    include(GNUInstallDirs)
-    install(PROGRAMS coz DESTINATION bin)
-    install(FILES LICENSE.md DESTINATION licenses)
-    install(FILES cmake/coz-profilerConfig.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake)
-endif()
