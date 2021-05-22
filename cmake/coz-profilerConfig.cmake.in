@@ -1,0 +1,21 @@
+@PACKAGE_INIT@
+
+message(INFO " ${COZ_INCLUDE_DIR} ${COZ_LIBRARY} ${COZ_FOUND}")
+
+# Use find_dependency to find dependend packages.
+
+include(${CMAKE_CURRENT_LIST_DIR}/coz-profilerTargets.cmake)
+
+add_executable(coz::profiler IMPORTED)
+
+# This includes the lib file
+get_target_property(_COZ_LIBARRY_PATH coz::coz IMPORTED_LOCATION)
+# {INSTALLATION}/lib/libcoz.so
+get_filename_component(_IMPORT_PREFIX "${_COZ_LIBRARY_PATH}" PATH)
+# {INSTALLATION}/lib
+get_filename_component(_IMPORT_PREFIX "${_COZ_LIBARRY_PATH}" PATH)
+# {INSTALLATION}
+set_property(TARGET coz::profiler PROPERTY IMPORTED_LOCATION ${_COZ_LIBARRY_PATH})
+# Cleanup temporary variables
+set(_COZ_LIBARRY_PATH)
+
