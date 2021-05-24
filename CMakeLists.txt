@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.4)
-project(coz C CXX)
+project(coz VERSION 0.2.2 LANGUAGES C CXX)
 
 enable_testing()
 
@@ -18,9 +18,26 @@ option(INSTALL_COZ "Enable installation of coz. (Projects embedding coz may want
 
 if(INSTALL_COZ)
     include(GNUInstallDirs)
+    include(CMakePackageConfigHelpers)
     install(PROGRAMS coz DESTINATION bin)
     install(FILES LICENSE.md DESTINATION licenses)
-    install(FILES cmake/coz-profilerConfig.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake)
+    configure_package_config_file(
+        cmake/coz-profilerConfig.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/coz-profilerConfig.cmake
+        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake)
+    write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/coz-profilerConfigVersion.cmake
+        COMPATIBILITY ExactVersion) # SameMajor only applies to versions >= 1.0. Versions 0.x have to match exactly according to semver.org
+    install(
+        FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/coz-profilerConfig.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/coz-profilerConfigVersion.cmake
+        DESTINATION
+        ${CMAKE_INSTALL_LIBDIR}/cmake)
+    install(
+        EXPORT coz-profilerTargets
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake
+        NAMESPACE coz::)
 endif()
 
 add_subdirectory(libcoz)
