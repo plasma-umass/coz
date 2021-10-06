@@ -59,7 +59,7 @@ def _coz_run(args):
     os.path.join(coz_prefix, '..', 'lib', 'coz-profiler', 'libcoz.so'),
 
     # Local library under development directory
-    os.path.join(coz_prefix, 'libcoz', 'libcoz.so')      # Local library during development
+    os.path.join('libcoz', 'libcoz.so')      # Local library during development
   ]
 
   # Find the first library location that exists
