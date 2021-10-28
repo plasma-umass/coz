@@ -44,6 +44,8 @@ $ pip install conan --user
 $ git clone https://github.com/plasma-umass/coz.git
 $ cd coz
 $ mkdir build && cd build
+$ # This helps to avoid problems with linker failing to find C++ symbols:
+$ conan profile update settings.compiler.libcxx=libstdc++11 default
 $ conan install ..
 $ cmake ..
 $ make
