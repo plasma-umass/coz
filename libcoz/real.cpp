@@ -51,6 +51,23 @@ static void* get_pthread_handle() {
  * located function is called.
  */
 
+static void * resolve_calloc(size_t nmemb, size_t size) throw() {
+  GET_SYMBOL(calloc);
+  if(real_calloc) return real_calloc(nmemb, size);
+  return nullptr;
+}
+
+static void * resolve_malloc(size_t size) throw() {
+  GET_SYMBOL(malloc);
+  if(real_malloc) return real_malloc(size);
+  return nullptr;
+}
+
+static void resolve_free(void * ptr) throw() {
+  GET_SYMBOL(free);
+  if(real_free) real_free(ptr);
+}
+
 static NORETURN void resolve_exit(int status) throw() {
   GET_SYMBOL(exit);
   if(real_exit) real_exit(status);
@@ -262,6 +279,10 @@ static int resolve_pthread_rwlock_unlock(pthread_rwlock_t* rwlock) throw() {
  * corresponding resolver function.
  */
 namespace real {
+  DEFINE_WRAPPER(malloc);
+  DEFINE_WRAPPER(calloc);
+  DEFINE_WRAPPER(free);
+
   DEFINE_WRAPPER(exit);
   DEFINE_WRAPPER(_exit);
   DEFINE_WRAPPER(_Exit);

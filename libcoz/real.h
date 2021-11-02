@@ -16,6 +16,9 @@
 #define DECLARE_WRAPPER(name) extern decltype(::name)* name;
 
 namespace real {
+  DECLARE_WRAPPER(malloc);
+  DECLARE_WRAPPER(calloc);
+  DECLARE_WRAPPER(free);
   DECLARE_WRAPPER(exit);
   DECLARE_WRAPPER(_exit);
   DECLARE_WRAPPER(_Exit);

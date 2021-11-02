@@ -79,7 +79,7 @@ def _coz_run(args):
     sys.exit(1)
 
   if 'LD_PRELOAD' in env:
-    env['LD_PRELOAD'] += ':' + coz_runtime
+    env['LD_PRELOAD'] = coz_runtime + ':' + env['LD_PRELOAD']
   else:
     env['LD_PRELOAD'] = coz_runtime
 

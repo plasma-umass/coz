@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
+#include <atomic>
+#include <cstring>
 #include <sstream>
 #include <string>
 #include <unordered_set>
@@ -225,6 +227,25 @@ static bool is_coz_signal(int signum) {
   return signum == SampleSignal || signum == SIGSEGV || signum == SIGABRT;
 }
 
+namespace {
+
+template <size_t Size>
+class LocalArena {
+  std::array<char, Size> _data;
+  std::atomic<char *> _offset{_data.begin()};
+
+public:
+  void * allocate(size_t bytes_requested) {
+    char * prev = _offset.fetch_add(bytes_requested, std::memory_order_relaxed);
+    if (prev + bytes_requested > _data.end()) {
+      std::abort();
+    }
+    return prev;
+  }
+};
+
+}
+
 extern "C" {
   /// Pass pthread_create calls to coz so child threads can inherit the parent's delay count
   int pthread_create(pthread_t* thread,
@@ -357,6 +378,32 @@ extern "C" {
   int pthread_rwlock_unlock(pthread_rwlock_t* rwlock) throw() {
     if(initialized) profiler::get_instance().catch_up();
     return real::pthread_rwlock_unlock(rwlock);
+  }
+
+  void * malloc(size_t bytes_requested) throw() {
+    if (!initialized && !init_in_progress) {
+      static LocalArena<1 << 22> arena;
+      return arena.allocate(bytes_requested);
+    }
+    return real::malloc(bytes_requested);
+  }
+
+  void * calloc(size_t nmemb, size_t size) throw() {
+    if (!initialized && !init_in_progress) {
+      const size_t bytes_requested = nmemb * size;
+      void * ptr = malloc(bytes_requested);
+      std::memset(ptr, 0x0, bytes_requested);
+
+      return ptr;
+    }
+    return real::calloc(nmemb, size);
+  }
+
+  void free(void * ptr) throw() {
+    if (!initialized && !init_in_progress) {
+      return;
+    }
+    return real::free(ptr);
   }
 
   /// Run shutdown before exiting
