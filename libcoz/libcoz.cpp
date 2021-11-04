@@ -236,6 +236,7 @@ class LocalArena {
 
 public:
   void * allocate(size_t bytes_requested) {
+    bytes_requested = (bytes_requested + 8) & ((~0ull) << 3);
     char * prev = _offset.fetch_add(bytes_requested, std::memory_order_relaxed);
     if (prev + bytes_requested > _data.end()) {
       std::abort();
