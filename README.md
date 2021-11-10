@@ -21,9 +21,12 @@ Coz should work on any modern Linux system (specifically, running
 version 2.6.32 or later, with support for the `perf_event_open` system
 call) with a Python 3.x interpreter.
 
-## Java version
+## Libraries/Wrappers
 
-There is now a Java version of Coz for profiling Java programs called [JCoz](https://github.com/Decave/JCoz).
+| Language      | Link |
+| ----------- | -----------  
+| Java   | JCoz: https://github.com/Decave/JCoz|
+| Go     | Cozgo: https://github.com/urjitbhatia/cozgo|
 
 ## Building Coz From Source
 
