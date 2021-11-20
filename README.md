@@ -38,7 +38,7 @@ By default, Coz works for C and C++ programs. It has been ported or
 has wrappers for several other languages, listed below:
 
 | Language      | Link |
-| ----------- | -----------  
+| ----------- | -----------
 | Java   | JCoz: https://github.com/Decave/JCoz|
 | Go     | Cozgo: https://github.com/urjitbhatia/cozgo|
 | Swift  | Swift Coz: https://github.com/funcmike/swift-coz |
@@ -88,6 +88,10 @@ Using Coz requires a small amount of setup, but you can jump ahead to the sectio
 To run your program with Coz, you will need to build it with debug information (`-g -gdwarf-3`). You do not need to include debug symbols in the main executable: coz uses the same procedure as `gdb` to locate debug information for stripped binaries.
 
 Once you have your program built with debug information, you can run it with Coz using the command `coz run {coz options} --- {program name and arguments}`. But, to produce a useful profile you need to decide which part(s) of the application you want to speed up by specifying one or more progress points.
+
+If your program uses `jemalloc`, `tcmalloc`, or any other allocation algorithm,
+and it crashes or deadlocks during profiling, try passing `--with-alloc-shims`
+option to coz.
 
 ### Profiling Modes
 Coz departs from conventional profiling by making it possible to view the effect of optimizations on both throughput and latency. To profile throughput, you must specify a progress point. To profile latency, you must specify a pair of progress points.

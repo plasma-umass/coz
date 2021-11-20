@@ -13,6 +13,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "alloc_shims.h"
+
 static bool resolving = false;        //< Set to true while symbol resolution is in progress
 static bool in_dlopen = false;        //< Set to true while dlopen is running
 static void* pthread_handle = NULL;   //< The `dlopen` handle to libpthread
@@ -20,7 +22,11 @@ static void* pthread_handle = NULL;   //< The `dlopen` handle to libpthread
 #define GET_SYMBOL_HANDLE(name, handle) \
   decltype(::name)* real_##name = nullptr; \
   while(!__atomic_exchange_n(&resolving, true, __ATOMIC_ACQ_REL)) {} \
+  if (coz_lock_and_set_dummy_alloc_shims) \
+    coz_lock_and_set_dummy_alloc_shims(); \
   uintptr_t addr = reinterpret_cast<uintptr_t>(dlsym(handle, #name)); \
+  if (coz_restore_real_alloc_shims_and_unlock) \
+    coz_restore_real_alloc_shims_and_unlock(); \
   memcpy(&real_##name, &addr, sizeof(uintptr_t)); \
   if(real_##name) { \
     memcpy(&real::name, &addr, sizeof(uintptr_t)); \
