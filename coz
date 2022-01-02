@@ -116,7 +116,13 @@ def _coz_run(args):
   exit(result)
 
 def _coz_plot(args):
-  sys.stdout.write('Plot your profile at http://plasma-umass.github.io/coz .\n')
+  coz_plot_url = 'http://plasma-umass.github.io/coz'
+  if sys.platform == 'darwin':
+    subprocess.call(['open', coz_plot_url])
+  elif sys.platform == 'win32':
+    os.startfile(coz_plot_url)
+  else:
+    subprocess.call(['xdg-open', coz_plot_url])
 
 # Special format handler for line reference arguments
 def line_ref(val):
