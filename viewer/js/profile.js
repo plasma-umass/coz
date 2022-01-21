@@ -514,7 +514,7 @@ var Profile = /** @class */ (function () {
         /****** Add or update y-axis title ******/
         var ytitle_sel = plot_area_sel.selectAll('text.ytitle').data([0]);
         ytitle_sel.enter().append('text').attr('class', 'ytitle');
-        ytitle_sel.attr('x', -(svg_height - margins.bottom) / 2) // x and y are flipped because of rotation
+        ytitle_sel.attr('x', -(svg_height - margins.bottom) / 2)
             .attr('y', -45) // Approximate width of y-axis
             .attr('transform', 'rotate(-90)')
             .style('text-anchor', 'middle')
