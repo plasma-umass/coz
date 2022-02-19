@@ -23,10 +23,14 @@ call) with a Python 3.x interpreter.
 
 ## Libraries/Wrappers
 
+By default, Coz works for C and C++ programs. It has been ported or
+has wrappers for several other languages, listed below:
+
 | Language      | Link |
 | ----------- | -----------  
 | Java   | JCoz: https://github.com/Decave/JCoz|
 | Go     | Cozgo: https://github.com/urjitbhatia/cozgo|
+| Swift  | Swift Coz: https://github.com/funcmike/swift-coz |
 
 ## Building Coz From Source
 
