@@ -44,19 +44,19 @@ typedef coz_counter_t* (*coz_get_counter_t)(int, const char*);
 static coz_counter_t* _call_coz_get_counter(int type, const char* name) {
   static unsigned char _initialized = 0;
   static coz_get_counter_t fn; // The pointer to _coz_get_counter
-  
+
   if(!_initialized) {
     if(dlsym) {
       // Locate the _coz_get_counter method
       void* p = dlsym(RTLD_DEFAULT, "_coz_get_counter");
-  
+
       // Use memcpy to avoid pedantic GCC complaint about storing function pointer in void*
       memcpy(&fn, &p, sizeof(p));
     }
-    
+
     _initialized = 1;
   }
-  
+
   // Call the function, or return null if profiler is not found
   if(fn) return fn(type, name);
   else return 0;
@@ -77,7 +77,7 @@ static coz_counter_t* _call_coz_get_counter(int type, const char* name) {
     } \
   }
 
-#define STR2(x) #x 
+#define STR2(x) #x
 #define STR(x) STR2(x)
 
 #define COZ_PROGRESS_NAMED(name) COZ_INCREMENT_COUNTER(COZ_COUNTER_TYPE_THROUGHPUT, name)
