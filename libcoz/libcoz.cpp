@@ -63,6 +63,18 @@ extern "C" coz_counter_t* _coz_get_counter(progress_point_type t, const char* na
   }
 }
 
+extern "C" void _coz_pre_block() {
+  profiler::get_instance().pre_block();
+}
+
+extern "C" void _coz_post_block(bool skip_delays) {
+  profiler::get_instance().post_block(skip_delays);
+}
+
+extern "C" void _coz_wake_other() {
+  profiler::get_instance().catch_up();
+}
+
 /**
  * Read a link's contents and return it as a string
  */

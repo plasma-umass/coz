@@ -160,7 +160,8 @@ public:
     state->pre_block_time = _global_delay.load();
   }
 
-  /// Call after unblocking. If by_thread is true, delays will be skipped
+  /// Call after unblocking. If skip_delays is true, all delays inserted
+  /// during the blocked period will be skipped.
   void post_block(bool skip_delays) {
     thread_state* state = get_thread_state();
     if(!state)
