@@ -8,6 +8,18 @@
 #if !defined(COZ_H)
 #define COZ_H
 
+/// Embedders can define COZ_ENABLED explicitly to 1 or 0 to globally to
+/// enable/disable coz tracepoints at build time without needing to modify code.
+/// If set to 0 before including this header for the first time, all macros
+/// become noops. This is useful to commit coz tracepoints into a codebase but
+/// not require linking against the coz runtime and not having any code bloat
+/// nor runtime overhead from using the macros.
+#ifndef COZ_ENABLED
+#define COZ_ENABLED 1
+#endif
+
+#if COZ_ENABLED
+
 #ifndef __USE_GNU
 #  define __USE_GNU
 #endif
@@ -182,6 +194,19 @@ static void _call_coz_wake_other() {
 
 #if defined(__cplusplus)
 }
+#endif
+
+#else
+
+#define _COZ_NOOP() do {} while(0)
+#define COZ_PROGRESS_NAMED(name) _COZ_NOOP()
+#define COZ_PROGRESS() _COZ_NOOP()
+#define COZ_BEGIN(name) _COZ_NOOP()
+#define COZ_END(name) _COZ_NOOP()
+#define COZ_PRE_BLOCK() _COZ_NOOP()
+#define COZ_POST_BLOCK(skip_delay) _COZ_NOOP()
+#define COZ_WAKE_OTHER() _COZ_NOOP()
+
 #endif
 
 #endif
