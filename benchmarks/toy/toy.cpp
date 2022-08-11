@@ -5,10 +5,11 @@
  * directory of this distribution and at http://github.com/plasma-umass/coz.
  */
 
+#include <coz.h>
 #include <thread>
 
   volatile size_t x;
-  char padding[128];
+  char padding[1024];
   volatile size_t y;
 
 
@@ -21,9 +22,12 @@ void b() {
 }
 
 int main() {
-  std::thread a_thread(a);
-  std::thread b_thread(b);
-  
-  a_thread.join();
-  b_thread.join();
+  for (int i = 0; i < 100; i++) {
+    std::thread a_thread(a);
+    std::thread b_thread(b);
+    
+    a_thread.join();
+    b_thread.join();
+    COZ_PROGRESS;
+  }
 }
