@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4)
+cmake_minimum_required(VERSION 3.13.0)
 project(coz VERSION 0.2.2 LANGUAGES C CXX)
 
 enable_testing()
