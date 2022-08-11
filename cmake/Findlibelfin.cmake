@@ -1,6 +1,6 @@
 include(FindPkgConfig)
-pkg_check_modules(libelfxx REQUIRED libelf++>=0.3)
-pkg_check_modules(libdwarfxx REQUIRED libdwarf++>=0.3)
+pkg_check_modules(libelfxx REQUIRED libelf++) # >=0.3)
+pkg_check_modules(libdwarfxx REQUIRED libdwarf++)#>=0.3)
 
 add_library(libelfin::libelf++ INTERFACE IMPORTED)
 set_target_properties(libelfin::libelf++ PROPERTIES
