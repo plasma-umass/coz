@@ -1,5 +1,5 @@
 add_executable(word_count sort-pthread.c word_count-pthread.c)
-target_link_libraries(word_count PRIVATE coz-instrumentation pthread)
+target_link_libraries(word_count PRIVATE pthread)
 
 add_custom_command(
     COMMENT "Downloading word_count inputs"

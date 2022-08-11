@@ -1,5 +1,5 @@
 add_executable(linear_regression linear_regression-pthread.c)
-target_link_libraries(linear_regression PRIVATE coz-instrumentation pthread)
+target_link_libraries(linear_regression PRIVATE pthread)
 
 add_custom_command(
     COMMENT "Downloading linear_regression inputs"

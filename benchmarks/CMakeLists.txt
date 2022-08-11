@@ -1,3 +1,4 @@
+add_compile_options(-g -O3 -DNDEBUG)
 function(add_coz_run_target name)
     set(one_value_args "")
     set(multi_value_args COMMAND)

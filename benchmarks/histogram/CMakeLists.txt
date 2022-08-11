@@ -1,5 +1,5 @@
 add_executable(histogram histogram-pthread.c)
-target_link_libraries(histogram PRIVATE coz-instrumentation pthread)
+target_link_libraries(histogram PRIVATE pthread)
 
 add_custom_command(
     COMMENT "Downloading histogram inputs"

@@ -1,5 +1,5 @@
 add_executable(string_match string_match-pthread.c)
-target_link_libraries(string_match PRIVATE coz-instrumentation pthread)
+target_link_libraries(string_match PRIVATE pthread)
 
 add_custom_command(
     COMMENT "Downloading string_match inputs"
