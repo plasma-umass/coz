@@ -36,7 +36,7 @@ static void* pthread_handle = NULL;   //< The `dlopen` handle to libpthread
  */
 static void* get_pthread_handle() {
   if(pthread_handle == NULL && !__atomic_exchange_n(&in_dlopen, true, __ATOMIC_ACQ_REL)) {
-    pthread_handle = dlopen("libpthread.so.0", RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD);
+    pthread_handle = dlopen("libpthread.so.0", RTLD_NOW | RTLD_GLOBAL);
     __atomic_store_n(&in_dlopen, false, __ATOMIC_RELEASE);
   }
 
