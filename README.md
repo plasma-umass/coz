@@ -49,7 +49,13 @@ git clone https://github.com/antoyo/libelfin && cd libelfin && make && sudo make
 git clone https://github.com/plasma-umass/coz && cd coz && cmake . && make && sudo make install && cd ..
 ```
 
-To test, build the benchmark suite and run one of the benchmarks (the SQLite3 benchmark takes a while to build).
+Next, you need to change the "perf_event_paranoia" level so Coz can run.
+
+```
+sudo sh -c 'echo 1 >/proc/sys/kernel/perf_event_paranoid'
+```
+
+Now you can test Coz. Build the benchmark suite and run one of the benchmarks (the SQLite3 benchmark takes a while to build).
 
 ```
 sudo apt-get install libbz2-dev libsqlite3-dev
@@ -57,7 +63,7 @@ cd coz/benchmarks && cmake . && make && cd ../..
 coz run --- ./coz/benchmarks/toy/toy
 ```
 
-Now, use the Coz viewer to see the results. This command will open up a browser tab, from which you will need to load the file `profile.coz`.
+Finally, use the Coz viewer to see the results. This command will open up a browser tab, from which you will need to load the file `profile.coz`.
 
 ```
 coz plot
