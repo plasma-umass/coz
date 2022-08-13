@@ -7,10 +7,10 @@ Full details of Coz are available in our paper, [Coz: Finding Code that Counts w
 
 ## Installation
 
-On Debian, Ubuntu, Fedora, you can install Coz via apt:
+On Debian, Ubuntu, and Fedora, you can install Coz via apt:
 
-```
-  % sudo apt install coz-profiler
+```shell
+sudo apt install coz-profiler
 ```
 
 An OpenSUSE package was prepared by user
@@ -39,11 +39,11 @@ To build Coz from source, you will need:
 - A copy of the source code for this project
 - A compiler with C++0x support (clang++ or g++)
 - A Python interpreter (Python 3.x is required)
-- *ONLY* for building the profiler viewer: NodeJS and npm -- `sudo apt-get install nodejs npm`
+- *OPTIONAL*: for building the profiler viewer, you need NodeJS and npm -- `sudo apt-get install nodejs npm`
 
 Once you have all dependencies in place, build Coz with CMake. On Debian-based distributions, the following commands should take care of the entire process:
 
-```
+```shell
 sudo apt-get install build-essential cmake docutils-common git python3 pkg-config
 git clone https://github.com/antoyo/libelfin && cd libelfin && make && sudo make install && cd ..
 git clone https://github.com/plasma-umass/coz && cd coz && cmake . && make && sudo make install && cd ..
@@ -51,13 +51,13 @@ git clone https://github.com/plasma-umass/coz && cd coz && cmake . && make && su
 
 Next, you need to change the "perf_event_paranoia" level so Coz can run.
 
-```
+```shell
 sudo sh -c 'echo 1 >/proc/sys/kernel/perf_event_paranoid'
 ```
 
 Now you can test Coz. Build the benchmark suite and run one of the benchmarks (the SQLite3 benchmark takes a while to build).
 
-```
+```shell
 sudo apt-get install libbz2-dev libsqlite3-dev
 cd coz/benchmarks && cmake . && make && cd ../..
 coz run --- ./coz/benchmarks/toy/toy
@@ -65,18 +65,18 @@ coz run --- ./coz/benchmarks/toy/toy
 
 Finally, use the Coz viewer to see the results. This command will open up a browser tab, from which you will need to load the file `profile.coz`.
 
-```
+```shell
 coz plot
 ```
 
 (You may need to move the "Minimum Points" slider on the left side to see the results.)
 
 ## Using Coz
-Using coz requires a small amount of setup, but you can jump ahead to the section on the included [sample applications](#sample-applications) in this repository if you want to try coz right away.
+Using Coz requires a small amount of setup, but you can jump ahead to the section on the included [sample applications](#sample-applications) in this repository if you want to try Coz right away.
 
-To run your program with coz, you will need to build it with debug information. You do not need to include debug symbols in the main executable: coz uses the same procedure as `gdb` to locate debug information for stripped binaries.
+To run your program with Coz, you will need to build it with debug information (`-g -gdwarf-3`). You do not need to include debug symbols in the main executable: coz uses the same procedure as `gdb` to locate debug information for stripped binaries.
 
-Once you have your program built with debug information, you can run it with coz using the command `coz run {coz options} --- {program name and arguments}`. But, to produce a useful profile you need to decide which part(s) of the application you want to speed up by specifying one or more progress points.
+Once you have your program built with debug information, you can run it with Coz using the command `coz run {coz options} --- {program name and arguments}`. But, to produce a useful profile you need to decide which part(s) of the application you want to speed up by specifying one or more progress points.
 
 ### Profiling Modes
 Coz departs from conventional profiling by making it possible to view the effect of optimizations on both throughput and latency. To profile throughput, you must specify a progress point. To profile latency, you must specify a pair of progress points.
