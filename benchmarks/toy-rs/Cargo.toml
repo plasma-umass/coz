@@ -7,3 +7,7 @@ edition = "2021"
 
 [dependencies]
 coz = "0.1"
+
+[profile.dev]
+opt-level = 2
+debug = true
