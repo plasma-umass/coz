@@ -82,19 +82,19 @@ Now you can test Coz. Build the benchmark suite and run one of the benchmarks (t
 
 * Debian-based distributions:
 
-```shell
-sudo apt-get install libbz2-dev libsqlite3-dev
-cd coz/benchmarks && cmake . && make && cd ../..
-coz run --- ./coz/benchmarks/toy/toy
-```
+    ```shell
+    sudo apt-get install libbz2-dev libsqlite3-dev
+    cd coz/benchmarks && cmake . && make && cd ../..
+    coz run --- ./coz/benchmarks/toy/toy
+    ```
 
 * RedHat-based distributions
 
-```shell
-sudo dnf install libbz2-dev libsqlite3-dev
-cd coz/benchmarks && cmake . && make && cd ../..
-coz run --- ./coz/benchmarks/toy/toy
-```
+   ```shell
+   sudo dnf install libbz2-dev libsqlite3-dev
+   cd coz/benchmarks && cmake . && make && cd ../..
+   coz run --- ./coz/benchmarks/toy/toy
+   ```
 
 
 Finally, use the Coz viewer to see the results. This command will open up a browser tab, from which you will need to load the file `profile.coz`.
