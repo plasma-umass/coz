@@ -56,20 +56,20 @@ Once you have all dependencies in place, build Coz with CMake.
 
 * Debian-based distributions
 
-```shell
-sudo apt-get install build-essential cmake docutils-common git python3 pkg-config
-git clone https://github.com/antoyo/libelfin && cd libelfin && make && sudo make install && cd ..
-git clone https://github.com/plasma-umass/coz && cd coz && cmake . && make && sudo make install && cd ..
-```
+    ```shell
+    sudo apt-get install build-essential cmake docutils-common git python3 pkg-config
+    git clone https://github.com/antoyo/libelfin && cd libelfin && make && sudo make install && cd ..
+    git clone https://github.com/plasma-umass/coz && cd coz && cmake . && make && sudo make install && cd ..
+    ```
 
 * RedHat-based distributions
 
-```shell
-sudo dnf -y group install "C Development Tools and Libraries" "Development Tools" "Development Libraries"
-sudo dnf -y install cmake git python3 pkg-config python3-docutils
-git clone https://github.com/antoyo/libelfin && cd libelfin && make && sudo make install && cd ..
-git clone https://github.com/plasma-umass/coz && cd coz && cmake . && make && sudo make install && cd ..
-```
+    ```shell
+    sudo dnf -y group install "C Development Tools and Libraries" "Development Tools" "Development Libraries"
+    sudo dnf -y install cmake git python3 pkg-config python3-docutils
+    git clone https://github.com/antoyo/libelfin && cd libelfin && make && sudo make install && cd ..
+    git clone https://github.com/plasma-umass/coz && cd coz && cmake . && make && sudo make install && cd ..
+    ```
 
 
 Next, you need to change the "perf_event_paranoia" level so Coz can run.
