@@ -52,13 +52,25 @@ To build Coz from source, you will need:
 - A Python interpreter (Python 3.x is required)
 - *OPTIONAL*: for building the profiler viewer, you need NodeJS and npm -- `sudo apt-get install nodejs npm`
 
-Once you have all dependencies in place, build Coz with CMake. On Debian-based distributions, the following commands should take care of the entire process:
+Once you have all dependencies in place, build Coz with CMake.
+
+* Debian-based distributions
 
 ```shell
 sudo apt-get install build-essential cmake docutils-common git python3 pkg-config
 git clone https://github.com/antoyo/libelfin && cd libelfin && make && sudo make install && cd ..
 git clone https://github.com/plasma-umass/coz && cd coz && cmake . && make && sudo make install && cd ..
 ```
+
+* RedHat-based distributions
+
+```shell
+sudo dnf -y group install "C Development Tools and Libraries" "Development Tools" "Development Libraries"
+sudo dnf -y install cmake git python3 pkg-config python3-docutils
+git clone https://github.com/antoyo/libelfin && cd libelfin && make && sudo make install && cd ..
+git clone https://github.com/plasma-umass/coz && cd coz && cmake . && make && sudo make install && cd ..
+```
+
 
 Next, you need to change the "perf_event_paranoia" level so Coz can run.
 
@@ -68,11 +80,22 @@ sudo sh -c 'echo 1 >/proc/sys/kernel/perf_event_paranoid'
 
 Now you can test Coz. Build the benchmark suite and run one of the benchmarks (the SQLite3 benchmark takes a while to build).
 
+* Debian-based distributions:
+
 ```shell
 sudo apt-get install libbz2-dev libsqlite3-dev
 cd coz/benchmarks && cmake . && make && cd ../..
 coz run --- ./coz/benchmarks/toy/toy
 ```
+
+* RedHat-based distributions
+
+```shell
+sudo dnf install libbz2-dev libsqlite3-dev
+cd coz/benchmarks && cmake . && make && cd ../..
+coz run --- ./coz/benchmarks/toy/toy
+```
+
 
 Finally, use the Coz viewer to see the results. This command will open up a browser tab, from which you will need to load the file `profile.coz`.
 
