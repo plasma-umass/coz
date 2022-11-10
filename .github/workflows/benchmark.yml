@@ -1,5 +1,6 @@
 name: benchmark
 
+on: [push]
 
 jobs:
   histogram:
@@ -11,3 +12,16 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: 3.9
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install coz-profiler g++
+
+      - name: Compile histogram
+        run: |
+          cd benchmarks/histogram
+          g++ histogram-pthread.c -g -gdwarf-3 -ldl -lpthread
+          sudo sh -c 'echo 1 >/proc/sys/kernel/perf_event_paranoid'
+          coz run --- ./a.out test.bmp
+          cat profile.coz
