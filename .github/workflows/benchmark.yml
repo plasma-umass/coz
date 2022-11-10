@@ -26,3 +26,44 @@ jobs:
           coz run --- ./a.out test.bmp
           echo '--- COZ PROFILE ---'
           cat profile.coz
+
+
+  source-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential cmake docutils-common git python3 pkg-config
+          sudo apt-get install libbz2-dev libsqlite3-dev libdwarf-dev
+
+          cd ../
+          git clone https://github.com/antoyo/libelfin && cd libelfin && make && sudo make install && cd ..
+          cd coz
+
+
+      - name: Compile coz
+        run: |
+          mkdir build
+          cd build
+          cmake ../
+          make -j 2
+
+          sudo make install
+          cd ../../
+
+      - name: Compile histogram
+        run: |
+          cd benchmarks/histogram
+          g++ histogram-pthread.c -g -gdwarf-3 -ldl -lpthread
+          sudo sh -c 'echo 1 >/proc/sys/kernel/perf_event_paranoid'
+          coz run --- ./a.out test.bmp
+          echo '--- COZ PROFILE ---'
+          cat profile.coz
