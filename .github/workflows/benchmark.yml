@@ -27,7 +27,6 @@ jobs:
           echo '--- COZ PROFILE ---'
           cat profile.coz
 
-
   source-compile:
     runs-on: ubuntu-latest
     steps:
@@ -42,12 +41,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install build-essential cmake docutils-common git python3 pkg-config
-          sudo apt-get install libbz2-dev libsqlite3-dev libdwarf-dev
 
           cd ../
-          git clone https://github.com/antoyo/libelfin && cd libelfin && make && sudo make install && cd ..
+          git clone https://github.com/aclements/libelfin.git && cd libelfin && make && sudo make install && cd ..
           cd coz
-
 
       - name: Compile coz
         run: |
@@ -58,6 +55,10 @@ jobs:
 
           sudo make install
           cd ../../
+
+      - name: Compile benchmarks
+        run: |
+          sudo apt-get install libbz2-dev libsqlite3-dev
 
       - name: Compile histogram
         run: |
