@@ -34,7 +34,7 @@ public:
   class saved;
   
   /// Create a throughput progress point with a given name
-  throughput_point(const std::string& name) : _name(name) {}
+  throughput_point(const std::string& name) : _name(name), _counter() {}
   
   /// Save the state of this progress point
   saved* save() const {
@@ -97,7 +97,7 @@ public:
   class saved;
   
   /// Create a latency progress point with a given name
-  latency_point(const std::string& name) : _name(name) {}
+  latency_point(const std::string& name) : _name(name), _begin_counter(), _end_counter() {}
   
   /// Save the state of this progress point
   saved* save() const {
