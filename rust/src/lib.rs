@@ -12,10 +12,8 @@
 //! [rust-readme]: https://github.com/alexcrichton/coz-rs/blob/master/README.md
 
 use once_cell::sync::OnceCell;
-use std::cell::Cell;
 use std::ffi::{CStr, CString};
 use std::mem;
-use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
 /// Equivalent of the `COZ_PROGRESS` and `COZ_PROGRESS_NAMED` macros
@@ -96,50 +94,6 @@ macro_rules! scope {
         BEGIN_COUNTER.increment();
         let _coz_scope_guard = $crate::Guard::new(&END_COUNTER);
     };
-}
-
-/// Perform one-time per-thread initialization for `coz`.
-///
-/// This may not be necessary to call, but for good measure it's recommended to
-/// call once per thread in your application near where the thread starts.
-/// If you run into issues with segfaults related to SIGPROF handlers this may
-/// help fix the issue since it installs a bigger stack earlier on in the
-/// process.
-pub fn thread_init() {
-    // As one-time program initialization, make sure that our sigaltstack is big
-    // enough. By default coz uses SIGPROF on an alternate signal stack, but the
-    // Rust standard library already sets up a SIGALTSTACK which is
-    // unfortunately too small to run coz's handler. If our sigaltstack looks
-    // too small let's allocate a bigger one and use it here.
-    thread_local!(static SIGALTSTACK_DISABLED: Cell<bool> = Cell::new(false));
-    if SIGALTSTACK_DISABLED.with(|s| s.replace(true)) {
-        return;
-    }
-    unsafe {
-        let mut stack = mem::zeroed();
-        libc::sigaltstack(ptr::null(), &mut stack);
-        let size = 1 << 20; // 1mb
-        if stack.ss_size >= size {
-            return;
-        }
-        let ss_sp = libc::mmap(
-            ptr::null_mut(),
-            size,
-            libc::PROT_READ | libc::PROT_WRITE,
-            libc::MAP_PRIVATE | libc::MAP_ANON,
-            -1,
-            0,
-        );
-        if ss_sp == libc::MAP_FAILED {
-            panic!("failed to allocate alternative stack");
-        }
-        let new_stack = libc::stack_t {
-            ss_sp,
-            ss_flags: 0,
-            ss_size: size,
-        };
-        libc::sigaltstack(&new_stack, ptr::null_mut());
-    }
 }
 
 /// A `coz`-counter which is either intended for throughput or `begin`/`end`
@@ -266,8 +220,6 @@ fn coz_get_counter(ty: libc::c_int, name: &CStr) -> Option<*mut coz_counter_t> {
             Some(unsafe { mem::transmute(func) })
         }
     });
-
-    thread_init(); // just in case we haven't already
 
     // SAFETY: We are calling an external function which exists as it is not None
     // No specific invariants that we must uphold have been defined.
