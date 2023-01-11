@@ -61,6 +61,12 @@ namespace ccutil {
       return std::move(*this);
     }
   };
+
+  constexpr const char* basename(const char* s, std::size_t i = 0, std::size_t pos = 0) {
+    return s[i] == '\0' ? s + pos
+                        : s[i] == '/' ? basename(s, i+1, i+1)
+                                      : basename(s, i+1, pos);
+  }
 }
 
 #if defined(NDEBUG)
@@ -68,7 +74,7 @@ namespace ccutil {
 #  define INFO (ccutil::logger_base())
 #  define ASSERT(cond) (ccutil::logger_base())
 #else
-#  define LOG(color, exit) (ccutil::logger(exit) << ccutil::SourceColor << "[" << __FILE__ << ":" << __LINE__ << "] " << color)
+#  define LOG(color, exit) (ccutil::logger(exit) << ccutil::SourceColor << "[" << ccutil::basename(__FILE__) << ":" << __LINE__ << "] " << color)
 #  define INFO LOG(ccutil::InfoColor, false)
 #  define ASSERT(cond) (cond) ? ccutil::logger_base() : FATAL
 #endif
