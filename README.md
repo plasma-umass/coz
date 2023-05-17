@@ -34,7 +34,7 @@ call) with a Python 3.x interpreter.
 
 ## Libraries/Wrappers
 
-By default, Coz works for C and C++ programs. It has been ported or
+By default, Coz works for C, C++, and Rust programs. It has been ported or
 has wrappers for several other languages, listed below:
 
 | Language      | Link |
