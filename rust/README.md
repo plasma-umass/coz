@@ -88,7 +88,7 @@ You can find an example toy program at `examples/toy.rs` in this repository, and
 we can execute it with `coz`:
 
 ```
-$ cargo build --release
+$ cargo build --release --examples
 $ coz run --- ./target/release/examples/toy
 ...
 [profiler.cpp:75] Starting profiler thread
