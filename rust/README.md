@@ -84,23 +84,19 @@ Known caveats so far to generate a report that collects information are:
 
 ## Examples
 
-You can find an example toy program at `examples/toy.rs` in this repository, and
-we can execute it with `coz`:
+You can find an example toy program at `rust/examples/toy.rs` in this repository, and we can execute it with `coz`:
+
+NOTE: If Rust is not yet installed, first run `sudo apt install curl` and then `curl --proto '=https' --tlsv1.3 https://sh.rustup.rs -sSf | sh`.
 
 ```
-$ cargo build --release
+$ cargo build --release --examples
 $ coz run --- ./target/release/examples/toy
 ...
 [profiler.cpp:75] Starting profiler thread
 $
 ```
 
-That should generate `profile.coz` in the current directory, which if you plot
-that should look something like this:
+That should generate `profile.coz` in the current directory, which if you plot with `coz plot` should look something like this:
 
 ![plot of `toy.rs`](toy.png)
 
-Note that I'm still learning myself the best sorts of applications to run on as
-well as the best sorts of questions to ask `coz` and where to put
-latency/throughput points. If you've got ideas or good examples, please feel
-free to add them here!
