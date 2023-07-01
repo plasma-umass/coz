@@ -89,16 +89,9 @@ $ coz run --- ./myprogram arg1 arg2
             <div class="text-center">
               <label for="load-profile-form">Load Profile</label>
               <form id="load-profile-form">
-                <input type="file" id="load-profile-file" accept=".coz" style="display: none" />
                 <div class="input-group">
                   <span class="input-group-addon"><i class="fa fa-file-text-o"></i></span>
-                  <input type="text" class="form-control" id="load-profile-filename" disabled placeholder="Select a profile">
-                  <span class="input-group-btn">
-                    <button class="browse btn btn-primary" id="load-profile-browse-btn" type="button">
-                      <i class="fa fa-search"></i>
-                      Browse
-                    </button>
-                  </span>
+		  <input type="file" class="form-control" id="load-profile-file" accept=".coz" />
                 </div> <!-- /input-group -->
               </form>
               <br>
