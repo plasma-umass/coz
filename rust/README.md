@@ -2,7 +2,7 @@
 
 Rust support for the [`coz` Causal Profiler](https://github.com/plasma-umass/coz)
 
-[![Documentation](https://docs.rs/coz/badge.svg)](https://docs.rs/coz)
+[![Rust crate downloads](https://img.shields.io/crates/d/coz)](https://img.shields.io/crates/d/coz)[![Documentation](https://docs.rs/coz/badge.svg)](https://docs.rs/coz)
 
 ## Usage
 
