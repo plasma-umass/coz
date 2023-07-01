@@ -65,16 +65,6 @@ finally you can run it with `coz run --- ./target/release/$your_binary`.
 
 Known caveats so far to generate a report that collects information are:
 
-* Rust programs by default segfault when run with `coz` with an issue related to
-  [plasma-umass/coz#110](https://github.com/plasma-umass/coz/issues/110). Rust
-  programs set up a `sigaltstack` to run segfault handlers to print "you ran out
-  of stack", but this alternate stack is too small to run the `SIGPROF` handler
-  that `coz` installs. To handle this this crate provides a `coz::thread_init()`
-  function which will increase the `sigaltstack` size that Rust installs by
-  default to something large enough to run `coz`. If you see segfaults, or
-  corrupt reports, you may wish to manually call `coz::thread_init()` instead of
-  waiting for this crate to automatically call it for you.
-
 * Debug information looks to be critical to get a report from `coz`. Make sure
   that your program is compiled with at least line-table information (`debug =
   1`) to ensure you get the best experience using `coz`.
