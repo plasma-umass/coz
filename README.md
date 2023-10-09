@@ -122,7 +122,7 @@ Coz has command line options to specify progress points when profiling the appli
 To plot profile results, go to http://plasma-umass.github.io/coz/ and load your profile. This page also includes several sample profiles from PARSEC benchmarks.
 
 ## Sample Applications
-The `benchmarks` directory in this repository includes several small benchmarks with progress points added at appropriate locations. To build and run one of these benchmarks with `coz`, just browse to `benchmarks/{bench name}` and type `cmake . && make`. These programs may require several runs before coz has enough measurements to generate a useful profile. Once you have profiled these programs for several minutes, go to http://plasma-umass.github.io/coz/ to load and plot your profile.
+The `benchmarks` directory in this repository includes several small benchmarks with progress points added at appropriate locations. To build and run one of these benchmarks with `coz`, just browse to `benchmarks` and type `cmake . && make`, then you can execute the programs compiled in `benchmarks/{benchmark}`. These programs may require several runs before coz has enough measurements to generate a useful profile. Once you have profiled these programs for several minutes, go to http://plasma-umass.github.io/coz/ to load and plot your profile.
 
 ## CMake
 When you install coz it installs a cmake config file. To add coz to a cmake project simply use the command `find_package(coz-profiler)`. This will import a target for the library and includes called `coz::coz` and a target for the coz binary `coz::profiler`. For guidance on how to use these targets refer to the CMake documentation.
