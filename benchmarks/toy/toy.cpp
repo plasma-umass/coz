@@ -14,15 +14,15 @@
 
 
 void a() {
-  for(x=0; x<2000000000; x++) {}
+  for(x=0; x<2000000; x++) {}
 }
 
 void b() {
-  for(y=0; y<1900000000; y++) {}
+  for(y=0; y<1900000; y++) {}
 }
 
 int main() {
-  for (int i = 0; i < 100; i++) {
+  for (int i = 0; i < 1000; i++) {
     std::thread a_thread(a);
     std::thread b_thread(b);
     
