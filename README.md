@@ -66,6 +66,8 @@ To build Coz from source, you will need:
 Once you have all dependencies in place, build Coz with CMake. On Debian-based distributions, the following commands should take care of the entire process:
 
 ```shell
+sudo apt-get update
+sudo apt-get install libdwarf-dev
 sudo apt-get install build-essential cmake docutils-common git python3 pkg-config
 git clone https://github.com/antoyo/libelfin && cd libelfin && make && sudo make install && cd ..
 git clone https://github.com/plasma-umass/coz && cd coz && cmake . && make && sudo make install && cd ..
@@ -90,6 +92,8 @@ Finally, use the Coz viewer to see the results. This command will open up a brow
 ```shell
 coz plot
 ```
+
+If you are on a remote system, you can open the Coz viewer in your browser: [https://plasma-umass.github.io/coz](https://plasma-umass.github.io/coz) and then load the file `profile.coz`, which you will have to transfer to your local machine.
 
 (You may need to move the "Minimum Points" slider on the left side to see the results.)
 
