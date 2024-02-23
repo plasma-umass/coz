@@ -29,7 +29,7 @@ that Counts with Causal Profiling
 
 ## Installation
 
-On Debian, Ubuntu, you can install Coz via apt:
+On Debian and Ubuntu, you can install Coz via apt:
 
 ```shell
 sudo apt install coz-profiler
