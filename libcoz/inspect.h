@@ -35,8 +35,6 @@ class memory_map;
 class line {
 public:
   line(std::weak_ptr<file> f, size_t l) : _file(f), _line(l) {}
-  line(const line&) = default;
-  line& operator=(const line&) = default;
   
   inline std::shared_ptr<file> get_file() const { return _file.lock(); }
   inline size_t get_line() const { return _line; }
