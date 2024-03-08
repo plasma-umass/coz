@@ -171,7 +171,7 @@ void wordcount_splitter(void *data_in)
    /* Barrier, wait for all threads to finish */
    for (i = 0; i < num_procs; i++)
    {
-      int ret_val;
+      long ret_val;
       CHECK_ERROR(pthread_join(tid[i], (void **)(void*)&ret_val) != 0);
 	  CHECK_ERROR(ret_val != 0);
    }
@@ -203,7 +203,7 @@ void wordcount_splitter(void *data_in)
 	   /* Barrier, wait for all threads to finish */
 	   for (i = 0; i < num_threads; i++)
 	   {
-		  int ret_val;
+		  long ret_val;
 		  CHECK_ERROR(pthread_join(tid[i], (void **)(void*)&ret_val) != 0);
 		  CHECK_ERROR(ret_val != 0);
 
