@@ -72,6 +72,31 @@ sudo apt-get install build-essential cmake docutils-common git python3 pkg-confi
 git clone https://github.com/antoyo/libelfin && cd libelfin && make && sudo make install && cd ..
 git clone https://github.com/plasma-umass/coz && cd coz && cmake . && make && sudo make install && cd ..
 ```
+<details><summary>Compiling libelfin and coz locally (without root access) is also possible</summary>
+  
+Install first the other dependencies and clone coz and libelfin, then:
+  
+```shell  
+COZ=$HOME/path/to/coz
+LIBELFIN=$HOME/path/to/libeflin
+cd $LIBELFIN && make
+export PKG_CONFIG_PATH=$LIBELFIN/elf:$LIBELFIN/dwarf
+export C_INCLUDE_PATH=$LIBELFIN/../
+export CPLUS_INCLUDE_PATH=$LIBELFIN/../
+cd $COZ && cmake . && make
+```
+
+This creates a local ./coz executable that can be run from the $COZ directory. 
+
+To compile and run C/C++ programs containing the coz.h header and COZ_xxx macros, you should position:
+  
+```shell
+  export CPLUS_INCLUDE_PATH=$COZ/include 
+  export C_INCLUDE_PATH=$COZ/include
+  export LD_LIBRARY_PATH=$LIBELFIN/elf:$LIBELFIN/dwarf
+```
+ 
+</details>
 
 Next, you need to change the "perf_event_paranoia" level so Coz can run.
 
