@@ -1,5 +1,6 @@
 set(sources
     ${PROJECT_SOURCE_DIR}/include/coz.h
+    alloc_shims.h
     inspect.cpp
     inspect.h
     libcoz.cpp
@@ -24,6 +25,16 @@ target_include_directories(coz
         $<INSTALL_INTERFACE:include>)
 target_link_libraries(coz PRIVATE ${CMAKE_DL_LIBS} rt Threads::Threads libelfin::libelfin)
 
+add_library(cozallocshims MODULE alloc_shims.cpp alloc_shims.h)
+if(CONAN_PACKAGE_VERSION)
+    set_target_properties(cozallocshims PROPERTIES VERSION ${CONAN_PACKAGE_VERSION})
+endif()
+target_include_directories(cozallocshims
+    PUBLIC
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>)
+target_link_libraries(cozallocshims PRIVATE ${CMAKE_DL_LIBS})
+
 add_library(coz-instrumentation INTERFACE)
 target_include_directories(coz-instrumentation
     INTERFACE
@@ -32,7 +43,7 @@ target_include_directories(coz-instrumentation
 target_link_libraries(coz-instrumentation INTERFACE -Wl,--push-state,--no-as-needed ${CMAKE_DL_LIBS} -Wl,--pop-state)
 
 if(INSTALL_COZ)
-    install(TARGETS coz
+    install(TARGETS coz cozallocshims
         EXPORT coz-profilerTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
