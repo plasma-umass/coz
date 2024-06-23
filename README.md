@@ -69,7 +69,7 @@ Once you have all dependencies in place, build Coz with CMake. On Debian-based d
 sudo apt-get update
 sudo apt-get install libdwarf-dev
 sudo apt-get install build-essential cmake docutils-common git python3 pkg-config
-git clone https://github.com/antoyo/libelfin && cd libelfin && make && sudo make install && cd ..
+git clone https://github.com/aclements/libelfin && cd libelfin && make && sudo make install && cd ..
 git clone https://github.com/plasma-umass/coz && cd coz && cmake . && make && sudo make install && cd ..
 ```
 
