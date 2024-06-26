@@ -47,21 +47,22 @@ def _coz_run(args):
 
   # Find coz
   coz_prefix = dirname(realpath(sys.argv[0]))
+  default_lib_name = 'libcoz.so'
 
   # Candidate runtime library locations
   library_locations = [
     # Check for library adjacent to this script
-    os.path.join(coz_prefix, '..', 'lib64', 'libcoz.so'),
-    os.path.join(coz_prefix, '..', 'lib', 'libcoz.so'),
+    os.path.join(coz_prefix, '..', 'lib64', default_lib_name),
+    os.path.join(coz_prefix, '..', 'lib', default_lib_name),
 
     # Check for library under the coz-profiler subdirectory
-    os.path.join(coz_prefix, '..', 'lib64', 'coz-profiler', 'libcoz.so'),
-    os.path.join(coz_prefix, '..', 'lib', 'coz-profiler', 'libcoz.so'),
+    os.path.join(coz_prefix, '..', 'lib64', 'coz-profiler', default_lib_name),
+    os.path.join(coz_prefix, '..', 'lib', 'coz-profiler', default_lib_name),
 
     # Local library under development directory
-    os.path.join('libcoz', 'libcoz.so'),      # Local library during development
-    os.path.join(coz_prefix, 'libcoz', 'libcoz.so'),
-    os.path.join(coz_prefix, 'build', 'libcoz', 'libcoz.so'),
+    os.path.join('libcoz', default_lib_name), # Local library during development
+    os.path.join(coz_prefix, 'libcoz', default_lib_name),
+    os.path.join(coz_prefix, 'build', 'libcoz', default_lib_name),
   ]
 
   # Find the first library location that exists
@@ -82,6 +83,11 @@ def _coz_run(args):
     env['LD_PRELOAD'] += ':' + coz_runtime
   else:
     env['LD_PRELOAD'] = coz_runtime
+
+  if args.with_alloc_shims:
+    cozallocshims = coz_runtime.replace(default_lib_name, 'libcozallocshims.so')
+    # Make cozallocshims first library to get loaded.
+    env['LD_PRELOAD'] = cozallocshims + ':' + env['LD_PRELOAD']
 
   if len(args.binary_scope) > 0:
     env['COZ_BINARY_SCOPE'] = '\t'.join(args.binary_scope)
@@ -184,6 +190,12 @@ _run_parser.add_argument('--fixed-speedup',
                          metavar='<speedup> (0-100)',
                          type=int, choices=list(range(0, 101)), default=None,
                          help='Evaluate optimizations of a specific amount')
+
+_run_parser.add_argument('--with-alloc-shims',
+                         action='store_true', default=False,
+                         help='Use shims for memory allocation functions (malloc). '
+                            'Useful as a proxy on top of libraries like jemalloc or '
+                            'tcmalloc, to avoid problems caused by them.')
 
 # Use defaults to recover handler function and parser object from parser output
 _run_parser.set_defaults(func=_coz_run, parser=_run_parser)
