@@ -81,7 +81,7 @@ void profiler::startup(const string& outfile,
 
   // Begin sampling in the main thread
   thread_state* state = add_thread();
-  REQUIRE(state) << "Failed to add thread state";
+  REQUIRE(state) << "Failed to add thread";
   begin_sampling(state);
 }
 
@@ -300,7 +300,11 @@ void profiler::shutdown() {
 }
 
 thread_state* profiler::add_thread() {
-  return _thread_states.insert(gettid());
+  thread_state* inserted = _thread_states.insert(gettid());
+  if (inserted != nullptr) {
+    _num_threads_running += 1;
+  }
+  return inserted;
 }
 
 thread_state* profiler::get_thread_state() {
@@ -309,6 +313,7 @@ thread_state* profiler::get_thread_state() {
 
 void profiler::remove_thread() {
   _thread_states.remove(gettid());
+  _num_threads_running -= 1;
 }
 
 /**
@@ -318,7 +323,7 @@ void* profiler::start_thread(void* p) {
   thread_start_arg* arg = reinterpret_cast<thread_start_arg*>(p);
 
   thread_state* state = get_instance().add_thread();
-  REQUIRE(state) << "Failed to add thread state";
+  REQUIRE(state) << "Failed to add thread";
 
   state->local_delay = arg->_parent_delay_time;
 
