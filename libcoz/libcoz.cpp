@@ -46,21 +46,33 @@ extern "C" coz_counter_t* _coz_get_counter(progress_point_type t, const char* na
     throughput_point* p = profiler::get_instance().get_throughput_point(name);
     if(p) return p->get_counter_struct();
     else return nullptr;
-    
+
   } else if(t == progress_point_type::begin) {
     latency_point* p = profiler::get_instance().get_latency_point(name);
     if(p) return p->get_begin_counter_struct();
     else return nullptr;
-    
+
   } else if(t == progress_point_type::end) {
     latency_point* p = profiler::get_instance().get_latency_point(name);
     if(p) return p->get_end_counter_struct();
     else return nullptr;
-    
+
   } else {
     WARNING << "Unknown progress point type " << ((int)t) << " named " << name;
     return nullptr;
   }
+}
+
+extern "C" void _coz_pre_block() {
+  profiler::get_instance().pre_block();
+}
+
+extern "C" void _coz_post_block(bool skip_delays) {
+  profiler::get_instance().post_block(skip_delays);
+}
+
+extern "C" void _coz_wake_other() {
+  profiler::get_instance().catch_up();
 }
 
 /**
