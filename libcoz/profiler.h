@@ -227,7 +227,7 @@ private:
   spinlock _latency_points_lock;  //< Spinlock that protects the latency points map
 
   static_map<pid_t, thread_state> _thread_states;   //< Map from thread IDs to thread-local state
-  uint64_t _num_threads_running;                    //< Number of threads that are currently being sampled
+  std::atomic<size_t> _num_threads_running;         //< Number of threads that are currently being sampled
 
   std::atomic<bool> _experiment_active; //< Is an experiment running?
   std::atomic<size_t> _global_delay;    //< The global delay time required
