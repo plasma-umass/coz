@@ -132,6 +132,10 @@ public:
   /// Force threads to catch up on delays, and stop sampling before the thread exits
   void handle_pthread_exit(void* result) __attribute__((noreturn)) {
     end_sampling();
+    // If no more threads being sampled, shut down the profiler
+    if (_num_threads_running == 0) {
+      shutdown();
+    }
     real::pthread_exit(result);
     abort(); // Silence g++ warning about noreturn
   }
@@ -223,6 +227,7 @@ private:
   spinlock _latency_points_lock;  //< Spinlock that protects the latency points map
 
   static_map<pid_t, thread_state> _thread_states;   //< Map from thread IDs to thread-local state
+  std::atomic<size_t> _num_threads_running;         //< Number of threads that are currently being sampled
 
   std::atomic<bool> _experiment_active; //< Is an experiment running?
   std::atomic<size_t> _global_delay;    //< The global delay time required
