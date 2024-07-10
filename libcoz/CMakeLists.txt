@@ -2,7 +2,6 @@ set(sources
     ${PROJECT_SOURCE_DIR}/include/coz.h
     inspect.cpp
     inspect.h
-    libcoz.cpp
     perf.cpp
     perf.h
     profiler.cpp
@@ -14,7 +13,8 @@ set(sources
     util.h
     )
 
-add_library(coz MODULE ${sources} ${public_headers})
+add_library(coz MODULE libcoz.cpp ${sources} ${public_headers})
+add_library(coz_nopre SHARED ${sources} ${public_headers})
 if(CONAN_PACKAGE_VERSION)
     set_target_properties(coz PROPERTIES VERSION ${CONAN_PACKAGE_VERSION})
 endif()
@@ -23,6 +23,7 @@ target_include_directories(coz
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>)
 target_link_libraries(coz PRIVATE ${CMAKE_DL_LIBS} rt Threads::Threads libelfin::libelfin)
+target_link_libraries(coz_nopre PRIVATE ${CMAKE_DL_LIBS} rt Threads::Threads libelfin::libelfin)
 
 add_library(coz-instrumentation INTERFACE)
 target_include_directories(coz-instrumentation
@@ -39,3 +40,4 @@ if(INSTALL_COZ)
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/. DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 endif()
+

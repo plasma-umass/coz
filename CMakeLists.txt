@@ -41,6 +41,7 @@ if(INSTALL_COZ)
 endif()
 
 add_subdirectory(libcoz)
+add_subdirectory(test)
 
 option(BUILD_BENCHMARKS "Build benchmarks" OFF)
 if(BUILD_BENCHMARKS)

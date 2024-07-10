@@ -145,6 +145,10 @@ public:
   
   static memory_map& get_instance();
   
+  /// Find a debug version of provided file and add all of its in-scope lines to the map
+  bool process_file(const std::string& name, uintptr_t load_address,
+                    const std::unordered_set<std::string>& source_scope);
+
 private:
   memory_map() : _files(std::map<std::string, std::shared_ptr<file>>()),
                  _ranges(std::map<interval, std::shared_ptr<line>>()) {}
@@ -163,10 +167,6 @@ private:
   }
   
   void add_range(std::string filename, size_t line_no, interval range);
-  
-  /// Find a debug version of provided file and add all of its in-scope lines to the map
-  bool process_file(const std::string& name, uintptr_t load_address,
-                    const std::unordered_set<std::string>& source_scope);
   
   /// Add entries for all inlined calls
   void process_inlines(const dwarf::die& d,
