@@ -35,3 +35,17 @@ build/
 viewer/node_modules
 rust/Cargo.lock
 rust/target
+
+# CMake ignores from github.com/github/gitignore/
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+CMakeUserPresets.json
