@@ -66,9 +66,9 @@ Once you have all dependencies in place, build Coz with CMake. On Debian-based d
 
 ```shell
 sudo apt-get update
-sudo apt-get install libdwarf-dev
-sudo apt-get install nodejs npm
-sudo apt-get install build-essential cmake docutils-common git python3 pkg-config
+sudo apt-get install -y libdwarf-dev
+sudo apt-get install -y nodejs npm
+sudo apt-get install -y build-essential cmake docutils-common git python3 pkg-config
 git clone https://github.com/plasma-umass/libelfin && cd libelfin && make && sudo make install && cd ..
 git clone https://github.com/plasma-umass/coz && cd coz && cmake . && make && sudo make install && cd ..
 sudo ldconfig
@@ -83,7 +83,7 @@ sudo sh -c 'echo 1 >/proc/sys/kernel/perf_event_paranoid'
 Now you can test Coz. Build the benchmark suite and run one of the benchmarks (the SQLite3 benchmark takes a while to build).
 
 ```shell
-sudo apt-get install libbz2-dev libsqlite3-dev
+sudo apt-get install -y libbz2-dev libsqlite3-dev
 cd coz/benchmarks && cmake . && make && cd ../..
 coz run --- ./coz/benchmarks/toy/toy
 ```
