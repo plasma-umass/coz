@@ -61,16 +61,17 @@ To build Coz from source, you will need:
 - A copy of the source code for this project
 - A compiler with C++0x support (clang++ or g++)
 - A Python interpreter (Python 3.x is required)
-- *OPTIONAL*: for building the profiler viewer, you need NodeJS and npm -- `sudo apt-get install nodejs npm`
 
 Once you have all dependencies in place, build Coz with CMake. On Debian-based distributions, the following commands should take care of the entire process:
 
 ```shell
 sudo apt-get update
 sudo apt-get install libdwarf-dev
+sudo apt-get install nodejs npm
 sudo apt-get install build-essential cmake docutils-common git python3 pkg-config
 git clone https://github.com/plasma-umass/libelfin && cd libelfin && make && sudo make install && cd ..
 git clone https://github.com/plasma-umass/coz && cd coz && cmake . && make && sudo make install && cd ..
+sudo ldconfig
 ```
 
 Next, you need to change the "perf_event_paranoia" level so Coz can run.
