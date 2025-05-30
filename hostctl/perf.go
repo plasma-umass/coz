@@ -11,7 +11,7 @@ import (
 )
 
 // perf_event_attr 구조체 (커널 헤더 기준)
-type PerfEventAttr struct {
+type PerfEventAttr112 struct {
     Type               uint32
     Size               uint32
     Config             uint64
@@ -32,7 +32,7 @@ type PerfEventAttr struct {
     Aux_watermark      uint32
     Reserved2          uint32
     Flags              uint64
-}
+} // 총 112바이트 (커널 기준)
 
 // perf constants
 const (
@@ -45,7 +45,7 @@ const (
 )
 
 // syscall wrapper
-func perfEventOpen(attr *PerfEventAttr, pid, cpu, groupFd int, flags uintptr) (int, error) {
+func perfEventOpen(attr *PerfEventAttr112, pid, cpu, groupFd int, flags uintptr) (int, error) {
     r0, _, e1 := syscall.Syscall6(syscall.SYS_PERF_EVENT_OPEN,
         uintptr(unsafe.Pointer(attr)), uintptr(pid), uintptr(cpu), uintptr(groupFd), flags, 0)
     if e1 != 0 {
@@ -56,17 +56,22 @@ func perfEventOpen(attr *PerfEventAttr, pid, cpu, groupFd int, flags uintptr) (i
 
 // 🔥 샘플링 이벤트 발생 시 → delay 주입
 func perfSamplerSync(cgFd int, period time.Duration, delta float64, others []*cgroup, mode string) {
-	attr := &PerfEventAttr{
+	attr := &PerfEventAttr112{
 		Type:   PERF_TYPE_SOFTWARE,
 		Config: PERF_COUNT_SW_TASK_CLOCK,
 		Flags:  PERF_ATTR_FLAG_DISABLED,
 	}
-	attr.Size = uint32(unsafe.Offsetof(attr.Flags) + unsafe.Sizeof(attr.Flags))
+	attr.Size = uint32(unsafe.Sizeof(*attr)) // 이제 괜찮음, 정확히 112
+	
+	// 정확한 크기만 전달
+	// safeSize := uint32(unsafe.Offsetof(attr.Flags) + unsafe.Sizeof(attr.Flags))
+	// log.Printf("safeSize for attr: %d", safeSize)
+	attr.Size = 112
 
-	log.Printf("perfeventattr: %+v\n", attr)
+	log.Printf("PerfEventAttr112: %+v\n", attr)
 
-	cpu := 0 // 또는 다른 특정 CPU
-	fd, err := perfEventOpen(attr, -1, cpu, -1, PERF_FLAG_PID_CGROUP|PERF_FLAG_FD_CLOEXEC)
+	// cpu := 0 // 또는 다른 특정 CPU
+	fd, err := perfEventOpen((*PerfEventAttr112)(unsafe.Pointer(attr)), -1, 0, -1, PERF_FLAG_PID_CGROUP|PERF_FLAG_FD_CLOEXEC)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "perf open failed: %v\n", err)
 		return
