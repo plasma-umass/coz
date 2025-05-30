@@ -4643,7 +4643,7 @@ int main(int argc, char* argv[])
 	} /* for */
 
 	// Terminate signal handler thread sending SIGQUIT signal
-	ret = pthread_kill(SignalHandlerThread, SIG_HANDLER_QUIT_SIGNAL);
+	ret = (SignalHandlerThread, SIG_HANDLER_QUIT_SIGNAL);
 	if (ret != 0)
 	{
 		fprintf(stderr, "Couldn't signal signal QUIT to SignalHandlerThread [%d]. Quitting prematurely!\n", ret);

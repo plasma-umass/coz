@@ -40,6 +40,9 @@ static size_t get_time() {
 #endif
 }
 
+// yunni: 기존 COZ는 nanosleep을 통해서 재움
+// container-mode delay
+
 static inline size_t wait(size_t ns) {
   if(ns == 0) return 0;
 
@@ -52,6 +55,7 @@ static inline size_t wait(size_t ns) {
 
   return get_time() - start_time;
 }
+
 
 static inline std::vector<std::string> split(const std::string& s, char delim='\t') {
   std::vector<std::string> elems;
