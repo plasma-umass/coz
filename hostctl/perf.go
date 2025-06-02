@@ -56,7 +56,7 @@ func perfEventOpen(attr *PerfEventAttr112, pid, cpu, groupFd int, flags uintptr)
 
 // 🔥 샘플링 이벤트 발생 시 → delay 주입
 func perfSamplerSync(cgFd int, period time.Duration, delta float64, others []*cgroup, mode string) {
-	
+	/*
 	// 이 버전은 그냥 "PERF_COUNT_SW_TASK_CLOCK"을 읽어서 누적 시간만 보고 있음
 	attr := &PerfEventAttr112{
 		Type:   PERF_TYPE_SOFTWARE,
@@ -79,6 +79,7 @@ func perfSamplerSync(cgFd int, period time.Duration, delta float64, others []*cg
 		return
 	}
 	defer syscall.Close(fd)
+	*/	
 
 	attr := &PerfEventAttr112{
 		Type:          0, // PERF_TYPE_HARDWARE
@@ -90,25 +91,45 @@ func perfSamplerSync(cgFd int, period time.Duration, delta float64, others []*cg
 	attr.Size = 112
 
 	log.Printf("PerfEventAttr112: %+v\n", attr)
-	fd, err := perfEventOpen(attr, -1, 0, -1, 0)
-	
 
 	// 이벤트 초기화 및 시작
-	syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), 0x2400, 0) // RESET
-	syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), 0x2401, 0) // ENABLE
+	if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), 0x2400 /* PERF_EVENT_IOC_RESET */, 0); err != 0 {
+		log.Printf("ioctl reset failed: %v\n", err)
+	}
+	if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), 0x2401 /* PERF_EVENT_IOC_ENABLE */, 0); err != 0 {
+		log.Printf("ioctl enable failed: %v\n", err)
+	}
 
-	fds := []syscall.PollFd{{Fd: int32(fd), Events: syscall.POLLIN}}
+	buf := make([]byte, 8)
 
 	for {
-		_, err := syscall.Poll(fds, 1000)
+		_, err := syscall.Read(fd, buf)
 		if err != nil {
-			log.Printf("poll error: %v", err)
+			log.Printf("read error: %v", err)
+			time.Sleep(time.Millisecond * 100) // fail-safe
 			continue
 		}
 
-		if fds[0].Revents&syscall.POLLIN != 0 {
-			log.Printf("🎯 컨테이너에서 작업 시작 감지됨!")
-			// delay 주기 또는 freeze 등 처리
+		usec := time.Duration(delta * float64(period.Nanoseconds()))
+
+		for _, cg := range others {
+			switch mode {
+			case "freezer":
+				_ = os.WriteFile(filepath.Join(cg.Path, "cgroup.freeze"), []byte{'1'}, 0644)
+			case "cpu-weight":
+				_ = os.WriteFile(filepath.Join(cg.Path, "cpu.weight"), []byte("1"), 0644)
+			}
+		}
+
+		time.Sleep(usec)
+
+		for _, cg := range others {
+			switch mode {
+			case "freezer":
+				_ = os.WriteFile(filepath.Join(cg.Path, "cgroup.freeze"), []byte{'0'}, 0644)
+			case "cpu-weight":
+				_ = os.WriteFile(filepath.Join(cg.Path, "cpu.weight"), []byte("100"), 0644)
+			}
 		}
 	}
 }
