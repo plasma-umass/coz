@@ -51,6 +51,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("cgroup FD 열기 실패: %v", err)
 	}
+    
 	cgFd := int(file.Fd())
 	log.Printf("cgroup FD : %d", cgFd)
 	
@@ -58,6 +59,7 @@ func main() {
     others := discoverOtherPods(tgt, *excludeNS)
 
     // perf 샘플러 실행 (blocking)
+    log.Printf("perfSamplerSync 호출 : perfSamplerSync(%d, %d, %f, %d, %s)", cgFd, *period, *speedup, others, *freezeMode)
     perfSamplerSync(cgFd, *period, *speedup, others, *freezeMode)
 }
 

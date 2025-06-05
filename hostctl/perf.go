@@ -1,17 +1,17 @@
 package main
 
 import (
-    "fmt"
-    "os"
-    "syscall"
+    "log"
     "time"
     "unsafe"
-    "path/filepath"
-	"log"
+    "golang.org/x/sys/unix"
+	"syscall"
+	"runtime"
 )
 
+
 // perf_event_attr 구조체 (커널 헤더 기준)
-type PerfEventAttr112 struct {
+type PerfEventAttr struct {
     Type               uint32
     Size               uint32
     Config             uint64
@@ -36,16 +36,20 @@ type PerfEventAttr112 struct {
 
 // perf constants
 const (
-    PERF_TYPE_SOFTWARE        = 1
-    PERF_COUNT_SW_TASK_CLOCK  = 1 // ✅ 여기로 변경
-    PERF_FLAG_PID_CGROUP      = 1 << 3
+	// 필요한 hw 이벤트 id
+    PERF_TYPE_HARDWARE        = 0
+    PERF_COUNT_HW_INSTRUCTIONS = 0
+    PERF_SAMPLE_IP = 1 << 0
+	// 필요한 flag
+    PERF_FLAG_PID_CGROUP      = 1 << 2
     PERF_FLAG_FD_CLOEXEC      = 1 << 3
+
     PERF_ATTR_FLAG_DISABLED       = 1 << 0
     PERF_ATTR_FLAG_ENABLE_ON_EXEC = 1 << 7
 )
 
 // syscall wrapper
-func perfEventOpen(attr *PerfEventAttr112, pid, cpu, groupFd int, flags uintptr) (int, error) {
+func perfEventOpen(attr *PerfEventAttr, pid, cpu, groupFd int, flags uintptr) (int, error) {
     r0, _, e1 := syscall.Syscall6(syscall.SYS_PERF_EVENT_OPEN,
         uintptr(unsafe.Pointer(attr)), uintptr(pid), uintptr(cpu), uintptr(groupFd), flags, 0)
     if e1 != 0 {
@@ -54,81 +58,60 @@ func perfEventOpen(attr *PerfEventAttr112, pid, cpu, groupFd int, flags uintptr)
     return int(r0), nil
 }
 
+func onlineCPUs() []int {
+	n := runtime.NumCPU()
+	cpus := make([]int, n)
+	for i := 0; i<n; i++ {
+		cpus[i] = i
+	}
+
+	log.Printf("# CPU = %d", len(cpus))
+	return cpus
+}
+
 // 🔥 샘플링 이벤트 발생 시 → delay 주입
 func perfSamplerSync(cgFd int, period time.Duration, delta float64, others []*cgroup, mode string) {
-	/*
-	// 이 버전은 그냥 "PERF_COUNT_SW_TASK_CLOCK"을 읽어서 누적 시간만 보고 있음
-	attr := &PerfEventAttr112{
-		Type:   PERF_TYPE_SOFTWARE,
-		Config: PERF_COUNT_SW_TASK_CLOCK,
-		Flags:  PERF_ATTR_FLAG_DISABLED,
-	}
-	attr.Size = uint32(unsafe.Sizeof(*attr)) // 이제 괜찮음, 정확히 112
-	
-	// 정확한 크기만 전달
-	// safeSize := uint32(unsafe.Offsetof(attr.Flags) + unsafe.Sizeof(attr.Flags))
-	// log.Printf("safeSize for attr: %d", safeSize)
-	attr.Size = 112
-
-	log.Printf("PerfEventAttr112: %+v\n", attr)
-
-	// cpu := 0 // 또는 다른 특정 CPU
-	fd, err := perfEventOpen((*PerfEventAttr112)(unsafe.Pointer(attr)), -1, 0, -1, PERF_FLAG_PID_CGROUP|PERF_FLAG_FD_CLOEXEC)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "perf open failed: %v\n", err)
-		return
-	}
-	defer syscall.Close(fd)
-	*/	
-
-	attr := &PerfEventAttr112{
-		Type:          0, // PERF_TYPE_HARDWARE
-		Config:        0, // PERF_COUNT_HW_INSTRUCTIONS
-		Sample_type:   1, // PERF_SAMPLE_IP
-		Sample_period: 100000, // 샘플 간격 (100k instructions 마다)
+	attr := &PerfEventAttr{
+		Type:          PERF_TYPE_HARDWARE,
+		Config:        PERF_COUNT_HW_INSTRUCTIONS,
+		Sample_period: 1000, // 100k instructions마다 샘플링
+		Sample_type:   PERF_SAMPLE_IP,
 		Flags:         PERF_ATTR_FLAG_DISABLED,
+		Wakeup_events: 1,
 	}
 	attr.Size = 112
 
-	log.Printf("PerfEventAttr112: %+v\n", attr)
+    log.Printf("PerfEventAttr: %+v\n", attr)
 
-	// 이벤트 초기화 및 시작
-	if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), 0x2400 /* PERF_EVENT_IOC_RESET */, 0); err != 0 {
-		log.Printf("ioctl reset failed: %v\n", err)
-	}
-	if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), 0x2401 /* PERF_EVENT_IOC_ENABLE */, 0); err != 0 {
-		log.Printf("ioctl enable failed: %v\n", err)
-	}
+	var pollFds []unix.PollFd
 
-	buf := make([]byte, 8)
+	// ******************************************************************** //
+	for _, cpu := range onlineCPUs() {
+		fd, err := perfEventOpen(attr, cgFd, cpu, -1, PERF_FLAG_PID_CGROUP|PERF_FLAG_FD_CLOEXEC)
+		if err != nil {
+			log.Fatalf("[%d] perfEventOpen failed: %v", cpu, err)
+		}
+		defer unix.Close(fd)
+
+		// 이벤트 초기화 및 시작
+		unix.IoctlSetInt(fd, unix.PERF_EVENT_IOC_RESET, 0)
+		unix.IoctlSetInt(fd, unix.PERF_EVENT_IOC_ENABLE, 0)
+
+		// fds := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
+		pollFds = append(pollFds, unix.PollFd{Fd: int32(fd), Events: unix.POLLIN})
+	}    
 
 	for {
-		_, err := syscall.Read(fd, buf)
+		_, err := unix.Poll(pollFds, 1000)
 		if err != nil {
-			log.Printf("read error: %v", err)
-			time.Sleep(time.Millisecond * 100) // fail-safe
+			log.Printf("poll error: %v", err)
 			continue
 		}
 
-		usec := time.Duration(delta * float64(period.Nanoseconds()))
-
-		for _, cg := range others {
-			switch mode {
-			case "freezer":
-				_ = os.WriteFile(filepath.Join(cg.Path, "cgroup.freeze"), []byte{'1'}, 0644)
-			case "cpu-weight":
-				_ = os.WriteFile(filepath.Join(cg.Path, "cpu.weight"), []byte("1"), 0644)
-			}
-		}
-
-		time.Sleep(usec)
-
-		for _, cg := range others {
-			switch mode {
-			case "freezer":
-				_ = os.WriteFile(filepath.Join(cg.Path, "cgroup.freeze"), []byte{'0'}, 0644)
-			case "cpu-weight":
-				_ = os.WriteFile(filepath.Join(cg.Path, "cpu.weight"), []byte("100"), 0644)
+		for i, pfd := range pollFds {
+			if pfd.Revents&unix.POLLIN != 0 {
+				log.Printf("cpu %d → 컨테이너 작업 감지!", i)
+				// To-do : 후처리 작업 연결
 			}
 		}
 	}
