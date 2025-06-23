@@ -83,6 +83,7 @@ func perfSamplerSync(cgFd int, period time.Duration, delta float64, others []*cg
 
     log.Printf("PerfEventAttr: %+v\n", attr)
 
+	// hi
 	var pollFds []unix.PollFd
 
 	// ******************************************************************** //
