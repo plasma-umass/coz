@@ -52,3 +52,4 @@ if(BUILD_BENCHMARKS)
     add_subdirectory(benchmarks)
 endif()
 
+add_subdirectory(hostctl_cpp)
