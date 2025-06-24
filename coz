@@ -79,12 +79,54 @@ def _coz_container_run(args):
 
     # 2. hostctl 바이너리 찾기
     coz_prefix = dirname(realpath(sys.argv[0]))
-    hostctl_bin = os.path.join(coz_prefix, 'hostctl', 'hostctl')
-    if not os.path.exists(hostctl_bin):
-        sys.stderr.write(f'error: hostctl binary not found at {hostctl_bin}\n')
+    # hostctl_bin = os.path.join(coz_prefix, 'hostctl', 'hostctl')
+    # if not os.path.exists(hostctl_bin):
+        # sys.stderr.write(f'error: hostctl binary not found at {hostctl_bin}\n')
+    candidate_bins = [
+        os.path.join(coz_prefix, 'hostctl_cpp', 'hostctl_cpp'),
+        # os.path.join(coz_prefix, 'hostctl', 'hostctl'),
+    ]
+
+    hostctl_bin = None
+    for b in candidate_bins:
+        if os.path.exists(b):
+            hostctl_bin = b
+            break
+
+    if not hostctl_bin:
+        sys.stderr.write('error: hostctl binary not found\n')
         sys.exit(1)
 
-    # 3. hostctl 실행 커맨드 생성
+    ## 3. library 찾기
+    library_locations = [
+      # Check for library adjacent to this script
+      os.path.join(coz_prefix, '..', 'lib64', 'libcoz.so'),
+      os.path.join(coz_prefix, '..', 'lib', 'libcoz.so'),
+
+      # Check for library under the coz-profiler subdirectory
+      os.path.join(coz_prefix, '..', 'lib64', 'coz-profiler', 'libcoz.so'),
+      os.path.join(coz_prefix, '..', 'lib', 'coz-profiler', 'libcoz.so'),
+
+      # Local library under development directory
+      os.path.join('libcoz', 'libcoz.so'),      # Local library during development
+      os.path.join(coz_prefix, 'libcoz', 'libcoz.so'),
+      os.path.join(coz_prefix, 'build', 'libcoz', 'libcoz.so'),
+    ]
+    coz_runtime = None
+    for loc in library_locations:
+       if os.path.exists(loc):
+          coz_runtime = loc
+          break
+    
+    # 4. 환경 변수에 LD_PRELOAD 설정
+    env = copy.deepcopy(os.environ)
+    if coz_runtime:
+      if 'LD_PRELOAD' in env:
+        env['LD_PRELOAD'] += ':' + coz_runtime
+      else:
+        env['LD_PRELOAD'] = coz_runtime
+
+    # 4. hostctl 실행 커맨드 생성
     cmd = [hostctl_bin, ## hostctl 바이너리파일 실행 (with argument)
            '--period', args.period,
            '--speedup', str(args.speedup),

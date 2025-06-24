@@ -13,5 +13,4 @@ struct cgroup {
 
 int perf_sampler_sync(int cg_fd, std::chrono::milliseconds period, double delta,
                       const std::vector<cgroup>& others, const std::string& mode);
-
 #endif

@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC   -shared  -o libcoz.so CMakeFiles/coz.dir/inspect.cpp.o CMakeFiles/coz.dir/libcoz.cpp.o CMakeFiles/coz.dir/perf.cpp.o CMakeFiles/coz.dir/profiler.cpp.o CMakeFiles/coz.dir/real.cpp.o  -ldl -lrt -lpthread -ldwarf++ -L/usr/local/lib -lelf++ 

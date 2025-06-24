@@ -38,7 +38,14 @@ static cgroup resolve_target_cgroup(const std::string& target_pod) {
     const std::string prefix = "containerd://";
     if(cid.rfind(prefix,0)==0) cid = cid.substr(prefix.size());
 
-    std::string root = "/sys/fs/cgroup/unified/kubepods.slice";
+    // 중요
+    // cgroup mount가 어떻게 되어있느냐에 따라 다름
+    // 만약 /sys/fs/cgroup/ 하위에 perf_event가 있다면 거기로, 아니라면 unified로 
+    const char* base = (access("/sys/fs/cgroup/perf_event", F_OK) == 0)
+                        ? "/sys/fs/cgroup/perf_event"
+                        : "/sys/fs/cgroup/unified";
+
+    std::string root = std::string(base) + "/kubepods.slice";
     std::string needle = "cri-containerd-" + cid + ".scope";
     std::string found;
     for(const auto& dir : std::filesystem::recursive_directory_iterator(root)) {
@@ -51,7 +58,7 @@ static cgroup resolve_target_cgroup(const std::string& target_pod) {
         throw std::runtime_error("cgroup path not found for cid="+cid);
     }
     cgroup cg{found, get_cgroup_id(found)};
-    std::cerr << "found cgroup id: " << cg.id << std::endl;
+    std::cout << "found cgroup id: " << cg.id << std::endl;
     return cg;
 }
 
@@ -70,11 +77,14 @@ static void inject_delay(const std::vector<cgroup>& others, uint64_t usec, const
 }
 
 static std::vector<cgroup> discover_other_pods(const cgroup& tgt, const std::string& exclude) {
+    std::cout << "In >> discover_other_pods" << std::endl;
     (void)tgt; (void)exclude; // placeholder
+    std::cout << "Out >> discover_other_pods" << std::endl;
     return {};
 }
 
 int main(int argc, char** argv) {
+    printf("In >> main\n");
     const char* target_pod = nullptr;
     const char* freeze_mode = "freezer";
     double speedup = 0.25;
@@ -104,18 +114,23 @@ int main(int argc, char** argv) {
     }
 
     try {
+        // 1. target pod의 cgroup을 찾기
         cgroup tgt = resolve_target_cgroup(target_pod);
-        int fd = open(tgt.path.c_str(), O_DIRECTORY);
-        if(fd < 0) {
+        std::cout << "target cgroup path : " << tgt.path << std::endl;
+        int cg_fd = open(tgt.path.c_str(), O_DIRECTORY);
+        if(cg_fd < 0) {
             perror("open cgroup");
             return 1;
         }
+        std::cout << "cg_fd : " << cg_fd << std::endl;
+        // 2. 다른 pod들을 관리하는 아이 만들기
         auto others = discover_other_pods(tgt, "");
-        perf_sampler_sync(fd, std::chrono::milliseconds(period_ms), speedup, others, freeze_mode);
+        // 3. perf_sampler_sync 적용 -> perf event open!!
+        // begin_sampling()을 그대로 따라해보자
+        perf_sampler_sync(cg_fd, std::chrono::milliseconds(period_ms), speedup, others, freeze_mode);
     } catch(const std::exception& e) {
         std::cerr << "error: " << e.what() << std::endl;
         return 1;
     }
     return 0;
 }
-

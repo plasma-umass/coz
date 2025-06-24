@@ -1,0 +1,1 @@
+/usr/bin/c++    -rdynamic CMakeFiles/hostctl_cpp.dir/main.o CMakeFiles/hostctl_cpp.dir/perf.o  -o hostctl_cpp  -lpthread 
