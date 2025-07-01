@@ -1,6 +1,6 @@
 file(REMOVE_RECURSE
-  "CMakeFiles/hostctl_cpp.dir/main.o"
-  "CMakeFiles/hostctl_cpp.dir/perf.o"
+  "CMakeFiles/hostctl_cpp.dir/main.cpp.o"
+  "CMakeFiles/hostctl_cpp.dir/perf.cpp.o"
   "hostctl_cpp"
   "hostctl_cpp.pdb"
 )

@@ -1,8 +1,29 @@
+cmake_minimum_required(VERSION 3.13)
+project(hostctl_cpp)
+
+# 1) C++17 활성화 ― Add_executable 전에 두는 편이 관례지만 기능상 차이는 없음
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# 2) 소스 목록
 add_executable(hostctl_cpp
     main.cpp
     perf.cpp
 )
 
-set_target_properties(hostctl_cpp PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
+# 3) pthread 찾기
+find_package(Threads REQUIRED)
 
-target_link_libraries(hostctl_cpp PRIVATE pthread)
+# 4) 필요한 라이브러리 연결
+target_link_libraries(hostctl_cpp
+    PRIVATE
+        Threads::Threads   # -lpthread
+        rt                 # -lrt (timer_create·timer_settime)
+)
+
+# 5) GCC 7 / 8 전용 <filesystem> 추가 아카이브
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
+    CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
+    target_link_libraries(hostctl_cpp PRIVATE stdc++fs)
+endif()
+

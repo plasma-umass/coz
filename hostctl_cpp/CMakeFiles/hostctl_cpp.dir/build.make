@@ -57,42 +57,42 @@ include CMakeFiles/hostctl_cpp.dir/progress.make
 # Include the compile flags for this target's objects.
 include CMakeFiles/hostctl_cpp.dir/flags.make
 
-CMakeFiles/hostctl_cpp.dir/main.o: CMakeFiles/hostctl_cpp.dir/flags.make
-CMakeFiles/hostctl_cpp.dir/main.o: main.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/yunni/mcoz/mcoz/coz/hostctl_cpp/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/hostctl_cpp.dir/main.o"
-	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/hostctl_cpp.dir/main.o -c /home/yunni/mcoz/mcoz/coz/hostctl_cpp/main.cpp
+CMakeFiles/hostctl_cpp.dir/main.cpp.o: CMakeFiles/hostctl_cpp.dir/flags.make
+CMakeFiles/hostctl_cpp.dir/main.cpp.o: main.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/yunni/mcoz/mcoz/coz/hostctl_cpp/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/hostctl_cpp.dir/main.cpp.o"
+	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/hostctl_cpp.dir/main.cpp.o -c /home/yunni/mcoz/mcoz/coz/hostctl_cpp/main.cpp
 
-CMakeFiles/hostctl_cpp.dir/main.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/hostctl_cpp.dir/main.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/yunni/mcoz/mcoz/coz/hostctl_cpp/main.cpp > CMakeFiles/hostctl_cpp.dir/main.i
+CMakeFiles/hostctl_cpp.dir/main.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/hostctl_cpp.dir/main.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/yunni/mcoz/mcoz/coz/hostctl_cpp/main.cpp > CMakeFiles/hostctl_cpp.dir/main.cpp.i
 
-CMakeFiles/hostctl_cpp.dir/main.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/hostctl_cpp.dir/main.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/yunni/mcoz/mcoz/coz/hostctl_cpp/main.cpp -o CMakeFiles/hostctl_cpp.dir/main.s
+CMakeFiles/hostctl_cpp.dir/main.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/hostctl_cpp.dir/main.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/yunni/mcoz/mcoz/coz/hostctl_cpp/main.cpp -o CMakeFiles/hostctl_cpp.dir/main.cpp.s
 
-CMakeFiles/hostctl_cpp.dir/perf.o: CMakeFiles/hostctl_cpp.dir/flags.make
-CMakeFiles/hostctl_cpp.dir/perf.o: perf.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/yunni/mcoz/mcoz/coz/hostctl_cpp/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/hostctl_cpp.dir/perf.o"
-	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/hostctl_cpp.dir/perf.o -c /home/yunni/mcoz/mcoz/coz/hostctl_cpp/perf.cpp
+CMakeFiles/hostctl_cpp.dir/perf.cpp.o: CMakeFiles/hostctl_cpp.dir/flags.make
+CMakeFiles/hostctl_cpp.dir/perf.cpp.o: perf.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/yunni/mcoz/mcoz/coz/hostctl_cpp/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/hostctl_cpp.dir/perf.cpp.o"
+	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/hostctl_cpp.dir/perf.cpp.o -c /home/yunni/mcoz/mcoz/coz/hostctl_cpp/perf.cpp
 
-CMakeFiles/hostctl_cpp.dir/perf.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/hostctl_cpp.dir/perf.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/yunni/mcoz/mcoz/coz/hostctl_cpp/perf.cpp > CMakeFiles/hostctl_cpp.dir/perf.i
+CMakeFiles/hostctl_cpp.dir/perf.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/hostctl_cpp.dir/perf.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/yunni/mcoz/mcoz/coz/hostctl_cpp/perf.cpp > CMakeFiles/hostctl_cpp.dir/perf.cpp.i
 
-CMakeFiles/hostctl_cpp.dir/perf.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/hostctl_cpp.dir/perf.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/yunni/mcoz/mcoz/coz/hostctl_cpp/perf.cpp -o CMakeFiles/hostctl_cpp.dir/perf.s
+CMakeFiles/hostctl_cpp.dir/perf.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/hostctl_cpp.dir/perf.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/yunni/mcoz/mcoz/coz/hostctl_cpp/perf.cpp -o CMakeFiles/hostctl_cpp.dir/perf.cpp.s
 
 # Object files for target hostctl_cpp
 hostctl_cpp_OBJECTS = \
-"CMakeFiles/hostctl_cpp.dir/main.o" \
-"CMakeFiles/hostctl_cpp.dir/perf.o"
+"CMakeFiles/hostctl_cpp.dir/main.cpp.o" \
+"CMakeFiles/hostctl_cpp.dir/perf.cpp.o"
 
 # External object files for target hostctl_cpp
 hostctl_cpp_EXTERNAL_OBJECTS =
 
-hostctl_cpp: CMakeFiles/hostctl_cpp.dir/main.o
-hostctl_cpp: CMakeFiles/hostctl_cpp.dir/perf.o
+hostctl_cpp: CMakeFiles/hostctl_cpp.dir/main.cpp.o
+hostctl_cpp: CMakeFiles/hostctl_cpp.dir/perf.cpp.o
 hostctl_cpp: CMakeFiles/hostctl_cpp.dir/build.make
 hostctl_cpp: CMakeFiles/hostctl_cpp.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/yunni/mcoz/mcoz/coz/hostctl_cpp/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable hostctl_cpp"

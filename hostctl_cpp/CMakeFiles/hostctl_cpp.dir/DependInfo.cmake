@@ -4,8 +4,8 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "/home/yunni/mcoz/mcoz/coz/hostctl_cpp/main.cpp" "/home/yunni/mcoz/mcoz/coz/hostctl_cpp/CMakeFiles/hostctl_cpp.dir/main.o"
-  "/home/yunni/mcoz/mcoz/coz/hostctl_cpp/perf.cpp" "/home/yunni/mcoz/mcoz/coz/hostctl_cpp/CMakeFiles/hostctl_cpp.dir/perf.o"
+  "/home/yunni/mcoz/mcoz/coz/hostctl_cpp/main.cpp" "/home/yunni/mcoz/mcoz/coz/hostctl_cpp/CMakeFiles/hostctl_cpp.dir/main.cpp.o"
+  "/home/yunni/mcoz/mcoz/coz/hostctl_cpp/perf.cpp" "/home/yunni/mcoz/mcoz/coz/hostctl_cpp/CMakeFiles/hostctl_cpp.dir/perf.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "GNU")
 

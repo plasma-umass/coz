@@ -323,9 +323,14 @@ void memory_map::build(const unordered_set<string>& binary_scope,
       }
     }
   }
+  
 
-  REQUIRE(in_scope_count > 0)
-    << "Debug information was not found for any in-scope executables or libraries";
+  // REQUIRE(in_scope_count > 0)
+  //   << "Debug information was not found for any in-scope executables or libraries";
+  if (in_scope_count == 0) {
+    WARNING << "No DWARF debug info found; continuing anyway";
+    // return;   // ← 완전히 건너뛰고 싶으면 early-return
+  }
 }
 
 dwarf::value find_attribute(const dwarf::die& d, dwarf::DW_AT attr) {

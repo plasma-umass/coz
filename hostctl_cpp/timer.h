@@ -4,15 +4,17 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <signal.h>
+#include <stdio.h>
 
 #include "log.h"
-
 
 class timer {
 public:
   timer() : _initialized(false) {}
   
   timer(int sig) {
+    std::cout << "In >> timer" << std::endl;
     struct sigevent ev;
     memset(&ev, 0, sizeof(ev));
     ev.sigev_notify = SIGEV_THREAD_ID;
@@ -23,6 +25,8 @@ public:
         << "Failed to create timer!";
     
     _initialized = true;
+    std::cout << "Out >> timer" << std::endl;
+
   }
   
   timer(timer&& other) {
@@ -44,6 +48,7 @@ public:
   }
   
   void start_interval(size_t time_ns) {
+    std::cout << "In >> start_interval" << std::endl;    
     ASSERT(_initialized) << "Can't start an uninitialized timer";
     
     long ns = time_ns % 1000000000;
@@ -59,6 +64,8 @@ public:
     REQUIRE(timer_settime(_timer, 0, &ts, NULL) == 0) << "Failed to start interval timer";
     
     _initialized = true;
+    std::cout << "Out >> start_interval" << std::endl;   
+
   }
   
   void start_oneshot(size_t time_ns) {

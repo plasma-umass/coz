@@ -123,35 +123,59 @@ hostctl_cpp/fast:
 	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/build
 .PHONY : hostctl_cpp/fast
 
-# target to build an object file
-main.o:
-	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/main.o
+main.o: main.cpp.o
+
 .PHONY : main.o
 
-# target to preprocess a source file
-main.i:
-	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/main.i
+# target to build an object file
+main.cpp.o:
+	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/main.cpp.o
+.PHONY : main.cpp.o
+
+main.i: main.cpp.i
+
 .PHONY : main.i
 
-# target to generate assembly for a file
-main.s:
-	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/main.s
+# target to preprocess a source file
+main.cpp.i:
+	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/main.cpp.i
+.PHONY : main.cpp.i
+
+main.s: main.cpp.s
+
 .PHONY : main.s
 
-# target to build an object file
-perf.o:
-	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/perf.o
+# target to generate assembly for a file
+main.cpp.s:
+	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/main.cpp.s
+.PHONY : main.cpp.s
+
+perf.o: perf.cpp.o
+
 .PHONY : perf.o
 
-# target to preprocess a source file
-perf.i:
-	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/perf.i
+# target to build an object file
+perf.cpp.o:
+	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/perf.cpp.o
+.PHONY : perf.cpp.o
+
+perf.i: perf.cpp.i
+
 .PHONY : perf.i
 
-# target to generate assembly for a file
-perf.s:
-	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/perf.s
+# target to preprocess a source file
+perf.cpp.i:
+	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/perf.cpp.i
+.PHONY : perf.cpp.i
+
+perf.s: perf.cpp.s
+
 .PHONY : perf.s
+
+# target to generate assembly for a file
+perf.cpp.s:
+	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/perf.cpp.s
+.PHONY : perf.cpp.s
 
 # Help Target
 help:
