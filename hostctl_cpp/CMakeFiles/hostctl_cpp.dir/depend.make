@@ -4,8 +4,6 @@
 CMakeFiles/hostctl_cpp.dir/main.cpp.o: main.cpp
 CMakeFiles/hostctl_cpp.dir/main.cpp.o: perf.h
 
-CMakeFiles/hostctl_cpp.dir/perf.cpp.o: log.h
 CMakeFiles/hostctl_cpp.dir/perf.cpp.o: perf.cpp
 CMakeFiles/hostctl_cpp.dir/perf.cpp.o: perf.h
-CMakeFiles/hostctl_cpp.dir/perf.cpp.o: timer.h
 

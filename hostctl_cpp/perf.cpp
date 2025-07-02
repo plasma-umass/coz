@@ -1,290 +1,243 @@
+// perf.cpp – signal-mode with verbose debug
 #include "perf.h"
-#include "timer.h"
-#include "log.h"
 
 #include <sys/syscall.h>
 #include <sys/ioctl.h>
-#include <sys/poll.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <stdio.h>
-#include <string.h>
-#include <vector>
-#include <iostream>
-#include <chrono>
-#include <linux/perf_event.h>
-#include <errno.h>
-#include <atomic>
 #include <signal.h>
+#include <linux/perf_event.h>
+#include <chrono>
+#include <vector>
+#include <atomic>
+#include <iostream>
+#include <cstring>
+#include <sys/time.h>
 
-static std::vector<int>  g_fds;          // CPU별 카운터 FD
-static std::atomic<bool> g_running{true};
-static std::atomic<bool> container_live{false};
+/* ──────────────── global state ──────────────── */
+static std::vector<int>  g_fds;                 // CPU별 perf FD
+static std::atomic<bool> g_running   {true};
+static std::atomic<bool> g_paused    {false};
+static std::atomic<uint64_t> g_lastNs{0};       // 마지막 활동 시각(ns)
+static int kSigRT = -1;                         // SIGNAL 초기 dummy 값
+static struct sigaction sa_alrm;                // freeze-unfreeze alarm용
 
-// gpt 
-/* --- cgroup 정보 --- */
-struct cg_info {
-    std::string path;            // "/sys/fs/cgroup/.../kubepods.slice/pod<uid>"
-    int freeze_fd;               // path + "/cgroup.freeze" (O_WRONLY)
-};
+constexpr uint64_t kIdleWindowNs = 2'000'000;   // 2 ms
 
-static std::vector<cg_info> g_victims;            // pause 대상 Pod 목록
-static std::atomic<bool>    g_victims_paused{false};
-static std::atomic<uint64_t>g_last_activity_ns{0}; // CLOCK_MONOTONIC ns
-constexpr uint64_t kIdleWindowNs = 2'000'000;      // 2 ms
+struct cg_info { std::string path; int fd; };
+static std::vector<cg_info> g_victims;
+static bool is_cgv2 = (access("/sys/fs/cgroup/cgroup.controllers",F_OK)==0);
 
-enum {
-  SampleSignal = SIGPROF,
-  SamplePeriod = 1000000,
-  SampleBatchSize = 10
-};
-
-typedef struct perf_event_attr perf_event_attr;
-
-// syscall wrapper for perf_event_open
-// 올바른 인자 for cgroup
-// pid : cgroup 디렉터리 FD
-// cpu 인자 : 0,1,2 ...
-// group_fd : -1 (단일이벤트), 리더 FD (그룹화 이벤트)
-// flags : PERF_FLAG_PID_CGROUP (이걸 통해 커널이 pid를 cgroup FD로 해석)
-static long perf_event_open(struct perf_event_attr *attr,
-                             int pid, int cpu, int group_fd, unsigned long flags) {
-    std::cout << "   >> perf_event_open : pid=" << pid << " cpu=" << cpu << " groupd_fd=" << group_fd << std::endl;
-    return syscall(__NR_perf_event_open, attr, pid, cpu, group_fd, flags);
+static long perf_event_open(struct perf_event_attr* attr,int pid,int cpu,int grp,unsigned long flags){
+    long r=syscall(__NR_perf_event_open,attr,pid,cpu,grp,flags);
+    if(r==-1) perror("perf_event_open");
+    else      std::cerr << "[DBG] perf_event_open ok cpu="<<cpu<<" fd="<<r<<"\n";
+    return r;
 }
 
-bool is_cgv2 = (access("/sys/fs/cgroup/cgroup.controllers", F_OK) == 0);
+static std::vector<int> online_cpus(){
+    int n=sysconf(_SC_NPROCESSORS_ONLN); std::vector<int> v; for(int i=0;i<n;++i) v.push_back(i);
+    std::cerr << "[DBG] online cpu cnt="<<v.size()<<"\n"; return v; }
 
-// gpt : 해당 경로에 있는 모든 container들
-void init_victims(const std::vector<cgroup>& others)
+
+
+/* ───────────── helper: 현재 상태 문자열 얻기 ───────────── */
+static std::string read_cg_state(const std::string& cg_path)
 {
-    const char* freezer_root_v1 = "/sys/fs/cgroup/freezer";
-    const std::string perf_prefix = "/sys/fs/cgroup/perf_event";   // 정확한 접두사
-
-    for (auto& cg : others) {
-        std::string path = cg.path;
-
-        /* v1 노드라면 perf_event → freezer 계층으로 접두사 교체 */
-        if (!is_cgv2 &&
-            path.compare(0, perf_prefix.size(), perf_prefix) == 0)
-        {
-            path.replace(0, perf_prefix.size(), freezer_root_v1);
-        }
-
-        /* freeze 파일 결정 */
-        std::string ctrl_file =
-            is_cgv2 ? (path + "/cgroup.freeze")
-                    : (path + "/freezer.state");
-
-        int fd = open(ctrl_file.c_str(), O_WRONLY);
-        if (fd < 0) {
-            std::cout << "path | " << ctrl_file << '\n';
-            perror("open freeze");
-            continue;
-        }
-        g_victims.push_back({path, fd});
-    }
+    std::string ctrl = is_cgv2 ? cg_path + "/cgroup.freeze"
+                               : cg_path + "/freezer.state";
+    char buf[32] = {};
+    int fd = open(ctrl.c_str(), O_RDONLY);
+    if (fd < 0) { perror("open state"); return "?"; }
+    ssize_t n = read(fd, buf, sizeof(buf)-1);
+    close(fd);
+    if (n < 0) { perror("read state"); return "?"; }
+    // v1 은 "FROZEN\n"·"THAWED\n", v2 는 "0\n"·"1\n"
+    if (is_cgv2) return (buf[0] == '1') ? "FROZEN" : "THAWED";
+    return std::string(buf, strcspn(buf, "\n"));   // 줄바꿈 제거
 }
 
-inline void freeze(int fd)  {
-    std::cout << "freeze!! | " << fd << std::endl;
-    if (is_cgv2) write(fd, "1", 1);          // v2
-    else         write(fd, "FROZEN", 6);     // v1
+
+/* ───────────── helper: fd → path 매핑 찾아 로그 ───────── */
+static void log_state_by_fd(int fd)
+{
+    for (const auto& v : g_victims)
+        if (v.fd == fd) {
+            std::cerr << "   [DBG] state now = "
+                      << read_cg_state(v.path) << '\n';
+            return;
+        }
 }
+
+
+/* ───────────── util: freeze / unfreeze ───────────── */
+inline void freeze(int fd){
+    std::cerr << "     >> freeze fd=" << fd << '\n';
+    if (is_cgv2) write(fd, "1", 1); else write(fd, "FROZEN", 6);
+    // log_state_by_fd(fd);                  // ★ 상태 표시
+}
+
 inline void unfreeze(int fd){
-    std::cout << "un-freeze!! | " << fd << std::endl;
-    if (is_cgv2) write(fd, "0", 1);          // v2
-    else         write(fd, "THAWED", 6);     // v1
+    std::cerr << "     >> unfreeze fd=" << fd << '\n';
+    if (is_cgv2) write(fd, "0", 1); else write(fd, "THAWED", 6);
+    // log_state_by_fd(fd);                  // ★ 상태 표시
 }
 
-// gpt : signal handler
-static void sigprof_handler(int, siginfo_t*, void*) {
-    if (!container_live.load(std::memory_order_relaxed)) {
-        container_live.store(true, std::memory_order_relaxed);
-        /* 여기서 원하는 액션 수행: 로그, 다른 스레드 깨우기 등 */
+
+/* ─────────────── signal handler ─────────────── */
+// unfreeze용 SIGALRM 핸들러
+static void sigalrm_handler(int) {
+    for (auto& v : g_victims) unfreeze(v.fd);
+    g_paused.store(false, std::memory_order_relaxed);
+}
+
+// 초기화 시점 (perf_sampler_sync 시작부나 main() 직후에)
+void setup_unfreeze_timer() {
+    // 1) SIGALRM 핸들러 등록
+    sa_alrm = {};
+    sa_alrm.sa_handler = sigalrm_handler;
+    sigemptyset(&sa_alrm.sa_mask);
+    sa_alrm.sa_flags = 0;
+    sigaction(SIGALRM, &sa_alrm, nullptr);
+}
+
+static void sig_handler(int, siginfo_t* info, void*){
+    int fd=info? info->si_fd : -1;
+    uint64_t val; if(fd>=0) read(fd,&val,8);
+
+    char buf[64];
+    int n = snprintf(buf, sizeof(buf), "[SIG] Signal from %d\n", fd);
+    write(STDERR_FILENO, buf, n);
+
+    uint64_t now=std::chrono::duration_cast<std::chrono::nanoseconds>(
+                   std::chrono::steady_clock::now().time_since_epoch()).count();
+    g_lastNs.store(now,std::memory_order_relaxed);
+
+    /* 로직변경
+    if(!g_paused.exchange(true)){
+        // std::cerr << "[ACT] victims pause\n";
+        for(auto& v:g_victims) freeze(v.fd);
     }
-    /* 필요하면 read(fd,&val,8) 로 카운터 리셋 */
-    uint64_t dummy;
-    for (int fd : g_fds){
-        read(fd, &dummy, sizeof(dummy));
+    if(fd>=0) ioctl(fd,PERF_EVENT_IOC_REFRESH,1);
+    */
+
+    // 1. freeze
+    if (!g_paused.exchange(true)) {
+        for (auto& v : g_victims) freeze(v.fd);
     }
+
+    // 2) 0.1 ms 후에 SIGALRM 발생하도록 타이머 설정
+    itimerval tv{};
+    tv.it_value.tv_sec  = 0;
+    tv.it_value.tv_usec = 100;   // 100 µs = 0.1 ms
+    setitimer(ITIMER_REAL, &tv, nullptr);
+
 }
 
-// Get list of online CPUs
-static std::vector<int> online_cpus() {
-    int n = sysconf(_SC_NPROCESSORS_ONLN);
-    std::vector<int> cpus;
-    for(int i = 0; i < n; i++) cpus.push_back(i);
-    std::cerr << "# CPUs detected: " << cpus.size() << std::endl;
-    return cpus;
-}
 
-// Sample perf events for a cgroup on the first online CPU
-// sampler를 초기화하는 로직
-int perf_sampler_sync(int cg_fd,
-                      std::chrono::milliseconds period,
-                      double delta,
-                      const std::vector<cgroup>& others,
-                      const std::string& mode) {
-    (void)delta; (void)others; (void)mode;
+/* ───────────── sampler entry ───────────── */
+int perf_sampler_sync(int cg_fd,std::chrono::milliseconds /*period*/,double /*delta*/,
+                      const std::vector<cgroup>& others,const std::string& /*mode*/){
+    std::cerr << "[INFO] sampler start\n";
 
-    std::cout << "In >> perf_sampler_sync" << std::endl;
-    // Configure perf_event_attr for SW task-clock
-    perf_event_attr pe;
-    memset(&pe, 0, sizeof(pe));
-    pe.type           = PERF_TYPE_SOFTWARE;
-    pe.size           = sizeof(pe);
-    pe.config         = PERF_COUNT_SW_TASK_CLOCK;
-    // pe.disabled       = 1;
-    pe.exclude_kernel = 1;
-    pe.exclude_idle   = 1;
-    // pe.sample_period  = period.count() * 1000000ULL; // ms -> ns
-    pe.disabled       = 0;
-    pe.sample_period  = 1000;
-    pe.sample_type    = 0;
-    pe.inherit        = 1;
-    pe.wakeup_events  = 10; // 0.5s 마다 링버퍼 비우기
-    std::cout << "   >> perf_sampler_sync : attr 설정 완료" << std::endl;
+    setup_unfreeze_timer();
+
+    /* SIGPROF 언블록: 함수 맨 첫 줄에 추가 */
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, kSigRT);
+    sigaddset(&set, SIGALRM);
+    pthread_sigmask(SIG_UNBLOCK, &set, nullptr);
+
+    /* victims 초기화 */
+    const char* root_v1="/sys/fs/cgroup/freezer";
+    const std::string perf_prefix="/sys/fs/cgroup/perf_event";
+    for(auto& cg:others){
+        std::string path=cg.path;
+        if(!is_cgv2 && path.rfind(perf_prefix,0)==0)
+            path.replace(0,perf_prefix.size(),root_v1);
+        std::string ctrl=is_cgv2?path+"/cgroup.freeze":path+"/freezer.state";
+        int fd=open(ctrl.c_str(),O_WRONLY);
+        if(fd<0){perror("open freeze");continue;}
+        g_victims.push_back({path,fd});
+        std::cerr << "[DBG] victim added "<<ctrl<<" fd="<<fd<<"\n";
+    }
+
+    /* perf attr */
+    perf_event_attr pe{}; pe.size=sizeof(pe);
+    pe.type=PERF_TYPE_SOFTWARE; 
+    pe.config=PERF_COUNT_SW_TASK_CLOCK;
+    pe.sample_period = 10'000'000;                 // ★ 1 ms
+    pe.sample_type   = PERF_SAMPLE_IDENTIFIER;  // ★ 한 비트 ON
+    pe.wakeup_events=1; 
+    pe.inherit=1;    
+
+    if (kSigRT == -1) kSigRT = SIGRTMIN + 3;
+
+    auto cpus=online_cpus();
+    for(int cpu:cpus){
+        int fd=perf_event_open(&pe,cg_fd,cpu,-1,PERF_FLAG_PID_CGROUP|PERF_FLAG_FD_CLOEXEC);
+        if(fd<0) continue;
+
+        if (fcntl(fd, F_SETOWN, getpid()) == -1) perror("F_SETOWN");
+        if (fcntl(fd, F_SETSIG, kSigRT) == -1) perror("F_SETSIG"); 
+        int fl = fcntl(fd, F_GETFL,0);
+        if (fcntl(fd, F_SETFL, fl | O_NONBLOCK | O_ASYNC) == -1) perror("F_SETFL");
 
 
-    /* 2. perf_event() */
-    auto cpus = online_cpus();
-    std::vector<pollfd> pfds;
-
-    g_fds.reserve(cpus.size());
-    for (int cpu : cpus) { // 기본 COZ는 -1
-        int fd = (int)perf_event_open(&pe,
-                                      /*pid      =*/ cg_fd,
-                                      /*cpu      =*/ cpu,
-                                      /*group_fd =*/ -1,
-                                      PERF_FLAG_PID_CGROUP | PERF_FLAG_FD_CLOEXEC);
-        if (fd == -1) {
-            perror("perf_event_open");
-            continue;                      // 실패한 CPU는 건너뜀
-        }
-
-        fcntl(fd, F_SETFL,  fcntl(fd, F_GETFL, 0) | O_ASYNC); // 기존 로직 따라해보기
-        fcntl(fd, F_SETSIG, SampleSignal);     // SIGPROF
-        fcntl(fd, F_SETOWN, getpid());         // 시그널을 받을 PID
-        // ioctl(fd, PERF_EVENT_IOC_RESET,  0); 
-        // Start counting events
-        ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
+        // ioctl(fd,PERF_EVENT_IOC_REFRESH,1); 
+        ioctl(fd,PERF_EVENT_IOC_ENABLE,0);
+        
         g_fds.push_back(fd);
-        pfds.push_back({fd, POLLIN, 0});   // ← poll()용 엔트리 추가
+        
+        std::cerr << "[DBG] set O_ASYNC owner="<<gettid()
+          <<" fcntl="<<std::hex<<fcntl(fd,F_GETFL)<<std::dec<<"\n";
+  
     }
+    if(g_fds.empty()) return -1;
 
-    if (g_fds.empty()) {
-        std::cerr << "No perf events opened\n";
-        return -1;
-    }
+    /* signal handler 등록 (perf용 RT 시그널) */
+    struct sigaction sa{};
+    sa.sa_sigaction = sig_handler;
+    sa.sa_flags     = SA_SIGINFO;
+    sigemptyset(&sa.sa_mask);
+    sigaction(kSigRT, &sa, nullptr);
 
-    /* 3. SIGPROF 핸들러 등록 -> 대신 poll로 바꾸자.. */
-    // struct sigaction sa{};
-    // sa.sa_sigaction = sigprof_handler;
-    // sa.sa_flags     = SA_SIGINFO;
-    // sigaction(SampleSignal, &sa, nullptr);
+    /* 종료 handler 등록 (Ctrl+C) */
+    struct sigaction sa_int{};
+    sa_int.sa_handler = sigint_handler;   // ← 이 줄이 필요
+    sa_int.sa_flags   = 0;                // 필요하면 SA_RESTART도 OK
+    sigemptyset(&sa_int.sa_mask);
+    sigaction(SIGINT, &sa_int, nullptr);
 
-    // /* 4. timer  */
-    // timer t = timer(SampleSignal);
+    // int rc = pthread_kill(pthread_self(), kSigRT);
+    // std::cerr << "[DBG] pthread_kill rc=" << rc << '\n';
 
-    // /* 5.  start_interval */
-    // t.start_interval(SamplePeriod * SampleBatchSize);
-
-    /* 6. main thread 무한 대기 (Ctrl-C로 종료) */
-    // while (g_running.load()) {
-    //     pause();
-    //     if (container_live.load()){
-    //         std::cout << "target run : found it !\n" << std::endl;
+    /* idle-loop -> handler에서 unfreeze 처리하니까 필요 X */
+    // while(g_running.load()){
+    //     usleep(500*1000);
+    //     uint64_t last=g_lastNs.load(std::memory_order_relaxed);
+    //     uint64_t now = std::chrono::duration_cast<std::chrono::nanoseconds>(
+    //                      std::chrono::steady_clock::now().time_since_epoch()).count();
+    //     if(g_paused && now-last>=kIdleWindowNs){
+    //         std::cerr << "[ACT] victims resume\n";
+    //         for(auto& v:g_victims) unfreeze(v.fd);
+    //         g_paused=false;
     //     }
-    // } -> poll로 해보기
-    while (g_running.load()) {
-        int ret = poll(pfds.data(), pfds.size(), -1);   // 무한 대기
-        if (ret < 0) {
-            if (errno == EINTR) continue;
-            perror("poll"); break;
-        }
+    // }
+    while (g_running.load()) pause();   // 또는 epoll/condvar 등으로 대체
 
-        for (size_t i = 0; i < pfds.size(); ++i) {
-            if (pfds[i].revents & POLLIN) {
-
-                /* 1) 타깃 Pod이 방금 CPU를 썼다 = 활동 감지 */
-                uint64_t now = std::chrono::duration_cast<
-                                std::chrono::nanoseconds>(
-                                std::chrono::steady_clock::now().time_since_epoch()
-                            ).count();
-                g_last_activity_ns.store(now, std::memory_order_relaxed);
-
-                /* 2) 아직 냉동 안 돼 있으면 즉시 pause */
-                if (!g_victims_paused.exchange(true)) {
-                    for (auto& v : g_victims) freeze(v.freeze_fd);
-                    std::cout << "==> victims PAUSED (Pod activity detected)" << std::endl;
-                }
-
-                /* 3) 카운터 리셋 */
-                uint64_t dummy;
-                read(pfds[i].fd, &dummy, sizeof(dummy));
-            }
-
-            uint64_t last = g_last_activity_ns.load(std::memory_order_relaxed);
-            uint64_t now  = std::chrono::duration_cast<
-                            std::chrono::nanoseconds>(
-                            std::chrono::steady_clock::now().time_since_epoch()
-                            ).count();
-
-            if (g_victims_paused && now - last >= kIdleWindowNs) {
-                for (auto& v : g_victims) unfreeze(v.freeze_fd);
-                g_victims_paused = false;
-                std::cout << "==> victims RESUMED (Pod idle)" << std::endl;
-            }
-        }
-
-        /* 한 번만 감지하고 끝내고 싶으면:
-        if (container_live) break; */
-    }
-
-    return 0;
+    cleanup();
     
-
-    // /* 3. 무한(또는 원하는 시간) 폴링 루프 */
-    // std::cout << "Start polling … (Ctrl-C to quit)\n";
-    // while (true) {
-    //     int ret = poll(pfds.data(), pfds.size(), 1000); // 1 초 타임아웃
-    //     if (ret < 0) {
-    //         if (errno == EINTR) continue; // 시그널로 깼으면 재시도
-    //         perror("poll");
-    //         break;
-    //     }
-    //     if (ret == 0) continue;           // 타임아웃
-
-    //     for (size_t i = 0; i < pfds.size(); ++i) {
-    //         if (pfds[i].revents & POLLIN) {
-    //             std::cerr << "cgroup activity on CPU "
-    //                       << cpus[i] << '\n';
-    //             /* 여기서 inject_delay(…) 등 후처리 가능 */
-    //             // 읽어서 revents 클리어
-    //             char buf[8];
-    //             read(pfds[i].fd, buf, sizeof(buf));
-    //         }
-    //     }
-    // }
-
-    // /* 4. 정리 */
-    // for (auto& p : pfds) {
-    //     ioctl(p.fd, PERF_EVENT_IOC_DISABLE, 0);
-    //     close(p.fd);
-    // }
-    // return 0;
-}
-
-void cleanup() {
-    if (g_victims_paused)           // 냉동된 채 종료 방지
-        for (auto& v : g_victims) unfreeze(v.freeze_fd);
-
-    for (auto& v : g_victims) close(v.freeze_fd);
-    for (int fd : g_fds) { ioctl(fd, PERF_EVENT_IOC_DISABLE, 0); close(fd); }
+    return 0;
 }
 
 
-void sigint_handler(int) {
-    g_running = false;          // perf.cpp 안의 static 변수 사용
-}
+/* ───────────── cleanup & sigint ───────────── */
+void cleanup(){
+    std::cerr << "[INFO] cleanup\n";
+    if(g_paused) for(auto& v:g_victims) unfreeze(v.fd);
+    for(auto& v:g_victims) close(v.fd);
+    for(int fd:g_fds){ ioctl(fd,PERF_EVENT_IOC_DISABLE,0); close(fd);} }
+
+void sigint_handler(int){ g_running=false; }

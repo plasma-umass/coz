@@ -99,7 +99,7 @@ discover_other_pods(const cgroup& tgt, const std::string& exclude /* 예: ns/pod
 {
     std::vector<cgroup> out;
     std::cout << "In >> discover_other_pods\n";
-    
+
     /* 1. kubectl 로 전체 Pod 목록 추출 */
     std::string cmd =
         "kubectl get pods --all-namespaces" +
@@ -157,6 +157,8 @@ discover_other_pods(const cgroup& tgt, const std::string& exclude /* 예: ns/pod
 
 int main(int argc, char** argv) {
     printf("In >> main\n");
+    std::cerr << "[DBG] my pid=" << getpid() << " tid=" << gettid() << '\n';
+
     const char* target_pod = nullptr;
     const char* freeze_mode = "freezer";
     double speedup = 0.25;
@@ -200,7 +202,6 @@ int main(int argc, char** argv) {
         std::cout << "cg_fd : " << cg_fd << std::endl;
         // 2. 다른 pod들을 관리하는 아이 만들기
         auto others = discover_other_pods(tgt, "");
-        init_victims(others);
         // 3. perf_sampler_sync 적용 -> perf event open!!
         // begin_sampling()을 그대로 따라해보자
         perf_sampler_sync(cg_fd, std::chrono::milliseconds(period_ms), speedup, others, freeze_mode);
