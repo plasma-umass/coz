@@ -126,7 +126,10 @@ static void sig_handler(int, siginfo_t* info, void*){
         for (auto& v : g_victims) freeze(v.fd);
     }
 
-    // 2) 0.1 ms 후에 SIGALRM 발생하도록 타이머 설정
+    // 2. 다음 overflow를 위해 다시 무장
+    if (fd >= 0) ioctl(fd, PERF_EVENT_IOC_REFRESH, 1);
+
+    // 3) 0.1 ms 뒤에 unfreeze 용 SIGALRM 예약
     itimerval tv{};
     tv.it_value.tv_sec  = 0;
     tv.it_value.tv_usec = 100;   // 100 µs = 0.1 ms
@@ -160,17 +163,39 @@ int perf_sampler_sync(int cg_fd,std::chrono::milliseconds /*period*/,double /*de
         int fd=open(ctrl.c_str(),O_WRONLY);
         if(fd<0){perror("open freeze");continue;}
         g_victims.push_back({path,fd});
-        std::cerr << "[DBG] victim added "<<ctrl<<" fd="<<fd<<"\n";
+        std::cerr << "[DBG] victim added: fd="<<fd<<"\n";
     }
 
-    /* perf attr */
+    /* perf attr - 첫 번째 버전 : 너무 많은 Signal 발생 
     perf_event_attr pe{}; pe.size=sizeof(pe);
     pe.type=PERF_TYPE_SOFTWARE; 
     pe.config=PERF_COUNT_SW_TASK_CLOCK;
-    pe.sample_period = 10'000'000;                 // ★ 1 ms
-    pe.sample_type   = PERF_SAMPLE_IDENTIFIER;  // ★ 한 비트 ON
+    pe.sample_period = 100'000;                 // ★ 0.1 ms
+    pe.sample_type   = PERF_SAMPLE_IDENTIFIER;     // ★ 한 비트 ON
     pe.wakeup_events=1; 
     pe.inherit=1;    
+    */
+
+    // perf attr - 두 번째 버전 : 하드웨어 카운트
+    // perf_event_attr pe{}; pe.size=sizeof(pe);
+    // pe.type            = PERF_TYPE_HARDWARE;
+    // pe.config          = PERF_COUNT_HW_INSTRUCTIONS;   // 또는 _CPU_CYCLES
+    // pe.sample_period   = 10'000'000;                  // 1e8 instr ≒ 20~50 ms 실사용
+    // pe.sample_type     = 0;                            // 식별자 필요 없으면 0
+    // pe.exclude_idle    = 1;                            // idle task 제외
+    // pe.wakeup_events=1; 
+    // pe.inherit=1;        
+
+    // perf attr - 세 번째 버전 : context switch가 될 때마다..?
+    perf_event_attr pe{}; pe.size=sizeof(pe);
+    pe.type            = PERF_TYPE_SOFTWARE;
+    pe.config          = PERF_COUNT_SW_CONTEXT_SWITCHES;  // 또는 _CPU_CYCLES
+    pe.sample_period   = 100;                           // 되.. 된다!!!!! 
+    pe.sample_type     = 0;                            // 식별자 필요 없으면 0
+    pe.exclude_idle    = 1;                            // idle task 제외
+    pe.wakeup_events=1; 
+    pe.inherit=1;        
+
 
     if (kSigRT == -1) kSigRT = SIGRTMIN + 3;
 
@@ -185,8 +210,8 @@ int perf_sampler_sync(int cg_fd,std::chrono::milliseconds /*period*/,double /*de
         if (fcntl(fd, F_SETFL, fl | O_NONBLOCK | O_ASYNC) == -1) perror("F_SETFL");
 
 
-        // ioctl(fd,PERF_EVENT_IOC_REFRESH,1); 
-        ioctl(fd,PERF_EVENT_IOC_ENABLE,0);
+        ioctl(fd,PERF_EVENT_IOC_REFRESH,1); 
+        // ioctl(fd,PERF_EVENT_IOC_ENABLE,0);
         
         g_fds.push_back(fd);
         

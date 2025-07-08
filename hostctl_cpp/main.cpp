@@ -100,6 +100,9 @@ discover_other_pods(const cgroup& tgt, const std::string& exclude /* 예: ns/pod
     std::vector<cgroup> out;
     std::cout << "In >> discover_other_pods\n";
 
+    // DEBUG : 오잉 이거 empty다
+    std::cout << "target : " << exclude << std::endl;
+
     /* 1. kubectl 로 전체 Pod 목록 추출 */
     std::string cmd =
         "kubectl get pods --all-namespaces" +
@@ -126,8 +129,11 @@ discover_other_pods(const cgroup& tgt, const std::string& exclude /* 예: ns/pod
 
         /* 2-1. system NS·타깃·exclude 필터 */
         if (is_system_ns(ns))             continue;
-        if (!exclude.empty() && ns + "/" + pod == exclude) continue;
-
+        if (!exclude.empty() && ns + "/" + pod == exclude) {
+            // std::cout << "[SKIP] " << ns << "/" << pod
+            //           << ", Target excluded" << std::endl;
+            continue;
+        }
         /* 2-2. containerd:// prefix 제거 */
         const std::string pref = "containerd://";
         if (cid.rfind(pref, 0) == 0) cid = cid.substr(pref.size());
@@ -144,7 +150,15 @@ discover_other_pods(const cgroup& tgt, const std::string& exclude /* 예: ns/pod
                 found = dir.path(); break;
             }
         }
-        if (found.empty() || found == tgt.path) continue; // 타깃 제외
+        if (found.empty() || found == tgt.path) {
+            // std::cout << "[SKIP] Pod=" << ns << "/" << pod
+            //     << ": No Cgroup" << std::endl;
+            continue; // 타깃 제외
+        }
+
+        // DEBUG: VICTIM으로 선정된 pod 정보
+        // std::cout << "[VICTIM] Pod=" << ns << "/" << pod
+        //           << ", cgroup path=" << found << std::endl;
 
         out.push_back({found, get_cgroup_id(found)});
     }
@@ -201,7 +215,7 @@ int main(int argc, char** argv) {
         }
         std::cout << "cg_fd : " << cg_fd << std::endl;
         // 2. 다른 pod들을 관리하는 아이 만들기
-        auto others = discover_other_pods(tgt, "");
+        auto others = discover_other_pods(tgt, target_pod);
         // 3. perf_sampler_sync 적용 -> perf event open!!
         // begin_sampling()을 그대로 따라해보자
         perf_sampler_sync(cg_fd, std::chrono::milliseconds(period_ms), speedup, others, freeze_mode);
