@@ -1,0 +1,39 @@
+#!/usr/bin/env bpftrace
+BEGIN { printf("Tracing cgroup freeze / unfreeze …  Ctrl-C to quit\n"); }
+
+/* freezer.state 파일을 열어 쓰는 시점 */
+tracepoint:syscalls:sys_enter_openat
+/ str(args->filename) == "/sys/fs/cgroup/unified/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod81b8e7cc_0436_4d05_80ec_8cf79532f656.slice/cri-containerd-e4f510db642a84a5c0c21946606a9bcfc37e1a23b3b1bb5816d2796706714b6e.scope/cgroup.freeze" /
+{
+    @start_ts_ns = nsecs;
+    printf("openat  %s  ts=%llu\n", str(args->filename), nsecs);
+}
+
+/* FROZEN 요청이 들어간 순간 */
+tracepoint:cgroup:cgroup_freeze
+/ @start_ts_ns /
+{
+    printf("**** echo ~ cgroup_freeze latency : %llu µs\n",
+           (nsecs - @start_ts_ns) / 1000);
+}
+
+/* THAWED 요청이 들어간 순간 */
+tracepoint:cgroup:cgroup_unfreeze
+/ @start_ts_ns /
+{
+    printf("**** echo ~ cgroup_unfreeze latency : %llu µs\n",
+           (nsecs - @start_ts_ns) / 1000);
+}
+
+/* notify 된 순간 : 실제로 동결된 순간  */
+tracepoint:cgroup:cgroup_notify_frozen
+/ @start_ts_ns /
+{
+    printf("******** echo ~ notify_frozen latency: %llu µs\n",
+           (nsecs - @start_ts_ns) / 1000);
+    delete(@start_ts_ns);
+}
+
+
+
+
