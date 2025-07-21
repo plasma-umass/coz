@@ -93,7 +93,7 @@ static void inject_delay(const std::vector<cgroup>& others, uint64_t usec, const
     }
 }
 
-
+// select victims
 static std::vector<cgroup>
 discover_other_pods(const cgroup& tgt, const std::string& exclude /* 예: ns/pod */)
 {

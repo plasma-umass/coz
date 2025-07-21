@@ -3,8 +3,11 @@
 
 #include <sys/syscall.h>
 #include <sys/ioctl.h>
+#include <thread>
+#include <chrono>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sstream>
 #include <signal.h>
 #include <linux/perf_event.h>
 #include <chrono>
@@ -19,10 +22,8 @@ static std::vector<int>  g_fds;                 // CPU별 perf FD
 static std::atomic<bool> g_running   {true};
 static std::atomic<bool> g_paused    {false};
 static std::atomic<uint64_t> g_lastNs{0};       // 마지막 활동 시각(ns)
-static int kSigRT = -1;                         // SIGNAL 초기 dummy 값
+// static int kSigRT = -1;                         // SIGNAL 초기 dummy 값
 static struct sigaction sa_alrm;                // freeze-unfreeze alarm용
-
-constexpr uint64_t kIdleWindowNs = 2'000'000;   // 2 ms
 
 struct cg_info { std::string path; int fd; };
 static std::vector<cg_info> g_victims;
@@ -81,6 +82,44 @@ inline void unfreeze(int fd){
     std::cerr << "     >> unfreeze fd=" << fd << '\n';
     if (is_cgv2) write(fd, "0", 1); else write(fd, "THAWED", 6);
     // log_state_by_fd(fd);                  // ★ 상태 표시
+}
+
+inline void freezer(int fd, int delay_ns)
+{
+    std::thread([fd, delay_ns]() {
+        using namespace std::chrono;
+
+        /* 1) freeze */
+        if (is_cgv2) write(fd, "1", 1);
+        else         write(fd, "FROZEN", 6);
+
+        /* 2) 기준 시각(t0) 찍고 잠들기 */
+        auto t0 = steady_clock::now();
+        std::this_thread::sleep_for(nanoseconds(delay_ns));
+
+        /* 3) unfreeze */
+        if (is_cgv2) write(fd, "0", 1);
+        else         write(fd, "THAWED", 6);
+
+        /* 4) 깨어난 직후(t1) = unfreeze 호출 직후 */
+        auto t1 = steady_clock::now();
+        auto actual_ns = duration_cast<nanoseconds>(t1 - t0).count();
+
+        /* 5) 로그 한 번에 출력 */
+        std::ostringstream oss;
+        oss << "fd = " << fd
+            << " (slept "    << static_cast<double>(actual_ns) / 1'000'000 << " ms"
+            << ", expected " << static_cast<double>(delay_ns) / 1'000'000 << " ms"
+            << ", gap " << (static_cast<double>(actual_ns) - static_cast<double>(delay_ns)) / 1'000'000 << " ms)"
+            << '\n';
+        std::cout << oss.str();
+    }).detach();
+}
+
+inline void start_freezer(int delay){
+    if (delay !=0) {
+        for (auto& v : g_victims) freezer(v.fd, delay);
+    }
 }
 
 
@@ -148,7 +187,6 @@ int perf_sampler_sync(int cg_fd,std::chrono::milliseconds /*period*/,double /*de
     /* SIGPROF 언블록: 함수 맨 첫 줄에 추가 */
     sigset_t set;
     sigemptyset(&set);
-    sigaddset(&set, kSigRT);
     sigaddset(&set, SIGALRM);
     pthread_sigmask(SIG_UNBLOCK, &set, nullptr);
 
@@ -166,38 +204,16 @@ int perf_sampler_sync(int cg_fd,std::chrono::milliseconds /*period*/,double /*de
         std::cerr << "[DBG] victim added: fd="<<fd<<"\n";
     }
 
-    /* perf attr - 첫 번째 버전 : 너무 많은 Signal 발생 
-    perf_event_attr pe{}; pe.size=sizeof(pe);
-    pe.type=PERF_TYPE_SOFTWARE; 
-    pe.config=PERF_COUNT_SW_TASK_CLOCK;
-    pe.sample_period = 100'000;                 // ★ 0.1 ms
-    pe.sample_type   = PERF_SAMPLE_IDENTIFIER;     // ★ 한 비트 ON
-    pe.wakeup_events=1; 
-    pe.inherit=1;    
-    */
-
-    // perf attr - 두 번째 버전 : 하드웨어 카운트
-    // perf_event_attr pe{}; pe.size=sizeof(pe);
-    // pe.type            = PERF_TYPE_HARDWARE;
-    // pe.config          = PERF_COUNT_HW_INSTRUCTIONS;   // 또는 _CPU_CYCLES
-    // pe.sample_period   = 10'000'000;                  // 1e8 instr ≒ 20~50 ms 실사용
-    // pe.sample_type     = 0;                            // 식별자 필요 없으면 0
-    // pe.exclude_idle    = 1;                            // idle task 제외
-    // pe.wakeup_events=1; 
-    // pe.inherit=1;        
-
-    // perf attr - 세 번째 버전 : context switch가 될 때마다..?
+    // polling 구현
     perf_event_attr pe{}; pe.size=sizeof(pe);
     pe.type            = PERF_TYPE_SOFTWARE;
-    pe.config          = PERF_COUNT_SW_CONTEXT_SWITCHES;  // 또는 _CPU_CYCLES
-    pe.sample_period   = 100;                           // 되.. 된다!!!!! 
-    pe.sample_type     = 0;                            // 식별자 필요 없으면 0
-    pe.exclude_idle    = 1;                            // idle task 제외
-    pe.wakeup_events=1; 
-    pe.inherit=1;        
+    pe.config          = PERF_COUNT_SW_TASK_CLOCK;
+    pe.sample_period   = 0;                            // 샘플링 이벤트 없음 -> event_based가 아님
+    pe.disabled        = 1;
+    pe.read_format     = PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
+    pe.exclude_idle    = 1;
 
-
-    if (kSigRT == -1) kSigRT = SIGRTMIN + 3;
+    // if (kSigRT == -1) kSigRT = SIGRTMIN + 3;
 
     auto cpus=online_cpus();
     for(int cpu:cpus){
@@ -205,52 +221,57 @@ int perf_sampler_sync(int cg_fd,std::chrono::milliseconds /*period*/,double /*de
         if(fd<0) continue;
 
         if (fcntl(fd, F_SETOWN, getpid()) == -1) perror("F_SETOWN");
-        if (fcntl(fd, F_SETSIG, kSigRT) == -1) perror("F_SETSIG"); 
+        // if (fcntl(fd, F_SETSIG, kSigRT) == -1) perror("F_SETSIG"); 
         int fl = fcntl(fd, F_GETFL,0);
         if (fcntl(fd, F_SETFL, fl | O_NONBLOCK | O_ASYNC) == -1) perror("F_SETFL");
 
 
-        ioctl(fd,PERF_EVENT_IOC_REFRESH,1); 
-        // ioctl(fd,PERF_EVENT_IOC_ENABLE,0);
+        // ioctl(fd,PERF_EVENT_IOC_REFRESH,1); 
+        ioctl(fd,PERF_EVENT_IOC_ENABLE,0);
+        ioctl(fd,PERF_EVENT_IOC_RESET, 0 );
         
         g_fds.push_back(fd);
         
-        std::cerr << "[DBG] set O_ASYNC owner="<<gettid()
-          <<" fcntl="<<std::hex<<fcntl(fd,F_GETFL)<<std::dec<<"\n";
+        // std::cerr << "[DBG] set O_ASYNC owner="<<gettid()
+        //   <<" fcntl="<<std::hex<<fcntl(fd,F_GETFL)<<std::dec<<"\n";
   
     }
     if(g_fds.empty()) return -1;
 
-    /* signal handler 등록 (perf용 RT 시그널) */
-    struct sigaction sa{};
-    sa.sa_sigaction = sig_handler;
-    sa.sa_flags     = SA_SIGINFO;
-    sigemptyset(&sa.sa_mask);
-    sigaction(kSigRT, &sa, nullptr);
 
-    /* 종료 handler 등록 (Ctrl+C) */
-    struct sigaction sa_int{};
-    sa_int.sa_handler = sigint_handler;   // ← 이 줄이 필요
-    sa_int.sa_flags   = 0;                // 필요하면 SA_RESTART도 OK
-    sigemptyset(&sa_int.sa_mask);
-    sigaction(SIGINT, &sa_int, nullptr);
+    /* polling 구현 */
+    // 이전 값 저장 
+    std::vector<uint64_t> prev(g_fds.size(), 0);
+    uint64_t sum = 0;
 
-    // int rc = pthread_kill(pthread_self(), kSigRT);
-    // std::cerr << "[DBG] pthread_kill rc=" << rc << '\n';
+    // 10ms 폴링 루프
+    while (g_running.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::cout << "==================================" << std::endl;
+        for (size_t i = 0; i < g_fds.size(); ++i) {
+            uint64_t buf[3] = {};
+            if (read(g_fds[i], buf, sizeof(buf)) != sizeof(buf)) {
+                perror("perf read");
+                continue;
+            }
 
-    /* idle-loop -> handler에서 unfreeze 처리하니까 필요 X */
-    // while(g_running.load()){
-    //     usleep(500*1000);
-    //     uint64_t last=g_lastNs.load(std::memory_order_relaxed);
-    //     uint64_t now = std::chrono::duration_cast<std::chrono::nanoseconds>(
-    //                      std::chrono::steady_clock::now().time_since_epoch()).count();
-    //     if(g_paused && now-last>=kIdleWindowNs){
-    //         std::cerr << "[ACT] victims resume\n";
-    //         for(auto& v:g_victims) unfreeze(v.fd);
-    //         g_paused=false;
-    //     }
-    // }
-    while (g_running.load()) pause();   // 또는 epoll/condvar 등으로 대체
+            uint64_t delta = buf[0] - prev[i];
+            prev[i] = buf[0];
+            sum += delta;
+
+            // std::cout << "[FD " << g_fds[i] << "]" << "task clock per 1s : " << delta << std::endl;
+        //   // delta만큼의 context-switch 발생
+        //   if (/* freeze_mode && */ delta > threshold) {
+        //     freeze(cg_fd);
+        //   } else {
+        //     unfreeze(cg_fd);
+        //   }
+        }
+        std::cout << "raw sum : " << sum << " ns" << std::endl;
+        // uint64_t : 나노초를 넘김
+        start_freezer(sum);
+        sum = 0;
+    }
 
     cleanup();
     

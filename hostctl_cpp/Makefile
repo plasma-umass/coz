@@ -48,13 +48,59 @@ RM = /usr/bin/cmake -E remove -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/yunni/mcoz/mcoz/coz/hostctl_cpp
+CMAKE_SOURCE_DIR = /home/yunni/mcoz/mcoz/coz
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/yunni/mcoz/mcoz/coz/hostctl_cpp
+CMAKE_BINARY_DIR = /home/yunni/mcoz/mcoz/coz
 
 #=============================================================================
 # Targets provided globally by CMake.
+
+# Special rule for the target install/strip
+install/strip: preinstall
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Installing the project stripped..."
+	/usr/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+.PHONY : install/strip
+
+# Special rule for the target install/strip
+install/strip/fast: preinstall/fast
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Installing the project stripped..."
+	/usr/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+.PHONY : install/strip/fast
+
+# Special rule for the target install/local
+install/local: preinstall
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Installing only the local directory..."
+	/usr/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
+.PHONY : install/local
+
+# Special rule for the target install/local
+install/local/fast: preinstall/fast
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Installing only the local directory..."
+	/usr/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
+.PHONY : install/local/fast
+
+# Special rule for the target install
+install: preinstall
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Install the project..."
+	/usr/bin/cmake -P cmake_install.cmake
+.PHONY : install
+
+# Special rule for the target install
+install/fast: preinstall/fast
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Install the project..."
+	/usr/bin/cmake -P cmake_install.cmake
+.PHONY : install/fast
+
+# Special rule for the target list_install_components
+list_install_components:
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Available install components are: \"Unspecified\""
+.PHONY : list_install_components
+
+# Special rule for the target list_install_components
+list_install_components/fast: list_install_components
+
+.PHONY : list_install_components/fast
 
 # Special rule for the target rebuild_cache
 rebuild_cache:
@@ -78,16 +124,27 @@ edit_cache/fast: edit_cache
 
 .PHONY : edit_cache/fast
 
+# Special rule for the target test
+test:
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running tests..."
+	/usr/bin/ctest --force-new-ctest-process $(ARGS)
+.PHONY : test
+
+# Special rule for the target test
+test/fast: test
+
+.PHONY : test/fast
+
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/yunni/mcoz/mcoz/coz/hostctl_cpp/CMakeFiles /home/yunni/mcoz/mcoz/coz/hostctl_cpp/CMakeFiles/progress.marks
-	$(MAKE) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/yunni/mcoz/mcoz/coz/hostctl_cpp/CMakeFiles 0
+	cd /home/yunni/mcoz/mcoz/coz && $(CMAKE_COMMAND) -E cmake_progress_start /home/yunni/mcoz/mcoz/coz/CMakeFiles /home/yunni/mcoz/mcoz/coz/hostctl_cpp/CMakeFiles/progress.marks
+	cd /home/yunni/mcoz/mcoz/coz && $(MAKE) -f CMakeFiles/Makefile2 hostctl_cpp/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/yunni/mcoz/mcoz/coz/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
 clean:
-	$(MAKE) -f CMakeFiles/Makefile2 clean
+	cd /home/yunni/mcoz/mcoz/coz && $(MAKE) -f CMakeFiles/Makefile2 hostctl_cpp/clean
 .PHONY : clean
 
 # The main clean target
@@ -97,30 +154,32 @@ clean/fast: clean
 
 # Prepare targets for installation.
 preinstall: all
-	$(MAKE) -f CMakeFiles/Makefile2 preinstall
+	cd /home/yunni/mcoz/mcoz/coz && $(MAKE) -f CMakeFiles/Makefile2 hostctl_cpp/preinstall
 .PHONY : preinstall
 
 # Prepare targets for installation.
 preinstall/fast:
-	$(MAKE) -f CMakeFiles/Makefile2 preinstall
+	cd /home/yunni/mcoz/mcoz/coz && $(MAKE) -f CMakeFiles/Makefile2 hostctl_cpp/preinstall
 .PHONY : preinstall/fast
 
 # clear depends
 depend:
-	$(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
+	cd /home/yunni/mcoz/mcoz/coz && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
 .PHONY : depend
 
-#=============================================================================
-# Target rules for targets named hostctl_cpp
+# Convenience name for target.
+hostctl_cpp/CMakeFiles/hostctl_cpp.dir/rule:
+	cd /home/yunni/mcoz/mcoz/coz && $(MAKE) -f CMakeFiles/Makefile2 hostctl_cpp/CMakeFiles/hostctl_cpp.dir/rule
+.PHONY : hostctl_cpp/CMakeFiles/hostctl_cpp.dir/rule
 
-# Build rule for target.
-hostctl_cpp: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 hostctl_cpp
+# Convenience name for target.
+hostctl_cpp: hostctl_cpp/CMakeFiles/hostctl_cpp.dir/rule
+
 .PHONY : hostctl_cpp
 
 # fast build rule for target.
 hostctl_cpp/fast:
-	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/build
+	cd /home/yunni/mcoz/mcoz/coz && $(MAKE) -f hostctl_cpp/CMakeFiles/hostctl_cpp.dir/build.make hostctl_cpp/CMakeFiles/hostctl_cpp.dir/build
 .PHONY : hostctl_cpp/fast
 
 main.o: main.cpp.o
@@ -129,7 +188,7 @@ main.o: main.cpp.o
 
 # target to build an object file
 main.cpp.o:
-	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/main.cpp.o
+	cd /home/yunni/mcoz/mcoz/coz && $(MAKE) -f hostctl_cpp/CMakeFiles/hostctl_cpp.dir/build.make hostctl_cpp/CMakeFiles/hostctl_cpp.dir/main.cpp.o
 .PHONY : main.cpp.o
 
 main.i: main.cpp.i
@@ -138,7 +197,7 @@ main.i: main.cpp.i
 
 # target to preprocess a source file
 main.cpp.i:
-	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/main.cpp.i
+	cd /home/yunni/mcoz/mcoz/coz && $(MAKE) -f hostctl_cpp/CMakeFiles/hostctl_cpp.dir/build.make hostctl_cpp/CMakeFiles/hostctl_cpp.dir/main.cpp.i
 .PHONY : main.cpp.i
 
 main.s: main.cpp.s
@@ -147,7 +206,7 @@ main.s: main.cpp.s
 
 # target to generate assembly for a file
 main.cpp.s:
-	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/main.cpp.s
+	cd /home/yunni/mcoz/mcoz/coz && $(MAKE) -f hostctl_cpp/CMakeFiles/hostctl_cpp.dir/build.make hostctl_cpp/CMakeFiles/hostctl_cpp.dir/main.cpp.s
 .PHONY : main.cpp.s
 
 perf.o: perf.cpp.o
@@ -156,7 +215,7 @@ perf.o: perf.cpp.o
 
 # target to build an object file
 perf.cpp.o:
-	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/perf.cpp.o
+	cd /home/yunni/mcoz/mcoz/coz && $(MAKE) -f hostctl_cpp/CMakeFiles/hostctl_cpp.dir/build.make hostctl_cpp/CMakeFiles/hostctl_cpp.dir/perf.cpp.o
 .PHONY : perf.cpp.o
 
 perf.i: perf.cpp.i
@@ -165,7 +224,7 @@ perf.i: perf.cpp.i
 
 # target to preprocess a source file
 perf.cpp.i:
-	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/perf.cpp.i
+	cd /home/yunni/mcoz/mcoz/coz && $(MAKE) -f hostctl_cpp/CMakeFiles/hostctl_cpp.dir/build.make hostctl_cpp/CMakeFiles/hostctl_cpp.dir/perf.cpp.i
 .PHONY : perf.cpp.i
 
 perf.s: perf.cpp.s
@@ -174,7 +233,7 @@ perf.s: perf.cpp.s
 
 # target to generate assembly for a file
 perf.cpp.s:
-	$(MAKE) -f CMakeFiles/hostctl_cpp.dir/build.make CMakeFiles/hostctl_cpp.dir/perf.cpp.s
+	cd /home/yunni/mcoz/mcoz/coz && $(MAKE) -f hostctl_cpp/CMakeFiles/hostctl_cpp.dir/build.make hostctl_cpp/CMakeFiles/hostctl_cpp.dir/perf.cpp.s
 .PHONY : perf.cpp.s
 
 # Help Target
@@ -183,8 +242,13 @@ help:
 	@echo "... all (the default if no target is provided)"
 	@echo "... clean"
 	@echo "... depend"
+	@echo "... install/strip"
+	@echo "... install/local"
+	@echo "... install"
+	@echo "... list_install_components"
 	@echo "... rebuild_cache"
 	@echo "... edit_cache"
+	@echo "... test"
 	@echo "... hostctl_cpp"
 	@echo "... main.o"
 	@echo "... main.i"
@@ -203,6 +267,6 @@ help:
 # No rule that depends on this can have commands that come from listfiles
 # because they might be regenerated.
 cmake_check_build_system:
-	$(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
+	cd /home/yunni/mcoz/mcoz/coz && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
 .PHONY : cmake_check_build_system
 

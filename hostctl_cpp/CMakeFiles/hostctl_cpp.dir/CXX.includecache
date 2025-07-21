@@ -51,9 +51,15 @@ sys/syscall.h
 -
 sys/ioctl.h
 -
+thread
+-
+chrono
+-
 unistd.h
 -
 fcntl.h
+-
+sstream
 -
 signal.h
 -
