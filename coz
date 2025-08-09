@@ -120,7 +120,7 @@ def open_browser(url):
   webbrowser.open_new_tab(url)
   
 def _coz_plot(args):
-  coz_plot_url = 'http://plasma-umass.github.io/coz'
+  coz_plot_url = 'https://coz-profiler.github.io/coz-ui/'
   import threading
   t1 = threading.Thread(target=open_browser,args=(coz_plot_url,))
   t1.start()
