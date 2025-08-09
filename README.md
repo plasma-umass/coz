@@ -94,7 +94,7 @@ Finally, use the Coz viewer to see the results. This command will open up a brow
 coz plot
 ```
 
-If you are on a remote system, you can open the Coz viewer in your browser: [https://plasma-umass.github.io/coz](https://plasma-umass.github.io/coz) and then load the file `profile.coz`, which you will have to transfer to your local machine.
+If you are on a remote system, you can open the Coz viewer in your browser: [https://coz-profiler.github.io/coz-ui/](https://coz-profiler.github.io/coz-ui/) and then load the file `profile.coz`, which you will have to transfer to your local machine.
 
 (You may need to move the "Minimum Points" slider on the left side to see the results.)
 
