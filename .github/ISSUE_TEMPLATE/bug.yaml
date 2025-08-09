@@ -1,0 +1,47 @@
+name: Bug Report
+description: File a bug report for Coz (e.g., a crash or incorrect behavior).
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please include enough information for us to understand and reproduce your bug.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What went wrong? What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: mcve
+    attributes:
+      label: What code did you run Coz on?
+      description: Ideally include a short C, C++, or Rust program here that is easy to build and run.
+    validations:
+      required: true
+  - type: textarea
+    id: coz-version
+    attributes:
+      label: Coz Version
+      description: Where did you get Coz from? If from GitHub, which commit did you build from? If from a Linux package, which package index (e.g. apt) and which package version (e.g. coz 0.2.2-2)?
+    validations:
+      required: true
+  - type: textarea
+    id: os-version
+    attributes:
+      label: OS Version
+      description: What OS and version are you running? e.g. run `uname -rsp`
+      placeholder: |
+        $ uname -rsp
+        Linux X.X.X-XXX x86_64
+      render: Shell
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else to add?
+    validations:
+      required: false
