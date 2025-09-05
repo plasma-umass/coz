@@ -94,6 +94,7 @@ hostctl_cpp_EXTERNAL_OBJECTS =
 hostctl_cpp/hostctl_cpp: hostctl_cpp/CMakeFiles/hostctl_cpp.dir/main.cpp.o
 hostctl_cpp/hostctl_cpp: hostctl_cpp/CMakeFiles/hostctl_cpp.dir/perf.cpp.o
 hostctl_cpp/hostctl_cpp: hostctl_cpp/CMakeFiles/hostctl_cpp.dir/build.make
+hostctl_cpp/hostctl_cpp: /usr/lib/x86_64-linux-gnu/libcurl.so
 hostctl_cpp/hostctl_cpp: hostctl_cpp/CMakeFiles/hostctl_cpp.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/yunni/mcoz/mcoz/coz/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable hostctl_cpp"
 	cd /home/yunni/mcoz/mcoz/coz/hostctl_cpp && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/hostctl_cpp.dir/link.txt --verbose=$(VERBOSE)

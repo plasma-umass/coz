@@ -1,1 +1,1 @@
-/usr/bin/c++     CMakeFiles/hostctl_cpp.dir/main.cpp.o CMakeFiles/hostctl_cpp.dir/perf.cpp.o  -o hostctl_cpp  -lrt -lpthread 
+/usr/bin/c++     CMakeFiles/hostctl_cpp.dir/main.cpp.o CMakeFiles/hostctl_cpp.dir/perf.cpp.o  -o hostctl_cpp  -lrt /usr/lib/x86_64-linux-gnu/libcurl.so -lpthread 

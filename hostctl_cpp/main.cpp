@@ -16,11 +16,21 @@
 #include <cstdlib>   // atexit()
 #include <algorithm>   // std::find, std::all_of ...
 #include <sstream>     // std::istringstream  (discover_other_pods에서 사용)
+#include <curl/curl.h> // kiali
+#include <set>         // kiali
+#include <map>
+#include <nlohmann/json.hpp>
+#include <unordered_map>
+#include <unordered_set>
+
+// 실행 명령어
+// sudo -E python3 coz container-run --target-pod=default/compose-post-service-6b8465bc45-nxtdh
 
 /* 0. kubeconfig 경로 확보*/
 const char* kc = getenv("KUBECONFIG");      // 환경변수 읽기
 std::string kc_arg = kc ? (" --kubeconfig " + std::string(kc)) : "";
 
+/* ─────────── system pod 판별 ─────────── */
 static bool is_system_ns(const std::string& ns)
 {
     /* 필요 시 목록 추가 */
@@ -36,6 +46,7 @@ static uint64_t get_cgroup_id(const std::string& path) {
     return st.st_ino;
 }
 
+/* ─────────── target의 cgroup 경로 탐색 ─────────── */
 static cgroup resolve_target_cgroup(const std::string& target_pod) {
     size_t slash = target_pod.find('/');
     if(slash == std::string::npos) {
@@ -79,104 +90,56 @@ static cgroup resolve_target_cgroup(const std::string& target_pod) {
     return cg;
 }
 
-static void inject_delay(const std::vector<cgroup>& others, uint64_t usec, const std::string& mode) {
-    for(const auto& cg : others) {
-        if(mode == "freezer") {
-            std::ofstream(cg.path + "/cgroup.freeze") << '1';
-            std::this_thread::sleep_for(std::chrono::microseconds(usec));
-            std::ofstream(cg.path + "/cgroup.freeze") << '0';
-        } else if(mode == "cpu-weight") {
-            std::ofstream(cg.path + "/cpu.weight") << "1";
-            std::this_thread::sleep_for(std::chrono::microseconds(usec));
-            std::ofstream(cg.path + "/cpu.weight") << "100";
-        }
-    }
-}
-
-// select victims
-static std::vector<cgroup>
-discover_other_pods(const cgroup& tgt, const std::string& exclude /* 예: ns/pod */)
+// select victims : 레이블 coz=test를 가진 Pod 이름만 모은다.
+static std::vector<std::string>
+discover_other_pods(const std::string& exclude /* 예: ns/pod */)
 {
-    std::vector<cgroup> out;
+    std::vector<std::string> pods;
     std::cout << "In >> discover_other_pods\n";
+    std::cout << "exclude target : " << exclude << std::endl;
 
-    // DEBUG : 오잉 이거 empty다
-    std::cout << "target : " << exclude << std::endl;
+    /* 1. coz=test 레이블이 붙은 모든 Pod 조회 */
+    const std::string cmd =
+        "kubectl get pods --all-namespaces" + kc_arg +
+        " -l coz=test "
+        "-o "
+        "jsonpath='{range .items[*]}{.metadata.namespace}/" 
+        "{.metadata.name}{\"\\n\"}{end}'";
 
-    /* 1. kubectl 로 전체 Pod 목록 추출 */
-    std::string cmd =
-        "kubectl get pods --all-namespaces" +
-        kc_arg +
-        " -o "
-        "jsonpath='{range .items[*]}{.metadata.namespace} "
-        "{.metadata.name} "
-        "{.status.containerStatuses[0].containerID}{\"\\n\"}{end}'";
-    FILE* fp = popen(cmd.c_str(), "r");   // ← .c_str() 중요
-    if (!fp) { perror("kubectl"); return out; }
+    FILE* fp = popen(cmd.c_str(), "r");
+    if (!fp) { perror("kubectl"); return pods; }
 
-    /* 2. cgroup mount 루트 확정 */
-    const char* base = (access("/sys/fs/cgroup/perf_event", F_OK) == 0)
-                       ? "/sys/fs/cgroup/perf_event"
-                       : "/sys/fs/cgroup/unified";
-    const std::string root = std::string(base) + "/kubepods.slice";
-
-    char line[512];
+    char line[256];
     while (fgets(line, sizeof(line), fp)) {
-        std::string ns, pod, cid;
-        std::istringstream iss(line);
-        iss >> ns >> pod >> cid;
-        cid.erase(cid.find_last_not_of(" \n\r\t") + 1);
+        std::string full(line);
+        full.erase(full.find_last_not_of(" \n\r\t") + 1); // 개행·공백 제거
 
-        /* 2-1. system NS·타깃·exclude 필터 */
+        /* system 네임스페이스나 타깃 Pod 제외 */
+        const auto delim = full.find('/');
+        if (delim == std::string::npos) continue;            // 방어코드
+        const std::string ns = full.substr(0, delim);
         if (is_system_ns(ns))             continue;
-        if (!exclude.empty() && ns + "/" + pod == exclude) {
-            // std::cout << "[SKIP] " << ns << "/" << pod
-            //           << ", Target excluded" << std::endl;
-            continue;
-        }
-        /* 2-2. containerd:// prefix 제거 */
-        const std::string pref = "containerd://";
-        if (cid.rfind(pref, 0) == 0) cid = cid.substr(pref.size());
+        if (!exclude.empty() && full == exclude) continue;
 
-        /* 2-3. cgroup 경로 탐색 (cri-containerd-<cid>.scope) */
-        const std::string needle = "cri-containerd-" + cid + ".scope";
-        std::string found;
-        for (const auto& dir :
-             std::filesystem::recursive_directory_iterator(root))
-        {
-            if (dir.is_directory() &&
-                dir.path().filename() == needle)
-            {
-                found = dir.path(); break;
-            }
-        }
-        if (found.empty() || found == tgt.path) {
-            // std::cout << "[SKIP] Pod=" << ns << "/" << pod
-            //     << ": No Cgroup" << std::endl;
-            continue; // 타깃 제외
-        }
-
-        // DEBUG: VICTIM으로 선정된 pod 정보
-        // std::cout << "[VICTIM] Pod=" << ns << "/" << pod
-        //           << ", cgroup path=" << found << std::endl;
-
-        out.push_back({found, get_cgroup_id(found)});
+        pods.push_back(full);  // 예: "default/my-pod"
     }
     pclose(fp);
 
-    std::cout << "discover_other_pods: " << out.size() << " victims\n";
+    std::cout << "discover_other_pods: " << pods.size() << " victims\n";
     std::cout << "Out >> discover_other_pods\n";
-    return out;
+    return pods;
 }
 
+
+
 int main(int argc, char** argv) {
-    printf("In >> main\n");
-    std::cerr << "[DBG] my pid=" << getpid() << " tid=" << gettid() << '\n';
+    // printf("In >> main\n");
+    // std::cerr << "[DBG] my pid=" << getpid() << " tid=" << gettid() << '\n';
 
     const char* target_pod = nullptr;
     const char* freeze_mode = "freezer";
-    double speedup = 0.25;
-    int period_ms = 5;
+    double speedup = 0.0;
+    int period_ms = 1000;
 
     signal(SIGINT, sigint_handler);  // Ctrl-C 누르면 poll 루프 탈출
     atexit(cleanup);                 // 어떤 경로든 종료 시 해동 보장   
@@ -215,7 +178,7 @@ int main(int argc, char** argv) {
         }
         std::cout << "cg_fd : " << cg_fd << std::endl;
         // 2. 다른 pod들을 관리하는 아이 만들기
-        auto others = discover_other_pods(tgt, target_pod);
+        auto others = discover_other_pods(target_pod);
         // 3. perf_sampler_sync 적용 -> perf event open!!
         // begin_sampling()을 그대로 따라해보자
         perf_sampler_sync(cg_fd, std::chrono::milliseconds(period_ms), speedup, others, freeze_mode);

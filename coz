@@ -319,8 +319,9 @@ _container_parser.add_argument('--target-pod',
 _container_parser.add_argument('--period',
                                default='5ms',
                                help='Sampling period P (e.g., 5ms)')
+# 여기서 기본 그거 실행
 _container_parser.add_argument('--speedup',
-                               type=float, default=0.25,
+                               type=float, default=0.1,
                                help='Virtual speed-up Δ (0 < Δ < 1)')
 _container_parser.add_argument('--freeze-mode',
                                choices=['freezer', 'cpu-weight'], default='freezer',

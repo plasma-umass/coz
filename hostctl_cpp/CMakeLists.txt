@@ -5,6 +5,8 @@ project(hostctl_cpp)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+find_package(CURL REQUIRED)
+
 # 2) 소스 목록
 add_executable(hostctl_cpp
     main.cpp
@@ -19,6 +21,7 @@ target_link_libraries(hostctl_cpp
     PRIVATE
         Threads::Threads   # -lpthread
         rt                 # -lrt (timer_create·timer_settime)
+        CURL::libcurl                       # ★ 추가
 )
 
 # 5) GCC 7 / 8 전용 <filesystem> 추가 아카이브

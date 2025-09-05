@@ -58,6 +58,16 @@
         "thread": "cpp",
         "cinttypes": "cpp",
         "typeinfo": "cpp",
-        "csignal": "cpp"
+        "csignal": "cpp",
+        "forward_list": "cpp",
+        "valarray": "cpp",
+        "condition_variable": "cpp",
+        "mutex": "cpp",
+        "any": "cpp",
+        "bitset": "cpp",
+        "list": "cpp",
+        "regex": "cpp",
+        "shared_mutex": "cpp",
+        "typeindex": "cpp"
     }
 }

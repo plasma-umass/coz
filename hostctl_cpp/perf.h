@@ -10,7 +10,7 @@ struct cgroup { std::string path; uint64_t id; };
 /*  ── 함수 원형 ── */
 void init_victims(const std::vector<cgroup>&);
 int  perf_sampler_sync(int, std::chrono::milliseconds, double,
-                       const std::vector<cgroup>&, const std::string&);
+                       const std::vector<std::string>&, const std::string&);
 void cleanup();
 void sigint_handler(int);          // ← 여기만 남김
 
