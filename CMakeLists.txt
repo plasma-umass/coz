@@ -12,7 +12,9 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR}/cmake)
 find_package(Threads REQUIRED)
 find_package(libelfin REQUIRED)
 
-add_compile_options(-gdwarf-3)
+# Allow compiler to use its default DWARF version (typically DWARF 5 for modern compilers)
+# Removed hardcoded -gdwarf-3 to support modern DWARF versions
+add_compile_options(-g)
 
 option(INSTALL_COZ "Enable installation of coz. (Projects embedding coz may want to turn this OFF.)" ON)
 
@@ -50,5 +52,16 @@ if(BUILD_BENCHMARKS)
     find_package(SQLite3 REQUIRED)
     find_package(BZip2 REQUIRED)
     add_subdirectory(benchmarks)
+endif()
+
+if(APPLE)
+    # 1. Specify the location of private frameworks to the linker
+    # This adds the -iframework /System/Library/PrivateFrameworks flag
+    target_link_options(coz PRIVATE "-iframework" "/System/Library/PrivateFrameworks")
+
+    # 2. Link against the specific (private) framework
+    # The name is likely 'Kperf' based on the symbol names.
+    # The quotes are important so CMake treats "-framework Kperf" as a single argument.
+    target_link_libraries(coz PRIVATE "-framework Kperf")
 endif()
 

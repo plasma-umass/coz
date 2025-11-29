@@ -5,6 +5,9 @@
  * directory of this distribution and at http://github.com/plasma-umass/coz.
  */
 
+#ifndef __APPLE__
+// Linux-specific perf implementation
+
 #include "perf.h"
 
 #include <asm/unistd.h>
@@ -415,3 +418,5 @@ T perf_event::record::locate_field() const {
 
   FATAL << "Unsupported sample field requested!";
 }
+
+#endif // !__APPLE__

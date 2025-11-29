@@ -1,4 +1,7 @@
-add_compile_options(-g -O3 -DNDEBUG -gdwarf-3)
+cmake_minimum_required(VERSION 4.2)
+
+# Use default DWARF version instead of forcing DWARF 3
+add_compile_options(-g -O3 -DNDEBUG)
 
 function(add_coz_run_target name)
     set(one_value_args "")

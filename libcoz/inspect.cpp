@@ -7,7 +7,11 @@
 
 #include "inspect.h"
 
-#include <elf.h>
+#ifdef __APPLE__
+  #include "elf_compat.h"
+#else
+  #include <elf.h>
+#endif
 #include <fcntl.h>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -139,12 +143,17 @@ static const string get_full_path(const string filename) {
  * resolved via the PATH variable.
  */
 static elf::elf locate_debug_executable(const string filename) {
+  fprintf(stderr, "[DEBUG] locate_debug_executable called for: %s\n", filename.c_str());
+  fflush(stderr);
   elf::elf f;
 
   const string full_path = get_full_path(filename);
+  fprintf(stderr, "[DEBUG] Full path: %s\n", full_path.c_str());
+  fflush(stderr);
 
   // If a full path wasn't found, return the invalid ELF file
   if(full_path.length() == 0) {
+    WARNING << "Full path is empty, returning invalid elf";
     return f;
   }
 
@@ -162,6 +171,36 @@ static elf::elf locate_debug_executable(const string filename) {
   if(f.get_section(".debug_info").valid()) {
     return f;
   }
+
+#ifdef __APPLE__
+  // On macOS, check for .dSYM bundle
+  string binary_name = full_path.substr(full_path.find_last_of('/') + 1);
+  string dsym_path = full_path + ".dSYM/Contents/Resources/DWARF/" + binary_name;
+
+  fprintf(stderr, "[DEBUG] Checking for dSYM at: %s\n", dsym_path.c_str());
+  fflush(stderr);
+  int dsym_fd = open(dsym_path.c_str(), O_RDONLY);
+  if(dsym_fd >= 0) {
+    fprintf(stderr, "[DEBUG] Opened dSYM file\n");
+    fflush(stderr);
+    try {
+      elf::elf dsym_f = elf::elf(elf::create_mmap_loader(dsym_fd));
+      fprintf(stderr, "[DEBUG] Loaded dSYM as elf object\n");
+      fflush(stderr);
+      auto debug_info = dsym_f.get_section(".debug_info");
+      fprintf(stderr, "[DEBUG] Got debug_info section, valid=%d\n", debug_info.valid());
+      fflush(stderr);
+      if(debug_info.valid()) {
+        fprintf(stderr, "[DEBUG] Found debug info in dSYM bundle: %s\n", dsym_path.c_str());
+        return dsym_f;
+      }
+    } catch (const std::exception& e) {
+      fprintf(stderr, "[DEBUG] Error loading dSYM: %s\n", e.what());
+    }
+  } else {
+    fprintf(stderr, "[DEBUG] Could not open dSYM file: %s\n", strerror(errno));
+  }
+#endif
 
   // If there isn't a .debug_info section, check for the .gnu_debuglink section
   auto& link_section = f.get_section(".gnu_debuglink");
@@ -308,9 +347,26 @@ bool in_scope(const string& name, const unordered_set<string>& scope) {
 
 void memory_map::build(const unordered_set<string>& binary_scope,
                        const unordered_set<string>& source_scope) {
+  FILE* debug = fopen("/tmp/coz_debug.txt", "a");
+  if(debug) {
+    fprintf(debug, "[DEBUG] memory_map::build() called\n");
+    fclose(debug);
+  }
+
+  auto loaded = get_loaded_files();
+  debug = fopen("/tmp/coz_debug.txt", "a");
+  if(debug) {
+    fprintf(debug, "[DEBUG] Loaded files count: %zu\n", loaded.size());
+    fclose(debug);
+  }
+
   size_t in_scope_count = 0;
-  for(const auto& f : get_loaded_files()) {
+  for(const auto& f : loaded) {
+    fprintf(stderr, "[DEBUG] Checking file: %s\n", f.first.c_str());
+    fflush(stderr);
     if(in_scope(f.first, binary_scope)) {
+      fprintf(stderr, "[DEBUG] File is in scope!\n");
+      fflush(stderr);
       try {
         if(process_file(f.first, f.second, source_scope)) {
           INFO << "Including lines from executable " << f.first;
@@ -452,6 +508,8 @@ void memory_map::process_inlines(const dwarf::die& d,
 
 bool memory_map::process_file(const string& name, uintptr_t load_address,
                               const unordered_set<string>& source_scope) {
+  fprintf(stderr, "[DEBUG] process_file called for: %s\n", name.c_str());
+  fflush(stderr);
   elf::elf f = locate_debug_executable(name);
   // If a debug version of the file could not be located, return false
   if(!f.valid()) {

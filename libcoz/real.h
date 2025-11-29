@@ -26,17 +26,23 @@ namespace real {
   DECLARE_WRAPPER(kill);
   DECLARE_WRAPPER(sigprocmask);
   DECLARE_WRAPPER(sigwait);
+#ifndef __APPLE__
   DECLARE_WRAPPER(sigwaitinfo);
   DECLARE_WRAPPER(sigtimedwait);
+#endif
   
   DECLARE_WRAPPER(pthread_create);
   DECLARE_WRAPPER(pthread_exit);
   DECLARE_WRAPPER(pthread_join);
+#ifndef __APPLE__
   DECLARE_WRAPPER(pthread_tryjoin_np);
   DECLARE_WRAPPER(pthread_timedjoin_np);
+#endif
   DECLARE_WRAPPER(pthread_sigmask);
   DECLARE_WRAPPER(pthread_kill);
+#ifndef __APPLE__
   DECLARE_WRAPPER(pthread_sigqueue);
+#endif
   
   DECLARE_WRAPPER(pthread_mutex_lock);
   DECLARE_WRAPPER(pthread_mutex_trylock);
@@ -46,15 +52,21 @@ namespace real {
   DECLARE_WRAPPER(pthread_cond_timedwait);
   DECLARE_WRAPPER(pthread_cond_signal);
   DECLARE_WRAPPER(pthread_cond_broadcast);
-  
+
+#ifndef __APPLE__
   DECLARE_WRAPPER(pthread_barrier_wait);
-  
+#endif
+
   DECLARE_WRAPPER(pthread_rwlock_rdlock);
   DECLARE_WRAPPER(pthread_rwlock_tryrdlock);
+#ifndef __APPLE__
   DECLARE_WRAPPER(pthread_rwlock_timedrdlock);
+#endif
   DECLARE_WRAPPER(pthread_rwlock_wrlock);
   DECLARE_WRAPPER(pthread_rwlock_trywrlock);
+#ifndef __APPLE__
   DECLARE_WRAPPER(pthread_rwlock_timedwrlock);
+#endif
   DECLARE_WRAPPER(pthread_rwlock_unlock);
 };
 

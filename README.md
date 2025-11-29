@@ -39,9 +39,13 @@ An OpenSUSE package was prepared by user
 [@zethra](https://github.com/zethra) and is available at
 <https://build.opensuse.org/package/show/home:zethra/coz-profiler>.
 
-Coz should work on any modern Linux system (specifically, running
-version 2.6.32 or later, with support for the `perf_event_open` system
-call) with a Python 3.x interpreter.
+Coz works on Linux systems (running version 2.6.32 or later, with support
+for the `perf_event_open` system call) and macOS (using Apple's kperf framework).
+Both platforms require a Python 3.x interpreter.
+
+**macOS Note**: The macOS port uses Apple's private kperf framework for sampling.
+This requires either running with elevated privileges or adjusting System Integrity
+Protection settings. The kperf API is undocumented and may change in future macOS versions.
 
 ## Libraries/Wrappers
 
@@ -101,7 +105,7 @@ If you are on a remote system, you can open the Coz viewer in your browser: [htt
 ## Using Coz
 Using Coz requires a small amount of setup, but you can jump ahead to the section on the included [sample applications](#sample-applications) in this repository if you want to try Coz right away.
 
-To run your program with Coz, you will need to build it with debug information (`-g -gdwarf-3`). You do not need to include debug symbols in the main executable: coz uses the same procedure as `gdb` to locate debug information for stripped binaries.
+To run your program with Coz, you will need to build it with debug information (`-g`). Coz now supports modern DWARF versions (including DWARF 5), so you can use your compiler's default debug format. You do not need to include debug symbols in the main executable: coz uses the same procedure as `gdb` to locate debug information for stripped binaries.
 
 Once you have your program built with debug information, you can run it with Coz using the command `coz run {coz options} --- {program name and arguments}`. But, to produce a useful profile you need to decide which part(s) of the application you want to speed up by specifying one or more progress points.
 
