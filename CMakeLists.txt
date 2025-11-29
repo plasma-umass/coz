@@ -10,11 +10,47 @@ set(CONAN_CMAKE_SILENT_OUTPUT ON)
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR}/cmake)
 
 find_package(Threads REQUIRED)
-find_package(libelfin REQUIRED)
 
-# Allow compiler to use its default DWARF version (typically DWARF 5 for modern compilers)
-# Removed hardcoded -gdwarf-3 to support modern DWARF versions
-add_compile_options(-g)
+option(USE_SYSTEM_LIBELFIN "Link against libelfin discovered via pkg-config" OFF)
+
+if(USE_SYSTEM_LIBELFIN)
+    find_package(libelfin REQUIRED)
+else()
+    set(LIBELFIN_ELF_SOURCES
+        ${PROJECT_SOURCE_DIR}/libelfin/elf/elf.cc
+        ${PROJECT_SOURCE_DIR}/libelfin/elf/mmap_loader.cc
+        ${PROJECT_SOURCE_DIR}/libelfin/elf/to_string.cc)
+
+    set(LIBELFIN_DWARF_SOURCES
+        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/abbrev.cc
+        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/attrs.cc
+        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/cursor.cc
+        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/die.cc
+        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/die_str_map.cc
+        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/dwarf.cc
+        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/elf.cc
+        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/expr.cc
+        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/line.cc
+        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/rangelist.cc
+        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/to_string.cc
+        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/value.cc)
+
+    add_library(libelfin_internal STATIC
+        ${LIBELFIN_ELF_SOURCES}
+        ${LIBELFIN_DWARF_SOURCES})
+    target_include_directories(libelfin_internal PUBLIC
+        ${PROJECT_SOURCE_DIR}/libelfin
+        ${PROJECT_SOURCE_DIR}/libelfin/elf
+        ${PROJECT_SOURCE_DIR}/libelfin/dwarf)
+    target_compile_features(libelfin_internal PUBLIC cxx_std_11)
+    set_target_properties(libelfin_internal PROPERTIES
+        POSITION_INDEPENDENT_CODE ON)
+    add_library(libelfin::libelfin ALIAS libelfin_internal)
+endif()
+
+# Until the bundled libelfin gains full DWARF5 line-table support, force DWARF4
+# debug info so coz can locate progress points on modern Linux toolchains.
+add_compile_options(-g -gdwarf-4)
 
 option(INSTALL_COZ "Enable installation of coz. (Projects embedding coz may want to turn this OFF.)" ON)
 
@@ -64,4 +100,3 @@ if(APPLE)
     # The quotes are important so CMake treats "-framework Kperf" as a single argument.
     target_link_libraries(coz PRIVATE "-framework Kperf")
 endif()
-
