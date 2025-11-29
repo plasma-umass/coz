@@ -48,9 +48,9 @@ else()
     add_library(libelfin::libelfin ALIAS libelfin_internal)
 endif()
 
-# Until the bundled libelfin gains full DWARF5 line-table support, force DWARF4
-# debug info so coz can locate progress points on modern Linux toolchains.
-add_compile_options(-g -gdwarf-4)
+# Always emit debug info so line tables are available when resolving
+# progress points, but let the toolchain decide which DWARF version to use.
+add_compile_options(-g)
 
 option(INSTALL_COZ "Enable installation of coz. (Projects embedding coz may want to turn this OFF.)" ON)
 

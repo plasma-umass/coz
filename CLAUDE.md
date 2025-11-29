@@ -179,11 +179,11 @@ Key constants in `profiler.h`:
 
 ### Running Coz
 
-Programs must be compiled with debug info (`-g -gdwarf-3`) and linked with `-ldl`:
+Programs must be compiled with debug info (`-g`) and linked with `-ldl`. Coz understands modern DWARF line tables (up through DWARF 5), so you can rely on your toolchain's default DWARF version.
 
 ```bash
 # Build target with debug info
-g++ -g -gdwarf-3 -o myapp myapp.cpp -ldl
+g++ -g -o myapp myapp.cpp -ldl
 
 # Run with coz
 coz run --- ./myapp
@@ -191,6 +191,12 @@ coz run --- ./myapp
 # View results (opens browser or use hosted viewer)
 coz plot
 # Or visit: https://coz-profiler.github.io/coz-ui/
+```
+
+If you only want to collect lines from your own sources (and not the C++ standard library), pass one or more `--source-scope` globs or set `COZ_SOURCE_SCOPE`. For example:
+
+```bash
+coz run --source-scope '/media/psf/Home/git/coz-portage/benchmarks/**' --- ./coz/benchmarks/toy/toy
 ```
 
 ### Adding Progress Points
