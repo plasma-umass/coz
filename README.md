@@ -39,9 +39,13 @@ An OpenSUSE package was prepared by user
 [@zethra](https://github.com/zethra) and is available at
 <https://build.opensuse.org/package/show/home:zethra/coz-profiler>.
 
-Coz should work on any modern Linux system (specifically, running
-version 2.6.32 or later, with support for the `perf_event_open` system
-call) with a Python 3.x interpreter.
+Coz works on Linux systems (running version 2.6.32 or later, with support
+for the `perf_event_open` system call) and macOS (using Apple's kperf framework).
+Both platforms require a Python 3.x interpreter.
+
+**macOS Note**: The macOS port uses Apple's private kperf framework for sampling.
+This requires either running with elevated privileges or adjusting System Integrity
+Protection settings. The kperf API is undocumented and may change in future macOS versions.
 
 ## Libraries/Wrappers
 
@@ -56,43 +60,51 @@ has wrappers for several other languages, listed below:
 
 ## Building Coz From Source
 
-To build Coz from source, you will need:
+### Install build prerequisites
 
-- A copy of the source code for this project
-- A compiler with C++0x support (clang++ or g++)
-- A Python interpreter (Python 3.x is required)
-
-Once you have all dependencies in place, build Coz with CMake. On Debian-based distributions, the following commands should take care of the entire process:
+On Debian/Ubuntu this covers everything (including the TypeScript viewer tooling and docs):
 
 ```shell
 sudo apt-get update
-sudo apt-get install -y libdwarf-dev
-sudo apt-get install -y nodejs npm
 sudo apt-get install -y build-essential cmake docutils-common git python3 pkg-config
-git clone https://github.com/plasma-umass/libelfin && cd libelfin && make && sudo make install && cd ..
-git clone https://github.com/plasma-umass/coz && cd coz && cmake . && make && sudo make install && cd ..
-sudo ldconfig
+sudo apt-get install -y nodejs npm
+# Optional, but required if you plan to build the bundled benchmarks
+sudo apt-get install -y libbz2-dev libsqlite3-dev
 ```
 
-Next, you need to change the "perf_event_paranoia" level so Coz can run.
+The repository vendors libelfin, so you do **not** need to build or install it separately.
+
+### Configure and build
+
+Use the standard out-of-source workflow (shown with `build/`, but any directory works):
+
+```shell
+cmake -S . -B build          # Configure (defaults to Release with debug info)
+cmake --build build -j       # Build libcoz, the CLI, and the tests
+ctest --test-dir build -V    # Optional: run the regression tests
+cmake --install build        # Optional: install into CMAKE_INSTALL_PREFIX
+```
+
+Before running Coz on Linux, relax `perf_event_paranoid` so sampling works:
 
 ```shell
 sudo sh -c 'echo 1 >/proc/sys/kernel/perf_event_paranoid'
 ```
 
-Now you can test Coz. Build the benchmark suite and run one of the benchmarks (the SQLite3 benchmark takes a while to build).
+### Building the Benchmarks
+
+The benchmark suite is off by default because it pulls in extra dependencies. Enable it when configuring:
 
 ```shell
-sudo apt-get install -y libbz2-dev libsqlite3-dev
-cd coz/benchmarks && cmake . && make && cd ../..
-coz run --- ./coz/benchmarks/toy/toy
+cmake -S . -B build-bench -DBUILD_BENCHMARKS=ON
+cmake --build build-bench -j
 ```
 
-Finally, use the Coz viewer to see the results. This command will open up a browser tab, from which you will need to load the file `profile.coz`.
+When `BUILD_BENCHMARKS` is set, CMake automatically switches the build type to `RelWithDebInfo` (or keeps `Debug`) so DWARF line tables are available. Benchmark binaries live under `build-bench/benchmarks/<name>/`.
 
-```shell
-coz plot
-```
+### Viewer
+
+After profiling, open the results locally (`coz plot`, which launches the bundled HTML UI) or visit [https://coz-profiler.github.io/coz-ui/](https://coz-profiler.github.io/coz-ui/) and drop in your `profile.coz`.
 
 If you are on a remote system, you can open the Coz viewer in your browser: [https://coz-profiler.github.io/coz-ui/](https://coz-profiler.github.io/coz-ui/) and then load the file `profile.coz`, which you will have to transfer to your local machine.
 
@@ -101,7 +113,7 @@ If you are on a remote system, you can open the Coz viewer in your browser: [htt
 ## Using Coz
 Using Coz requires a small amount of setup, but you can jump ahead to the section on the included [sample applications](#sample-applications) in this repository if you want to try Coz right away.
 
-To run your program with Coz, you will need to build it with debug information (`-g -gdwarf-3`). You do not need to include debug symbols in the main executable: coz uses the same procedure as `gdb` to locate debug information for stripped binaries.
+To run your program with Coz, you will need to build it with debug information (`-g`). Coz now supports modern DWARF versions (including DWARF 5), so you can use your compiler's default debug format. You do not need to include debug symbols in the main executable: coz uses the same procedure as `gdb` to locate debug information for stripped binaries.
 
 Once you have your program built with debug information, you can run it with Coz using the command `coz run {coz options} --- {program name and arguments}`. But, to produce a useful profile you need to decide which part(s) of the application you want to speed up by specifying one or more progress points.
 
@@ -127,7 +139,14 @@ Coz has command line options to specify progress points when profiling the appli
 To plot profile results, go to http://plasma-umass.github.io/coz/ and load your profile. This page also includes several sample profiles from PARSEC benchmarks.
 
 ## Sample Applications
-The `benchmarks` directory in this repository includes several small benchmarks with progress points added at appropriate locations. To build and run one of these benchmarks with `coz`, just browse to `benchmarks` and type `cmake . && make`, then you can execute the programs compiled in `benchmarks/{benchmark}`. These programs may require several runs before coz has enough measurements to generate a useful profile. Once you have profiled these programs for several minutes, go to http://plasma-umass.github.io/coz/ to load and plot your profile.
+The `benchmarks/` directory includes several small programs with progress points already wired up. Once you configure with `-DBUILD_BENCHMARKS=ON` (see above), you can run them straight from the build tree:
+
+```shell
+./build-bench/benchmarks/toy/toy
+coz run --- ./build-bench/benchmarks/toy/toy
+```
+
+These programs may need several runs before Coz accumulates enough samples to emit a useful profile. Upload `profile.coz` to the viewer when you are done.
 
 ## CMake
 When you install coz it installs a cmake config file. To add coz to a cmake project simply use the command `find_package(coz-profiler)`. This will import a target for the library and includes called `coz::coz` and a target for the coz binary `coz::profiler`. For guidance on how to use these targets refer to the CMake documentation.

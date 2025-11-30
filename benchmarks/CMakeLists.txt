@@ -1,4 +1,7 @@
-add_compile_options(-g -O3 -DNDEBUG -gdwarf-3)
+cmake_minimum_required(VERSION 3.13)
+
+# Emit debug info for benchmarks so line tables are available when profiling.
+add_compile_options(-g -O3 -DNDEBUG)
 
 function(add_coz_run_target name)
     set(one_value_args "")
