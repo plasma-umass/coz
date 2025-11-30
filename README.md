@@ -102,6 +102,8 @@ cmake --build build-bench -j
 
 When `BUILD_BENCHMARKS` is set, CMake automatically switches the build type to `RelWithDebInfo` (or keeps `Debug`) so DWARF line tables are available. Benchmark binaries live under `build-bench/benchmarks/<name>/`.
 
+A number of the benchmarks are from the Phoenix benchmark suite, and several require data files. These are available for download via links in the README from [the Phoenix repository](https://github.com/kozyraki/phoenix).
+
 ### Viewer
 
 After profiling, open the results locally (`coz plot`, which launches the bundled HTML UI) or visit [https://coz-profiler.github.io/coz-ui/](https://coz-profiler.github.io/coz-ui/) and drop in your `profile.coz`.
