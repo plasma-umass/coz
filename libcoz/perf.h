@@ -2,14 +2,23 @@
  * Copyright (c) 2015, Charlie Curtsinger and Emery Berger,
  *                     University of Massachusetts Amherst
  * This file is part of the Coz project. See LICENSE.md file at the top-level
- * directory of this distribution and at http://github.com/plasma-umass/coz.
+ * distribution of this distribution and at http://github.com/plasma-umass/coz.
  */
 
 #if !defined(CAUSAL_RUNTIME_PERF_H)
 #define CAUSAL_RUNTIME_PERF_H
 
-#include <linux/perf_event.h>
-#include <sys/types.h>
+// Platform-specific includes
+#ifdef __APPLE__
+  #include "perf_macos.h"
+#else
+  // Linux version
+  #include <linux/perf_event.h>
+  #include <sys/types.h>
+#endif
+
+#ifndef __APPLE__
+// Linux-specific implementation continues below
 
 #include <cstddef>
 #include <cstdint>
@@ -237,4 +246,6 @@ private:
   uint64_t _read_format = 0;
 };
 
-#endif
+#endif // !__APPLE__
+
+#endif // CAUSAL_RUNTIME_PERF_H

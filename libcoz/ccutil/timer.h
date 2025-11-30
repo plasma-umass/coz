@@ -7,10 +7,12 @@
 
 #include "log.h"
 
+#ifndef __APPLE__
+// Linux-specific timer using POSIX timer API
 class timer {
 public:
   timer() : _initialized(false) {}
-  
+
   timer(int sig) {
     struct sigevent ev;
     memset(&ev, 0, sizeof(ev));
@@ -77,9 +79,50 @@ public:
 private:
   timer(const timer&) = delete;
   void operator=(const timer&) = delete;
-  
+
   timer_t _timer;
   bool _initialized;
 };
 
+#else
+// macOS stub - timers are handled differently via dispatch in perf_macos
+class timer {
+public:
+  timer() : _initialized(false), _sig(0) {}
+  timer(int sig) : _initialized(true), _sig(sig) {
+    // On macOS, timing is handled by dispatch timers in perf_macos.cpp
+    // This is just a stub to satisfy compilation
+  }
+
+  // Allow move construction and assignment
+  timer(timer&& other) : _sig(other._sig), _initialized(other._initialized) {
+    other._initialized = false;
+  }
+
+  timer& operator=(timer&& other) {
+    if (this != &other) {
+      _sig = other._sig;
+      _initialized = other._initialized;
+      other._initialized = false;
+    }
+    return *this;
+  }
+
+  void start_interval(size_t time_ns) {
+    // No-op on macOS - handled by dispatch timers
+  }
+
+  void start_oneshot(size_t time_ns) {
+    // No-op on macOS - handled by dispatch timers
+  }
+
+private:
+  timer(const timer&) = delete;
+  timer& operator=(const timer&) = delete;
+
+  int _sig;
+  bool _initialized;
+};
 #endif
+
+#endif // CCUTIL_TIMER_H

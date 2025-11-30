@@ -7,7 +7,17 @@
 
 #include "profiler.h"
 
-#include <asm/unistd.h>
+#ifndef __APPLE__
+  #include <asm/unistd.h>
+#else
+  // macOS doesn't have gettid(), provide implementation
+  #include <pthread.h>
+  static inline pid_t gettid() {
+    uint64_t tid;
+    pthread_threadid_np(NULL, &tid);
+    return (pid_t)tid;
+  }
+#endif
 #include <execinfo.h>
 #include <limits.h>
 #include <poll.h>
@@ -343,7 +353,8 @@ void* profiler::start_thread(void* p) {
 }
 
 void profiler::begin_sampling(thread_state* state) {
-  // Set the perf_event sampler configuration
+#ifndef __APPLE__
+  // Set the perf_event sampler configuration (Linux)
   struct perf_event_attr pe;
   memset(&pe, 0, sizeof(pe));
   pe.type = PERF_TYPE_SOFTWARE;
@@ -360,6 +371,12 @@ void profiler::begin_sampling(thread_state* state) {
   state->process_timer = timer(SampleSignal);
   state->process_timer.start_interval(SamplePeriod * SampleBatchSize);
   state->sampler.start();
+#else
+  // macOS version using kperf-based timer sampling
+  state->sampler = perf_event(SamplePeriod);
+  state->process_timer = timer(SampleSignal);
+  state->sampler.start();
+#endif
 }
 
 void profiler::end_sampling() {

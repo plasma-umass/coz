@@ -14,6 +14,12 @@
 #include <stdint.h>
 #include <string.h>
 
+#ifndef __sighandler_t
+typedef void (*__sighandler_t)(int);
+#endif
+typedef __sighandler_t sighandler_t;
+
+
 static bool resolving = false;        //< Set to true while symbol resolution is in progress
 static bool in_dlopen = false;        //< Set to true while dlopen is running
 static void* pthread_handle = NULL;   //< The `dlopen` handle to libpthread
@@ -107,6 +113,7 @@ static int resolve_sigwait(const sigset_t* set, int* sig) {
   else return -1;
 }
 
+#ifndef __APPLE__
 static int resolve_sigwaitinfo(const sigset_t* set, siginfo_t* info) {
   GET_SYMBOL(sigwaitinfo);
   if(real_sigwaitinfo) return real_sigwaitinfo(set, info);
@@ -118,6 +125,7 @@ static int resolve_sigtimedwait(const sigset_t* set, siginfo_t* info, const stru
   if(real_sigtimedwait) return real_sigtimedwait(set, info, timeout);
   else return -1;
 }
+#endif
 
 static int resolve_pthread_create(pthread_t* t, const pthread_attr_t* attr, void* (*fn)(void*), void* arg) throw() {
   GET_SYMBOL_HANDLE(pthread_create, get_pthread_handle());
@@ -137,6 +145,7 @@ static int resolve_pthread_join(pthread_t t, void** ret) {
   else return -1;
 }
 
+#ifndef __APPLE__
 static int resolve_pthread_tryjoin_np(pthread_t t, void** ret) throw() {
   GET_SYMBOL_HANDLE(pthread_tryjoin_np, get_pthread_handle());
   if(real_pthread_tryjoin_np) return real_pthread_tryjoin_np(t, ret);
@@ -148,6 +157,7 @@ static int resolve_pthread_timedjoin_np(pthread_t t, void** ret, const struct ti
   if(real_pthread_timedjoin_np) return real_pthread_timedjoin_np(t, ret, abstime);
   else return -1;
 }
+#endif
 
 static int resolve_pthread_kill(pthread_t t, int sig) throw() {
   GET_SYMBOL_HANDLE(pthread_kill, get_pthread_handle());
@@ -155,11 +165,13 @@ static int resolve_pthread_kill(pthread_t t, int sig) throw() {
   else return -1;
 }
 
+#ifndef __APPLE__
 static int resolve_pthread_sigqueue(pthread_t t, int sig, const union sigval val) throw() {
   GET_SYMBOL_HANDLE(pthread_sigqueue, get_pthread_handle());
   if(real_pthread_sigqueue) return real_pthread_sigqueue(t, sig, val);
   else return -1;
 }
+#endif
 
 static int resolve_pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset) throw() {
   GET_SYMBOL_HANDLE(pthread_sigmask, get_pthread_handle());
@@ -209,11 +221,13 @@ static int resolve_pthread_cond_broadcast(pthread_cond_t* cond) throw() {
   else return 0;  // Silently elide synchronization during linking
 }
 
+#ifndef __APPLE__
 static int resolve_pthread_barrier_wait(pthread_barrier_t* barr) throw() {
   GET_SYMBOL_HANDLE(pthread_barrier_wait, get_pthread_handle());
   if(real_pthread_barrier_wait) return real_pthread_barrier_wait(barr);
   else return 0;  // Silently elide synchronization during linking
 }
+#endif
 
 static int resolve_pthread_rwlock_rdlock(pthread_rwlock_t* rwlock) throw() {
   GET_SYMBOL_HANDLE(pthread_rwlock_rdlock, get_pthread_handle());
@@ -227,11 +241,13 @@ static int resolve_pthread_rwlock_tryrdlock(pthread_rwlock_t* rwlock) throw() {
   else return 0;  // Silently elide synchronization during linking
 }
 
+#ifndef __APPLE__
 static int resolve_pthread_rwlock_timedrdlock(pthread_rwlock_t* rwlock, const struct timespec* abstime) throw() {
   GET_SYMBOL_HANDLE(pthread_rwlock_timedrdlock, get_pthread_handle());
   if(real_pthread_rwlock_timedrdlock) return real_pthread_rwlock_timedrdlock(rwlock, abstime);
   else return 0;  // Silently elide synchronization during linking
 }
+#endif
 
 static int resolve_pthread_rwlock_wrlock(pthread_rwlock_t* rwlock) throw() {
   GET_SYMBOL_HANDLE(pthread_rwlock_wrlock, get_pthread_handle());
@@ -245,11 +261,13 @@ static int resolve_pthread_rwlock_trywrlock(pthread_rwlock_t* rwlock) throw() {
   else return 0;  // Silently elide synchronization during linking
 }
 
+#ifndef __APPLE__
 static int resolve_pthread_rwlock_timedwrlock(pthread_rwlock_t* rwlock, const struct timespec* abstime) throw() {
   GET_SYMBOL_HANDLE(pthread_rwlock_timedwrlock, get_pthread_handle());
   if(real_pthread_rwlock_timedwrlock) return real_pthread_rwlock_timedwrlock(rwlock, abstime);
   else return 0;  // Silently elide synchronization during linking
 }
+#endif
 
 static int resolve_pthread_rwlock_unlock(pthread_rwlock_t* rwlock) throw() {
   GET_SYMBOL_HANDLE(pthread_rwlock_unlock, get_pthread_handle());
@@ -274,17 +292,23 @@ namespace real {
   DEFINE_WRAPPER(kill);
   DEFINE_WRAPPER(sigprocmask);
   DEFINE_WRAPPER(sigwait);
+#ifndef __APPLE__
   DEFINE_WRAPPER(sigwaitinfo);
   DEFINE_WRAPPER(sigtimedwait);
+#endif
 
   DEFINE_WRAPPER(pthread_create);
   DEFINE_WRAPPER(pthread_exit);
   DEFINE_WRAPPER(pthread_join);
+#ifndef __APPLE__
   DEFINE_WRAPPER(pthread_tryjoin_np);
   DEFINE_WRAPPER(pthread_timedjoin_np);
+#endif
   DEFINE_WRAPPER(pthread_sigmask);
   DEFINE_WRAPPER(pthread_kill);
+#ifndef __APPLE__
   DEFINE_WRAPPER(pthread_sigqueue);
+#endif
 
   DEFINE_WRAPPER(pthread_mutex_lock);
   DEFINE_WRAPPER(pthread_mutex_trylock);
@@ -295,13 +319,19 @@ namespace real {
   DEFINE_WRAPPER(pthread_cond_signal);
   DEFINE_WRAPPER(pthread_cond_broadcast);
 
+#ifndef __APPLE__
   DEFINE_WRAPPER(pthread_barrier_wait);
+#endif
 
   DEFINE_WRAPPER(pthread_rwlock_rdlock);
   DEFINE_WRAPPER(pthread_rwlock_tryrdlock);
+#ifndef __APPLE__
   DEFINE_WRAPPER(pthread_rwlock_timedrdlock);
+#endif
   DEFINE_WRAPPER(pthread_rwlock_wrlock);
   DEFINE_WRAPPER(pthread_rwlock_trywrlock);
+#ifndef __APPLE__
   DEFINE_WRAPPER(pthread_rwlock_timedwrlock);
+#endif
   DEFINE_WRAPPER(pthread_rwlock_unlock);
 }
