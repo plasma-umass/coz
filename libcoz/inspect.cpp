@@ -30,6 +30,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include <algorithm>
 #include <libelfin/dwarf/dwarf++.hh>
 #include <libelfin/elf/elf++.hh>
 
@@ -38,6 +39,8 @@
 #include "ccutil/log.h"
 
 using namespace std;
+
+static dwarf::value find_attribute(const dwarf::die& d, dwarf::DW_AT attr);
 
 /**
  * Locate the build ID encoded in an ELF file and return it as a formatted string
@@ -143,13 +146,9 @@ static const string get_full_path(const string filename) {
  * resolved via the PATH variable.
  */
 static elf::elf locate_debug_executable(const string filename) {
-  fprintf(stderr, "[DEBUG] locate_debug_executable called for: %s\n", filename.c_str());
-  fflush(stderr);
   elf::elf f;
 
   const string full_path = get_full_path(filename);
-  fprintf(stderr, "[DEBUG] Full path: %s\n", full_path.c_str());
-  fflush(stderr);
 
   // If a full path wasn't found, return the invalid ELF file
   if(full_path.length() == 0) {
@@ -177,28 +176,17 @@ static elf::elf locate_debug_executable(const string filename) {
   string binary_name = full_path.substr(full_path.find_last_of('/') + 1);
   string dsym_path = full_path + ".dSYM/Contents/Resources/DWARF/" + binary_name;
 
-  fprintf(stderr, "[DEBUG] Checking for dSYM at: %s\n", dsym_path.c_str());
-  fflush(stderr);
   int dsym_fd = open(dsym_path.c_str(), O_RDONLY);
   if(dsym_fd >= 0) {
-    fprintf(stderr, "[DEBUG] Opened dSYM file\n");
-    fflush(stderr);
     try {
       elf::elf dsym_f = elf::elf(elf::create_mmap_loader(dsym_fd));
-      fprintf(stderr, "[DEBUG] Loaded dSYM as elf object\n");
-      fflush(stderr);
       auto debug_info = dsym_f.get_section(".debug_info");
-      fprintf(stderr, "[DEBUG] Got debug_info section, valid=%d\n", debug_info.valid());
-      fflush(stderr);
       if(debug_info.valid()) {
-        fprintf(stderr, "[DEBUG] Found debug info in dSYM bundle: %s\n", dsym_path.c_str());
         return dsym_f;
       }
     } catch (const std::exception& e) {
-      fprintf(stderr, "[DEBUG] Error loading dSYM: %s\n", e.what());
+      (void)e;
     }
-  } else {
-    fprintf(stderr, "[DEBUG] Could not open dSYM file: %s\n", strerror(errno));
   }
 #endif
 
@@ -335,8 +323,8 @@ bool wildcard_match(const string& subject, const string& pattern) {
   return wildcard_match(subject.begin(), subject.end(), pattern.begin(), pattern.end());
 }
 
-bool in_scope(const string& name, const unordered_set<string>& scope) {
-  string normalized = canonicalize_path(name);
+static bool in_scope_normalized(const string& normalized,
+                                const unordered_set<string>& scope) {
   for(const string& pattern : scope) {
     if(wildcard_match(normalized, pattern)) {
       return true;
@@ -345,30 +333,172 @@ bool in_scope(const string& name, const unordered_set<string>& scope) {
   return false;
 }
 
-void memory_map::build(const unordered_set<string>& binary_scope,
-                       const unordered_set<string>& source_scope) {
-  FILE* debug = fopen("/tmp/coz_debug.txt", "a");
-  if(debug) {
-    fprintf(debug, "[DEBUG] memory_map::build() called\n");
-    fclose(debug);
+bool in_scope(const string& name, const unordered_set<string>& scope) {
+  string normalized = canonicalize_path(name);
+  return in_scope_normalized(normalized, scope);
+}
+
+static bool path_has_prefix(const string& path, const string& prefix) {
+  if(prefix.empty())
+    return false;
+  if(prefix.size() > path.size())
+    return false;
+  if(path.compare(0, prefix.size(), prefix) != 0)
+    return false;
+  return path.size() == prefix.size() || path[prefix.size()] == '/';
+}
+
+static bool is_system_path(const string& normalized) {
+  static const vector<string> prefixes = {
+    "/usr/include",
+    "/usr/lib",
+    "/usr/local/include",
+    "/usr/local/lib",
+    "/lib",
+    "/lib64"
+  };
+  for(const auto& prefix : prefixes) {
+    if(path_has_prefix(normalized, prefix))
+      return true;
+  }
+  return false;
+}
+
+static bool file_matches_scope(const string& name,
+                               const unordered_set<string>& scope,
+                               bool allow_system_sources) {
+  if(name.empty())
+    return false;
+  string normalized = canonicalize_path(name);
+  if(!allow_system_sources && is_system_path(normalized))
+    return false;
+  if(scope.empty())
+    return true;
+  return in_scope_normalized(normalized, scope);
+}
+
+static void enqueue_range(vector<memory_map::queued_range>& pending,
+                          const string& filename,
+                          size_t line_no,
+                          interval range,
+                          bool preferred = false) {
+  if(filename.empty())
+    return;
+  pending.push_back(memory_map::queued_range{filename, line_no, range, preferred});
+}
+
+struct subprogram_range {
+  uintptr_t low;
+  uintptr_t high;
+  std::string filename;
+  size_t line;
+  bool in_scope;
+};
+
+static void collect_subprogram_ranges(const dwarf::die& d,
+                                      const dwarf::line_table& table,
+                                      const unordered_set<string>& source_scope,
+                                      bool allow_system_sources,
+                                      vector<subprogram_range>& ranges) {
+  if(!d.valid())
+    return;
+
+  try {
+    if(d.tag == dwarf::DW_TAG::subprogram) {
+      string decl_file;
+      dwarf::value decl_file_val = find_attribute(d, dwarf::DW_AT::decl_file);
+      if(decl_file_val.valid() &&
+         decl_file_val.get_type() == dwarf::value::type::uconstant &&
+         table.valid()) {
+        decl_file = table.get_file(decl_file_val.as_uconstant())->path;
+        decl_file = canonicalize_path(decl_file);
+      }
+
+      size_t decl_line = 0;
+      dwarf::value decl_line_val = find_attribute(d, dwarf::DW_AT::decl_line);
+      if(decl_line_val.valid()) {
+        if(decl_line_val.get_type() == dwarf::value::type::uconstant)
+          decl_line = decl_line_val.as_uconstant();
+        else if(decl_line_val.get_type() == dwarf::value::type::sconstant)
+          decl_line = decl_line_val.as_sconstant();
+      }
+
+      bool file_in_scope = decl_file.size() > 0 &&
+                           file_matches_scope(decl_file, source_scope, allow_system_sources);
+
+      if(file_in_scope && decl_line > 0) {
+        dwarf::value ranges_val = find_attribute(d, dwarf::DW_AT::ranges);
+        if(ranges_val.valid()) {
+          for(auto r : ranges_val.as_rangelist()) {
+            ranges.push_back(subprogram_range{r.low, r.high, decl_file, decl_line, true});
+          }
+        } else {
+          dwarf::value low_pc_val = find_attribute(d, dwarf::DW_AT::low_pc);
+          dwarf::value high_pc_val = find_attribute(d, dwarf::DW_AT::high_pc);
+          if(low_pc_val.valid() && high_pc_val.valid()) {
+            uintptr_t low_pc = 0;
+            uintptr_t high_pc = 0;
+
+            if(low_pc_val.get_type() == dwarf::value::type::address)
+              low_pc = low_pc_val.as_address();
+            else if(low_pc_val.get_type() == dwarf::value::type::uconstant)
+              low_pc = low_pc_val.as_uconstant();
+            else if(low_pc_val.get_type() == dwarf::value::type::sconstant)
+              low_pc = low_pc_val.as_sconstant();
+
+            if(high_pc_val.get_type() == dwarf::value::type::address)
+              high_pc = high_pc_val.as_address();
+            else if(high_pc_val.get_type() == dwarf::value::type::uconstant)
+              high_pc = high_pc_val.as_uconstant();
+            else if(high_pc_val.get_type() == dwarf::value::type::sconstant)
+              high_pc = high_pc_val.as_sconstant();
+
+            if(high_pc > low_pc) {
+              ranges.push_back(subprogram_range{low_pc, high_pc, decl_file, decl_line, true});
+            }
+          }
+        }
+      }
+    }
+  } catch(dwarf::format_error e) {
+    (void)e;
   }
 
-  auto loaded = get_loaded_files();
-  debug = fopen("/tmp/coz_debug.txt", "a");
-  if(debug) {
-    fprintf(debug, "[DEBUG] Loaded files count: %zu\n", loaded.size());
-    fclose(debug);
+  for(const auto& child : d) {
+    collect_subprogram_ranges(child, table, source_scope, allow_system_sources, ranges);
   }
+}
+
+static const subprogram_range* find_subprogram(const vector<subprogram_range>& ranges,
+                                               uintptr_t addr) {
+  if(ranges.empty())
+    return nullptr;
+
+  auto it = upper_bound(ranges.begin(),
+                        ranges.end(),
+                        addr,
+                        [](uintptr_t value, const subprogram_range& range) {
+                          return value < range.low;
+                        });
+  if(it == ranges.begin())
+    return nullptr;
+
+  --it;
+  if(addr >= it->low && addr < it->high)
+    return &(*it);
+  return nullptr;
+}
+
+void memory_map::build(const unordered_set<string>& binary_scope,
+                       const unordered_set<string>& source_scope,
+                       bool allow_system_sources) {
+  auto loaded = get_loaded_files();
 
   size_t in_scope_count = 0;
   for(const auto& f : loaded) {
-    fprintf(stderr, "[DEBUG] Checking file: %s\n", f.first.c_str());
-    fflush(stderr);
     if(in_scope(f.first, binary_scope)) {
-      fprintf(stderr, "[DEBUG] File is in scope!\n");
-      fflush(stderr);
       try {
-        if(process_file(f.first, f.second, source_scope)) {
+        if(process_file(f.first, f.second, source_scope, allow_system_sources)) {
           INFO << "Including lines from executable " << f.first;
           in_scope_count++;
         } else {
@@ -406,7 +536,7 @@ dwarf::value find_attribute(const dwarf::die& d, dwarf::DW_AT attr) {
         return v;
     }
   } catch(dwarf::format_error e) {
-    WARNING << "Ignoring DWARF format error " << e.what();
+    (void)e;
   }
 
   return dwarf::value();
@@ -422,31 +552,25 @@ void memory_map::add_range(std::string filename, size_t line_no, interval range)
 void memory_map::process_inlines(const dwarf::die& d,
                                  const dwarf::line_table& table,
                                  const unordered_set<string>& source_scope,
-                                 uintptr_t load_address) {
+                                 uintptr_t load_address,
+                                 bool allow_system_sources,
+                                 vector<memory_map::queued_range>& pending,
+                                 const string& parent_file,
+                                 size_t parent_line,
+                                 bool parent_in_scope) {
   if(!d.valid())
     return;
 
+  string attribution_file = parent_file;
+  size_t attribution_line = parent_line;
+  bool attribution_valid = parent_in_scope && !parent_file.empty();
+
   try {
     if(d.tag == dwarf::DW_TAG::inlined_subroutine) {
-      string name;
-      dwarf::value name_val = find_attribute(d, dwarf::DW_AT::name);
-      if(name_val.valid()) {
-        name = name_val.as_string();
-      }
-
-      string decl_file;
-      if(d.has(dwarf::DW_AT::decl_file) && table.valid()) {
-        decl_file = table.get_file(d[dwarf::DW_AT::decl_file].as_uconstant())->path;
-      }
-
-      size_t decl_line = 0;
-      dwarf::value decl_line_val = find_attribute(d, dwarf::DW_AT::decl_line);
-      if(decl_line_val.valid())
-        decl_line = decl_line_val.as_uconstant();
-
       string call_file;
       if(d.has(dwarf::DW_AT::call_file) && table.valid()) {
         call_file = table.get_file(d[dwarf::DW_AT::call_file].as_uconstant())->path;
+        call_file = canonicalize_path(call_file);
       }
 
       size_t call_line = 0;
@@ -454,62 +578,90 @@ void memory_map::process_inlines(const dwarf::die& d,
         call_line = d[dwarf::DW_AT::call_line].as_uconstant();
       }
 
-      // If the call location is in scope but the function is not, add an entry
-      if(decl_file.size() > 0 && call_file.size() > 0) {
-        if(!in_scope(decl_file, source_scope) && in_scope(call_file, source_scope)) {
-          // Does this inline have separate ranges?
-          dwarf::value ranges_val = find_attribute(d, dwarf::DW_AT::ranges);
-          if(ranges_val.valid()) {
-            // Add each range
-            for(auto r : ranges_val.as_rangelist()) {
-              add_range(call_file,
-                        call_line,
-                        interval(r.low, r.high) + load_address);
-            }
-          } else {
-            // Must just be one range. Add it
-            dwarf::value low_pc_val = find_attribute(d, dwarf::DW_AT::low_pc);
-            dwarf::value high_pc_val = find_attribute(d, dwarf::DW_AT::high_pc);
+      bool call_in_scope = file_matches_scope(call_file, source_scope, allow_system_sources);
+      bool prefer_new_attribution = !attribution_valid || !is_system_path(call_file);
+      if(call_in_scope && !call_file.empty() && prefer_new_attribution) {
+        attribution_file = call_file;
+        attribution_line = call_line;
+        attribution_valid = true;
+      }
 
-            if(low_pc_val.valid() && high_pc_val.valid()) {
-              uint64_t low_pc;
-              uint64_t high_pc;
+      if(attribution_valid) {
+        dwarf::value ranges_val = find_attribute(d, dwarf::DW_AT::ranges);
+        if(ranges_val.valid()) {
+          for(auto r : ranges_val.as_rangelist()) {
+            enqueue_range(pending,
+                          attribution_file,
+                          attribution_line,
+                          interval(r.low, r.high) + load_address,
+                          /*preferred=*/true);
+          }
+        } else {
+          dwarf::value low_pc_val = find_attribute(d, dwarf::DW_AT::low_pc);
+          dwarf::value high_pc_val = find_attribute(d, dwarf::DW_AT::high_pc);
 
-              if(low_pc_val.get_type() == dwarf::value::type::address)
-                low_pc = low_pc_val.as_address();
-              else if(low_pc_val.get_type() == dwarf::value::type::uconstant)
-                low_pc = low_pc_val.as_uconstant();
-              else if(low_pc_val.get_type() == dwarf::value::type::sconstant)
-                low_pc = low_pc_val.as_sconstant();
+          if(low_pc_val.valid() && high_pc_val.valid()) {
+            uint64_t low_pc = 0;
+            uint64_t high_pc = 0;
 
-              if(high_pc_val.get_type() == dwarf::value::type::address)
-                high_pc = high_pc_val.as_address();
-              else if(high_pc_val.get_type() == dwarf::value::type::uconstant)
-                high_pc = high_pc_val.as_uconstant();
-              else if(high_pc_val.get_type() == dwarf::value::type::sconstant)
-                high_pc = high_pc_val.as_sconstant();
+            if(low_pc_val.get_type() == dwarf::value::type::address)
+              low_pc = low_pc_val.as_address();
+            else if(low_pc_val.get_type() == dwarf::value::type::uconstant)
+              low_pc = low_pc_val.as_uconstant();
+            else if(low_pc_val.get_type() == dwarf::value::type::sconstant)
+              low_pc = low_pc_val.as_sconstant();
 
-              add_range(call_file,
-                        call_line,
-                        interval(low_pc, high_pc) + load_address);
+            if(high_pc_val.get_type() == dwarf::value::type::address)
+              high_pc = high_pc_val.as_address();
+            else if(high_pc_val.get_type() == dwarf::value::type::uconstant)
+              high_pc = high_pc_val.as_uconstant();
+            else if(high_pc_val.get_type() == dwarf::value::type::sconstant)
+              high_pc = high_pc_val.as_sconstant();
+
+            if(high_pc > low_pc) {
+              enqueue_range(pending,
+                            attribution_file,
+                            attribution_line,
+                            interval(low_pc, high_pc) + load_address,
+                            /*preferred=*/true);
             }
           }
         }
       }
+
+      for(const auto& child : d) {
+        process_inlines(child,
+                        table,
+                        source_scope,
+                        load_address,
+                        allow_system_sources,
+                        pending,
+                        attribution_file,
+                        attribution_line,
+                        attribution_valid);
+      }
+      return;
     }
   } catch(dwarf::format_error e) {
-    WARNING << "Ignoring DWARF format error " << e.what();
+    (void)e;
   }
 
   for(const auto& child : d) {
-    process_inlines(child, table, source_scope, load_address);
+    process_inlines(child,
+                    table,
+                    source_scope,
+                    load_address,
+                    allow_system_sources,
+                    pending,
+                    attribution_file,
+                    attribution_line,
+                    attribution_valid);
   }
 }
 
 bool memory_map::process_file(const string& name, uintptr_t load_address,
-                              const unordered_set<string>& source_scope) {
-  fprintf(stderr, "[DEBUG] process_file called for: %s\n", name.c_str());
-  fflush(stderr);
+                              const unordered_set<string>& source_scope,
+                              bool allow_system_sources) {
   elf::elf f = locate_debug_executable(name);
   // If a debug version of the file could not be located, return false
   if(!f.valid()) {
@@ -533,6 +685,8 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
   // Read the DWARF information from the chosen file
   dwarf::dwarf d(dwarf::elf::create_loader(f));
 
+  vector<memory_map::queued_range> pending;
+
   // Walk through the compilation units (source files) in the executable
   for(auto unit : d.compilation_units()) {
 
@@ -541,15 +695,43 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
       size_t prev_line;
       uintptr_t prev_address = 0;
       set<string> included_files;
+      const auto& table = unit.get_line_table();
+      if(!table.valid())
+        continue;
+      vector<subprogram_range> subprograms;
+      collect_subprogram_ranges(unit.root(),
+                                table,
+                                source_scope,
+                                allow_system_sources,
+                                subprograms);
+      sort(subprograms.begin(), subprograms.end(),
+           [](const subprogram_range& a, const subprogram_range& b) {
+             if(a.low != b.low)
+               return a.low < b.low;
+             return a.high < b.high;
+           });
+
       // Walk through the line instructions in the DWARF line table
-      for(auto& line_info : unit.get_line_table()) {
+      for(auto& line_info : table) {
         // Insert an entry if this isn't the first line command in the sequence
-        if(in_scope(prev_filename, source_scope)) {
+        if(file_matches_scope(prev_filename, source_scope, allow_system_sources)) {
+          if(prev_address != 0) {
+            const subprogram_range* owner = find_subprogram(subprograms, prev_address);
+            if(owner && owner->in_scope) {
+              bool owner_is_system = is_system_path(owner->filename);
+              bool prev_is_system = is_system_path(prev_filename);
+              if(prev_is_system && !owner_is_system) {
+                prev_filename = owner->filename;
+                prev_line = owner->line;
+              }
+            }
+          }
           if(prev_address != 0) {
             included_files.insert(prev_filename);
-            add_range(prev_filename,
-                      prev_line,
-                      interval(prev_address, line_info.address) + load_address);
+            enqueue_range(pending,
+                          prev_filename,
+                          prev_line,
+                          interval(prev_address, line_info.address) + load_address);
           }
         }
 
@@ -561,15 +743,36 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
           prev_address = line_info.address;
         }
       }
-      process_inlines(unit.root(), unit.get_line_table(), source_scope, load_address);
+      process_inlines(unit.root(),
+                      table,
+                      source_scope,
+                      load_address,
+                      allow_system_sources,
+                      pending);
 
       for(const string& filename : included_files) {
         INFO << "Included source file " << filename;
       }
 
     } catch(dwarf::format_error e) {
-      WARNING << "Ignoring DWARF format error when reading line table: " << e.what();
+      (void)e;
     }
+  }
+
+  std::sort(pending.begin(), pending.end(),
+            [](const memory_map::queued_range& a, const memory_map::queued_range& b) {
+              if(a.range.get_base() != b.range.get_base())
+                return a.range.get_base() < b.range.get_base();
+              if(a.range.get_limit() != b.range.get_limit())
+                return a.range.get_limit() < b.range.get_limit();
+              if(a.preferred != b.preferred)
+                return a.preferred && !b.preferred;
+              if(a.line != b.line)
+                return a.line < b.line;
+              return a.filename < b.filename;
+            });
+  for(auto& entry : pending) {
+    add_range(entry.filename, entry.line, entry.range);
   }
 
   return true;

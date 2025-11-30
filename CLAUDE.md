@@ -38,6 +38,8 @@ make
 
 **Important**: Benchmarks must be built with debug information (`Debug` or `RelWithDebInfo`). The build will fail if you try to build benchmarks without debug info.
 
+> **DWARF reminder:** the vendored libelfin + `memory_map` logic now handle DWARF 2–5 line tables. DWARF 5 uses an explicit file table (no implicit “file 0 = CU source”), so `line_table::entry::file_index` starts at 0 in that mode. If you touch either libelfin or `libcoz/inspect.cpp`, keep their assumptions in sync and always test against a DWARF‑5 build (GCC’s default on modern Linux).
+
 ### Building Individual Benchmarks
 
 Benchmarks are in `benchmarks/` and each has its own CMakeLists.txt:
@@ -61,7 +63,7 @@ coz run --- ./toy/toy
    - **Platform-specific sampling**:
      - `perf.cpp/h`: Linux implementation using perf_event_open syscall
      - `perf_macos.cpp/h`: macOS implementation using kperf private framework
-   - `inspect.cpp/h`: DWARF debug info parsing using libelfin (supports DWARF 3-5)
+   - `inspect.cpp/h`: DWARF debug info parsing using libelfin (supports DWARF 2-5). Source filtering obeys `COZ_SOURCE_SCOPE` (defaults to `%`) and the optional `COZ_FILTER_SYSTEM=1` env to drop `/usr/include`, `/usr/lib`, etc. Keep those flags in mind before hard-coding additional filters.
    - `real.cpp/h`: Wrapper functions to capture real pthread/libc functions
    - `libcoz.cpp`: Library initialization and exported symbols
 
@@ -193,10 +195,14 @@ coz plot
 # Or visit: https://coz-profiler.github.io/coz-ui/
 ```
 
-If you only want to collect lines from your own sources (and not the C++ standard library), pass one or more `--source-scope` globs or set `COZ_SOURCE_SCOPE`. For example:
+If you only want to collect lines from your own sources (and not the C++ standard library), pass one or more `--source-scope` globs or set `COZ_SOURCE_SCOPE`. Coz also honors `COZ_FILTER_SYSTEM=1` as a quick toggle to drop system headers after the DWARF pass. For example:
 
 ```bash
-coz run --source-scope '/media/psf/Home/git/coz-portage/benchmarks/**' --- ./coz/benchmarks/toy/toy
+# Limit to project files
+coz run --source-scope '/media/psf/Home/git/coz-portage/benchmarks/**' --- ./benchmarks/toy/toy
+
+# Or just drop system headers entirely
+COZ_FILTER_SYSTEM=1 coz run --- ./benchmarks/toy/toy
 ```
 
 ### Adding Progress Points

@@ -82,13 +82,19 @@ add_subdirectory(libcoz)
 
 option(BUILD_BENCHMARKS "Build benchmarks" OFF)
 if(BUILD_BENCHMARKS)
-    if(NOT (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
-        message(FATAL_ERROR "Build benchmarks with debug information - use Debug or RelWithDebInfo")
+    if(NOT CMAKE_BUILD_TYPE)
+        set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
+        message(STATUS "BUILD_BENCHMARKS=ON: defaulting CMAKE_BUILD_TYPE to RelWithDebInfo")
+    elseif(NOT (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
+        message(STATUS "BUILD_BENCHMARKS=ON: forcing debug info by switching to RelWithDebInfo")
+        set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
     endif()
     find_package(SQLite3 REQUIRED)
     find_package(BZip2 REQUIRED)
     add_subdirectory(benchmarks)
 endif()
+
+add_subdirectory(tests)
 
 if(APPLE)
     # 1. Specify the location of private frameworks to the linker

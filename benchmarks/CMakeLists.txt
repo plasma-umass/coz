@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.2)
+cmake_minimum_required(VERSION 3.13)
 
 # Emit debug info for benchmarks so line tables are available when profiling.
 add_compile_options(-g -O3 -DNDEBUG)

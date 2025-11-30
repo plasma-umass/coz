@@ -133,6 +133,9 @@ void init_coz(void) {
 
   vector<string> source_scope_v = split(getenv_safe("COZ_SOURCE_SCOPE"), '\t');
   unordered_set<string> source_scope(source_scope_v.begin(), source_scope_v.end());
+  if(source_scope.empty()) {
+    source_scope.insert("%");
+  }
 
   vector<string> progress_points_v = split(getenv_safe("COZ_PROGRESS_POINTS"), '\t');
   unordered_set<string> progress_points(progress_points_v.begin(), progress_points_v.end());
@@ -151,7 +154,9 @@ void init_coz(void) {
   }
 
   // Build the memory map for all in-scope binaries
-  memory_map::get_instance().build(binary_scope, source_scope);
+  bool filter_system_sources = getenv("COZ_FILTER_SYSTEM");
+
+  memory_map::get_instance().build(binary_scope, source_scope, !filter_system_sources);
 
   // Register any sampling progress points
   for(const string& line_name : progress_points) {
