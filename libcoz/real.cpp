@@ -43,7 +43,12 @@ static void* pthread_handle = NULL;   //< The `dlopen` handle to libpthread
  */
 static void* get_pthread_handle() {
   if(pthread_handle == NULL && !__atomic_exchange_n(&in_dlopen, true, __ATOMIC_ACQ_REL)) {
-    pthread_handle = dlopen("libpthread.so.0", RTLD_NOW | RTLD_GLOBAL);
+#if defined(__APPLE__)
+    const char* lib_name = "/usr/lib/system/libsystem_pthread.dylib";
+#else
+    const char* lib_name = "libpthread.so.0";
+#endif
+    pthread_handle = dlopen(lib_name, RTLD_NOW | RTLD_GLOBAL);
     REQUIRE(pthread_handle != NULL) << dlerror();
     __atomic_store_n(&in_dlopen, false, __ATOMIC_RELEASE);
   }

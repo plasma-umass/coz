@@ -25,19 +25,24 @@
 #include "ccutil/spinlock.h"
 #include "ccutil/static_map.h"
 
+#ifdef __APPLE__
+#include "mac_interpose.h"
+#endif
+
 /// Type of a thread entry function
 typedef void* (*thread_fn_t)(void*);
 
 /// The type of a main function
 typedef int (*main_fn_t)(int, char**, char**);
 
-enum {
+enum : size_t {
   SampleSignal = SIGPROF, //< Signal to generate when samples are ready
-  SamplePeriod = 1000000, //< Time between samples (1ms)
+  SamplePeriod = 5000000, //< Time between samples (5ms) - reduced overhead, fewer samples from short threads
   SampleBatchSize = 10,   //< Samples to batch together for one processing run
   SpeedupDivisions = 20,  //< How many different speedups to try (20 = 5% increments)
   ZeroSpeedupWeight = 7,  //< Weight of speedup=0 versus other speedup values (7 = ~25% of experiments run with zero speedup)
-  ExperimentMinTime = SamplePeriod * SampleBatchSize * 50,  //< Minimum experiment length
+  ExperimentMinTime = SamplePeriod * SampleBatchSize * 10,  //< Minimum experiment length (500ms)
+  ExperimentMaxTime = SamplePeriod * SampleBatchSize * 40,  //< Maximum experiment length (2s) - cap to prevent runaway
   ExperimentCoolOffTime = SamplePeriod * SampleBatchSize,   //< Time to wait after an experiment
   ExperimentTargetDelta = 5 //< Target minimum number of visits to a progress point during an experiment
 };
@@ -126,7 +131,13 @@ public:
     new_arg = new thread_start_arg(fn, arg, state->local_delay);
 
     // Create a wrapped thread and pass in the wrapped argument
+#ifdef __APPLE__
+    // On macOS with DYLD interpose, use bypass guard to call the real pthread_create
+    coz::pthread_interpose_guard guard;
+    return pthread_create(thread, attr, profiler::start_thread, new_arg);
+#else
     return real::pthread_create(thread, attr, profiler::start_thread, new_arg);
+#endif
   }
 
   /// Force threads to catch up on delays, and stop sampling before the thread exits
@@ -136,7 +147,12 @@ public:
     if (_num_threads_running == 0) {
       shutdown();
     }
+#ifdef __APPLE__
+    coz::pthread_interpose_guard guard;
+    pthread_exit(result);
+#else
     real::pthread_exit(result);
+#endif
     abort(); // Silence g++ warning about noreturn
   }
 
@@ -191,6 +207,8 @@ private:
   profiler()  {
     _experiment_active.store(false);
     _global_delay.store(0);
+    _actual_delay.store(0);
+    _experiment_start_delay.store(0);
     _delay_size.store(0);
     _selected_line.store(nullptr);
     _next_line.store(nullptr);
@@ -231,6 +249,8 @@ private:
 
   std::atomic<bool> _experiment_active; //< Is an experiment running?
   std::atomic<size_t> _global_delay;    //< The global delay time required
+  std::atomic<size_t> _actual_delay;    //< The actual time spent waiting (for duration calc)
+  std::atomic<size_t> _experiment_start_delay; //< Global delay at start of current experiment
   std::atomic<size_t> _delay_size;      //< The current delay size
   std::atomic<line*> _selected_line;    //< The line to speed up
   std::atomic<line*> _next_line;        //< The next line to speed up

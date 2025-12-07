@@ -19,6 +19,11 @@ if(APPLE)
     list(APPEND sources
         perf_macos.cpp
         perf_macos.h
+        macho_support.cpp
+        macho_support.h
+        elf_compat.h
+        mac_interpose.cpp
+        mac_interpose.h
     )
 endif()
 

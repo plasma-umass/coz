@@ -177,6 +177,8 @@ Key constants in `profiler.h`:
 - Global atomic delay counter (`_global_delay`) coordinates experiments
 - Pre/post-block hooks skip delays during blocking operations
 
+**macOS caution:** Only install one layer of interposition for `pthread_*` APIs. Exporting replacement symbols *and* using `__DATA_CONST,__interpose` makes early `pthread_create` calls (triggered while `coz_init_macos()` is still running) recurse into the profiler before `thread_state` exists. When you really must fall through to the system implementation, resolve it with `dlsym(RTLD_NEXT, "pthread_create")` instead of the `real::pthread_create` shim to avoid re-entering our own hook. For observing thread lifecycle without interposing, consider `pthread_introspection_hook_install`.
+
 ## Common Development Tasks
 
 ### Running Coz

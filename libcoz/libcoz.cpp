@@ -25,6 +25,7 @@
 #include "progress_point.h"
 #include "real.h"
 #include "util.h"
+#include "mac_interpose.h"
 
 #include "ccutil/log.h"
 
@@ -155,7 +156,6 @@ void init_coz(void) {
 
   // Build the memory map for all in-scope binaries
   bool filter_system_sources = getenv("COZ_FILTER_SYSTEM");
-
   memory_map::get_instance().build(binary_scope, source_scope, !filter_system_sources);
 
   // Register any sampling progress points
@@ -274,28 +274,104 @@ static bool is_coz_signal(int signum) {
   return signum == SampleSignal || signum == SIGSEGV || signum == SIGABRT;
 }
 
+#ifdef __APPLE__
+namespace {
+thread_local bool pthread_interpose_bypass = false;
+} // anonymous namespace
+
+namespace coz {
+pthread_interpose_guard::pthread_interpose_guard() {
+  pthread_interpose_bypass = true;
+}
+
+pthread_interpose_guard::~pthread_interpose_guard() {
+  pthread_interpose_bypass = false;
+}
+
+bool pthread_interpose_bypassed() {
+  return pthread_interpose_bypass;
+}
+} // namespace coz
+#endif
+
+namespace {
+
+int coz_pthread_create_impl(pthread_t* thread,
+                            const pthread_attr_t* attr,
+                            thread_fn_t fn,
+                            void* arg) {
+  return profiler::get_instance().handle_pthread_create(thread, attr, fn, arg);
+}
+
+__attribute__((noreturn)) void coz_pthread_exit_impl(void* result) {
+  profiler::get_instance().handle_pthread_exit(result);
+}
+
+int coz_pthread_join_impl(pthread_t t, void** retval) {
+  if(initialized) profiler::get_instance().pre_block();
+#ifdef __APPLE__
+  coz::pthread_interpose_guard guard;
+  int result = pthread_join(t, retval);
+#else
+  int result = real::pthread_join(t, retval);
+#endif
+  if(initialized) profiler::get_instance().post_block(true);
+  return result;
+}
+
+} // anonymous namespace
+
 extern "C" {
+#ifndef __APPLE__
   /// Pass pthread_create calls to coz so child threads can inherit the parent's delay count
   int pthread_create(pthread_t* thread,
                      const pthread_attr_t* attr,
                      thread_fn_t fn,
                      void* arg) {
-    return profiler::get_instance().handle_pthread_create(thread, attr, fn, arg);
+    return coz_pthread_create_impl(thread, attr, fn, arg);
   }
 
   /// Catch up on delays before exiting, possibly unblocking a thread joining this one
   void __attribute__((noreturn)) pthread_exit(void* result) {
-	  profiler::get_instance().handle_pthread_exit(result);
+    coz_pthread_exit_impl(result);
   }
 
   /// Skip any delays added while waiting to join a thread
   int pthread_join(pthread_t t, void** retval) {
-    if(initialized) profiler::get_instance().pre_block();
-    int result = real::pthread_join(t, retval);
-    if(initialized) profiler::get_instance().post_block(true);
-
-    return result;
+    return coz_pthread_join_impl(t, retval);
   }
+#endif
+
+#ifdef __APPLE__
+  // Wrapper functions for DYLD interpose (called via mac_interpose.cpp)
+  // When called from within libcoz, pthread_create/exit/join call the real functions (no recursion)
+  int coz_pthread_create_wrapper(pthread_t* thread,
+                                  const pthread_attr_t* attr,
+                                  thread_fn_t fn,
+                                  void* arg) {
+    // If bypass is set, call the real pthread_create directly
+    if(coz::pthread_interpose_bypassed()) {
+      return pthread_create(thread, attr, fn, arg);
+    }
+    // Otherwise, go through our implementation
+    return coz_pthread_create_impl(thread, attr, fn, arg);
+  }
+
+  void __attribute__((noreturn)) coz_pthread_exit_wrapper(void* result) {
+    if(coz::pthread_interpose_bypassed()) {
+      pthread_exit(result);
+      __builtin_unreachable();
+    }
+    coz_pthread_exit_impl(result);
+  }
+
+  int coz_pthread_join_wrapper(pthread_t t, void** retval) {
+    if(coz::pthread_interpose_bypassed()) {
+      return pthread_join(t, retval);
+    }
+    return coz_pthread_join_impl(t, retval);
+  }
+#endif
 
 #ifndef __APPLE__
   int pthread_tryjoin_np(pthread_t t, void** retval) {

@@ -9,6 +9,8 @@
 
 #ifdef __APPLE__
   #include "elf_compat.h"
+  #include <mach-o/dyld.h>
+  #include "macho_support.h"
 #else
   #include <elf.h>
 #endif
@@ -145,6 +147,7 @@ static const string get_full_path(const string filename) {
  * This will work for files specified by relative path, absolute path, or raw name
  * resolved via the PATH variable.
  */
+#ifndef __APPLE__
 static elf::elf locate_debug_executable(const string filename) {
   elf::elf f;
 
@@ -235,7 +238,28 @@ static elf::elf locate_debug_executable(const string filename) {
 
   return f;
 }
+#endif // !__APPLE__
 
+#ifdef __APPLE__
+unordered_map<string, uintptr_t> get_loaded_files() {
+  unordered_map<string, uintptr_t> result;
+
+  uint32_t image_count = _dyld_image_count();
+  for(uint32_t i = 0; i < image_count; i++) {
+    const mach_header* header = _dyld_get_image_header(i);
+    const char* image_name = _dyld_get_image_name(i);
+    if(header == nullptr || image_name == nullptr)
+      continue;
+    string path = canonicalize_path(image_name);
+    if(path.empty())
+      continue;
+    intptr_t slide = _dyld_get_image_vmaddr_slide(i);
+    result.emplace(path, static_cast<uintptr_t>(slide));
+  }
+
+  return result;
+}
+#else
 unordered_map<string, uintptr_t> get_loaded_files() {
   unordered_map<string, uintptr_t> result;
 
@@ -279,6 +303,7 @@ unordered_map<string, uintptr_t> get_loaded_files() {
 
   return result;
 }
+#endif
 
 bool wildcard_match(string::const_iterator subject,
                     string::const_iterator subject_end,
@@ -355,7 +380,11 @@ static bool is_system_path(const string& normalized) {
     "/usr/local/include",
     "/usr/local/lib",
     "/lib",
-    "/lib64"
+    "/lib64",
+    // macOS system paths
+    "/Applications/Xcode.app",
+    "/Library/Developer",
+    "/System/Library"
   };
   for(const auto& prefix : prefixes) {
     if(path_has_prefix(normalized, prefix))
@@ -496,7 +525,8 @@ void memory_map::build(const unordered_set<string>& binary_scope,
 
   size_t in_scope_count = 0;
   for(const auto& f : loaded) {
-    if(in_scope(f.first, binary_scope)) {
+    bool scoped = in_scope(f.first, binary_scope);
+    if(scoped) {
       try {
         if(process_file(f.first, f.second, source_scope, allow_system_sources)) {
           INFO << "Including lines from executable " << f.first;
@@ -545,7 +575,6 @@ dwarf::value find_attribute(const dwarf::die& d, dwarf::DW_AT attr) {
 void memory_map::add_range(std::string filename, size_t line_no, interval range) {
   shared_ptr<file> f = get_file(filename);
   shared_ptr<line> l = f->get_line(line_no);
-  // Add the entry
   _ranges.emplace(range, l);
 }
 
@@ -662,6 +691,19 @@ void memory_map::process_inlines(const dwarf::die& d,
 bool memory_map::process_file(const string& name, uintptr_t load_address,
                               const unordered_set<string>& source_scope,
                               bool allow_system_sources) {
+#ifdef __APPLE__
+  std::shared_ptr<dwarf::loader> loader = macho_support::load_debug_info(name);
+  if(!loader) {
+    return false;
+  }
+  std::unique_ptr<dwarf::dwarf> dwarf_ptr;
+  try {
+    dwarf_ptr.reset(new dwarf::dwarf(loader));
+  } catch(const std::exception& e) {
+    WARNING << "Failed to load DWARF for " << name << ": " << e.what();
+    return false;
+  }
+#else
   elf::elf f = locate_debug_executable(name);
   // If a debug version of the file could not be located, return false
   if(!f.valid()) {
@@ -682,14 +724,23 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
       WARNING << "Unsupported ELF file type...";
   }
 
-  // Read the DWARF information from the chosen file
-  dwarf::dwarf d(dwarf::elf::create_loader(f));
+  std::unique_ptr<dwarf::dwarf> dwarf_ptr;
+  try {
+    dwarf_ptr.reset(new dwarf::dwarf(dwarf::elf::create_loader(f)));
+  } catch(const std::exception& e) {
+    WARNING << "Failed to load DWARF for " << name << ": " << e.what();
+    return false;
+  }
+#endif
+
+  dwarf::dwarf& d = *dwarf_ptr;
 
   vector<memory_map::queued_range> pending;
 
+  size_t cu_count = 0;
   // Walk through the compilation units (source files) in the executable
   for(auto unit : d.compilation_units()) {
-
+    cu_count++;
     try {
       string prev_filename;
       size_t prev_line;
@@ -714,7 +765,8 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
       // Walk through the line instructions in the DWARF line table
       for(auto& line_info : table) {
         // Insert an entry if this isn't the first line command in the sequence
-        if(file_matches_scope(prev_filename, source_scope, allow_system_sources)) {
+        bool scope_match = file_matches_scope(prev_filename, source_scope, allow_system_sources);
+        if(scope_match) {
           if(prev_address != 0) {
             const subprogram_range* owner = find_subprogram(subprograms, prev_address);
             if(owner && owner->in_scope) {
@@ -754,8 +806,11 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
         INFO << "Included source file " << filename;
       }
 
-    } catch(dwarf::format_error e) {
+    } catch(dwarf::format_error& e) {
+      // Skip compilation units with DWARF format errors (e.g., unsupported DWARF 5 features)
       (void)e;
+    } catch(std::exception& e) {
+      WARNING << "Exception processing DWARF: " << e.what();
     }
   }
 

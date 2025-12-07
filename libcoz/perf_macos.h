@@ -1,9 +1,6 @@
 /*
- * Copyright (c) 2015, Charlie Curtsinger and Emery Berger,
- *                     University of Massachusetts Amherst
- * Copyright (c) 2025, macOS port additions
- * This file is part of the Coz project. See LICENSE.md file at the top-level
- * directory of this distribution and at http://github.com/plasma-umass/coz.
+ * macOS-specific sampling support that uses a user-space dispatch timer
+ * to trigger stack captures.
  */
 
 #if !defined(CAUSAL_RUNTIME_PERF_MACOS_H)
@@ -12,120 +9,30 @@
 #ifdef __APPLE__
 
 #include <dispatch/dispatch.h>
-#include <mach/mach.h>
-#include <mach/mach_time.h>
 #include <pthread.h>
+#include <signal.h>
 #include <sys/types.h>
 
 #include <cstddef>
 #include <cstdint>
-#include <functional>
+#include <vector>
 
 #include "ccutil/log.h"
 #include "ccutil/wrapped_array.h"
 
-// Forward declarations for kperf private API
-// These are undocumented private APIs from kperf.framework
-extern "C" {
-  int kperf_sample_set(unsigned int actionid);
-  int kperf_sample_on(void);
-  int kperf_sample_off(void);
-  int kperf_timer_period_set(unsigned int actionid, uint64_t tick_count);
-  int kperf_timer_action_set(unsigned int timer, uint32_t actionid);
-  int kperf_action_count_set(unsigned int count);
-  int kperf_action_samplers_set(unsigned int actionid, uint32_t sample_what);
-  int kperf_timer_count_set(unsigned int count);
-  int kperf_lightweight_pet_set(uint32_t enabled);
-
-  // Sampling flags
-  #define KPERF_SAMPLER_TINFO        (1U << 0)  // Thread info
-  #define KPERF_SAMPLER_TSNAP        (1U << 1)  // Thread snapshot
-  #define KPERF_SAMPLER_KSTACK       (1U << 2)  // Kernel stack
-  #define KPERF_SAMPLER_USTACK       (1U << 3)  // User stack
-  #define KPERF_SAMPLER_PMC_THREAD   (1U << 4)  // PMC thread
-  #define KPERF_SAMPLER_PMC_CPU      (1U << 5)  // PMC CPU
-  #define KPERF_SAMPLER_PMC_CONFIG   (1U << 6)  // PMC config
-  #define KPERF_SAMPLER_MEMINFO      (1U << 7)  // Memory info
-  #define KPERF_SAMPLER_TH_DISPATCH  (1U << 8)  // Thread dispatch
-  #define KPERF_SAMPLER_TK_SNAPSHOT  (1U << 9)  // Task snapshot
-}
-
-// kdebug trace points for kperf
-#define KDBG_CODE(Class, SubClass, Code) \
-    (((Class & 0xff) << 24) | ((SubClass & 0xff) << 16) | ((Code & 0x3fff) << 2))
-
-#define PERF_CODE(SubClass, Code) KDBG_CODE(31, SubClass, Code)
-#define PERF_SAMPLE 8
-
 class perf_event {
 public:
-  enum class record_type;
-  class record;
-
-  /// Default constructor
-  perf_event();
-
-  /// Create a timer-based sampling event (macOS version)
-  perf_event(uint64_t sample_period_ns, pid_t pid = 0);
-
-  /// Move constructor
-  perf_event(perf_event&& other);
-
-  /// Destructor
-  ~perf_event();
-
-  /// Move assignment
-  void operator=(perf_event&& other);
-
-  /// Get event count (number of samples collected)
-  uint64_t get_count() const;
-
-  /// Start sampling
-  void start();
-
-  /// Stop sampling
-  void stop();
-
-  /// Close the event
-  void close();
-
-  /// Configure signal delivery when samples are ready
-  void set_ready_signal(int sig);
-
-  /// Sample data types (simplified for macOS)
-  enum class sample : uint64_t {
-    ip = (1U << 0),           // Instruction pointer
-    pid_tid = (1U << 1),      // Process/thread ID
-    time = (1U << 2),         // Timestamp
-    callchain = (1U << 3),    // Call stack
-    cpu = (1U << 4),          // CPU number
-    _end = (1U << 5)
-  };
-
-  /// Check if sampling this data type
-  inline bool is_sampling(sample s) const {
-    return _sample_type & static_cast<uint64_t>(s);
-  }
-
-  /// Get read format (compatibility)
-  inline uint64_t get_read_format() const {
-    return 0;
-  }
-
-  /// Record types
   enum class record_type {
     sample = 1,
     lost = 2
   };
 
-  /// A sample record
   struct record {
     friend class perf_event;
-  public:
-    record_type get_type() const { return _type; }
 
-    inline bool is_sample() const { return get_type() == record_type::sample; }
-    inline bool is_lost() const { return get_type() == record_type::lost; }
+    record_type get_type() const { return _type; }
+    bool is_sample() const { return _type == record_type::sample; }
+    bool is_lost() const { return _type == record_type::lost; }
 
     uint64_t get_ip() const;
     uint64_t get_pid() const;
@@ -135,7 +42,21 @@ public:
     ccutil::wrapped_array<uint64_t> get_callchain() const;
 
   private:
-    record(record_type type) : _type(type) {}
+    explicit record(record_type type) : _type(type) {}
+
+    void reset(record_type type) {
+      _type = type;
+      _ip = 0;
+      _pid = 0;
+      _tid = 0;
+      _time = 0;
+      _cpu = 0;
+      _callchain.clear();
+    }
+
+    void reserve_callchain(size_t count) {
+      _callchain.reserve(count);
+    }
 
     record_type _type;
     uint64_t _ip = 0;
@@ -148,12 +69,12 @@ public:
 
   class iterator {
   public:
-    iterator(perf_event& source, bool at_end = false) :
-        _source(source), _at_end(at_end) {}
+    iterator(perf_event& source, bool at_end)
+        : _source(source), _at_end(at_end) {}
 
     void next() { _at_end = true; }
     record get();
-    bool has_data() const { return !_at_end; }
+    bool has_data() const { return !_at_end && _source._has_sample; }
 
     iterator& operator++() { next(); return *this; }
     record operator*() { return get(); }
@@ -164,47 +85,44 @@ public:
     bool _at_end;
   };
 
-  /// Get iterator to beginning
-  iterator begin() {
-    return iterator(*this, false);
-  }
+  perf_event();
+  explicit perf_event(uint64_t sample_period_ns, pid_t pid = 0);
+  perf_event(perf_event&& other) noexcept;
+  ~perf_event();
 
-  /// Get iterator to end
-  iterator end() {
-    return iterator(*this, true);
-  }
+  void operator=(perf_event&& other) noexcept;
+
+  uint64_t get_count() const;
+  void start();
+  void stop();
+  void close();
+
+  void set_ready_signal(int sig);
+  void capture_sample(void* ucontext = nullptr);
+
+  inline bool is_sampling(uint64_t) const { return true; }
+  inline uint64_t get_read_format() const { return 0; }
+
+  iterator begin();
+  iterator end() { return iterator(*this, true); }
 
 private:
-  // Disallow copy and assignment
   perf_event(const perf_event&) = delete;
   void operator=(const perf_event&) = delete;
 
-  /// Whether sampling is active
+  static void timer_callback(void* context);
+
   bool _active = false;
-
-  /// Sample count
   uint64_t _sample_count = 0;
-
-  /// Sample type configuration
   uint64_t _sample_type = 0;
-
-  /// Sample period in nanoseconds
   uint64_t _sample_period_ns = 0;
-
-  /// Timer for periodic sampling
   dispatch_source_t _timer = nullptr;
-
-  /// Queue for timer
   dispatch_queue_t _queue = nullptr;
-
-  /// Signal to deliver when samples are ready
   int _ready_signal = 0;
-
-  /// Process ID to sample (0 = current process)
   pid_t _pid = 0;
-
-  /// Thread to signal
-  pthread_t _signal_thread;
+  pthread_t _signal_thread = nullptr;
+  bool _has_sample = false;
+  record _current_sample = record(record_type::sample);
 };
 
 #endif // __APPLE__

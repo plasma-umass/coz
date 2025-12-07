@@ -1,6 +1,20 @@
 cmake_minimum_required(VERSION 3.13.0)
 project(coz VERSION 0.2.2 LANGUAGES C CXX)
 
+if(APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+        set(CMAKE_OSX_ARCHITECTURES "arm64;arm64e"
+            CACHE STRING "Architectures to build on macOS" FORCE)
+    endif()
+endif()
+
+if(APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+        set(CMAKE_OSX_ARCHITECTURES "arm64;arm64e"
+            CACHE STRING "Architectures to build on macOS" FORCE)
+    endif()
+endif()
+
 enable_testing()
 
 set(CMAKE_CXX_STANDARD 11)
@@ -39,6 +53,7 @@ else()
         ${LIBELFIN_ELF_SOURCES}
         ${LIBELFIN_DWARF_SOURCES})
     target_include_directories(libelfin_internal PUBLIC
+        ${PROJECT_SOURCE_DIR}
         ${PROJECT_SOURCE_DIR}/libelfin
         ${PROJECT_SOURCE_DIR}/libelfin/elf
         ${PROJECT_SOURCE_DIR}/libelfin/dwarf)
@@ -51,6 +66,11 @@ endif()
 # Always emit debug info so line tables are available when resolving
 # progress points, but let the toolchain decide which DWARF version to use.
 add_compile_options(-g)
+if(APPLE)
+    add_compile_options(-gdwarf-4)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -gdwarf-4" CACHE STRING "" FORCE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -gdwarf-4" CACHE STRING "" FORCE)
+endif()
 
 option(INSTALL_COZ "Enable installation of coz. (Projects embedding coz may want to turn this OFF.)" ON)
 
@@ -95,14 +115,3 @@ if(BUILD_BENCHMARKS)
 endif()
 
 add_subdirectory(tests)
-
-if(APPLE)
-    # 1. Specify the location of private frameworks to the linker
-    # This adds the -iframework /System/Library/PrivateFrameworks flag
-    target_link_options(coz PRIVATE "-iframework" "/System/Library/PrivateFrameworks")
-
-    # 2. Link against the specific (private) framework
-    # The name is likely 'Kperf' based on the symbol names.
-    # The quotes are important so CMake treats "-framework Kperf" as a single argument.
-    target_link_libraries(coz PRIVATE "-framework Kperf")
-endif()

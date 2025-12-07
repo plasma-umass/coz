@@ -1,96 +1,49 @@
-/*
- * Copyright (c) 2015, Charlie Curtsinger and Emery Berger,
- *                     University of Massachusetts Amherst
- * Copyright (c) 2025, macOS port additions
- * This file is part of the Coz project. See LICENSE.md file at the top-level
- * directory of this distribution and at http://github.com/plasma-umass/coz.
- */
-
 #ifdef __APPLE__
 
 #include "perf_macos.h"
 
-#include <dispatch/dispatch.h>
-#include <mach/mach.h>
+#include <execinfo.h>
 #include <mach/mach_time.h>
 #include <pthread.h>
 #include <signal.h>
-#include <sys/sysctl.h>
+#include <sys/ucontext.h>
 #include <unistd.h>
 
-extern "C" int kperf_lightweight_pet_set(uint32_t enabled) {
-    size_t size = sizeof(enabled);
-    // This controls the "lightweight PET" mode via sysctl.
-    // Returns 0 on success, or -1 / errno on failure.
-    return sysctlbyname("kperf.lightweight_pet",
-                        nullptr, nullptr,
-                        &enabled, size);
-}
+#include <algorithm>
+#include <array>
 
 #include "util.h"
-#include "ccutil/log.h"
-#include "ccutil/wrapped_array.h"
-
-using ccutil::wrapped_array;
-
-// Global state for kperf initialization
-static bool g_kperf_initialized = false;
-static pthread_mutex_t g_kperf_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-// Initialize kperf for sampling
-static void init_kperf() {
-  pthread_mutex_lock(&g_kperf_mutex);
-
-  if (!g_kperf_initialized) {
-    // Set up kperf for lightweight PET (Profile Every Thread) mode
-    // This is the safest mode that works without kernel debugging enabled
-
-    // Configure action 1 to sample user stacks and thread info
-    uint32_t samplers = KPERF_SAMPLER_USTACK | KPERF_SAMPLER_TINFO;
-    int ret = kperf_action_samplers_set(1, samplers);
-    if (ret != 0) {
-      WARNING << "kperf_action_samplers_set failed: " << ret
-	      << ". Sampling may not work correctly. "
-	      << "Try running with sudo or adjusting System Integrity Protection.";
-    }
-
-    // Set action count to 1
-    kperf_action_count_set(1);
-
-    // Enable lightweight PET mode
-    kperf_lightweight_pet_set(1);
-
-    g_kperf_initialized = true;
-  }
-
-  pthread_mutex_unlock(&g_kperf_mutex);
+namespace {
+constexpr size_t kMaxFrames = 64;   // Reduced - we rarely need deep stacks
+constexpr size_t kTrimFrames = 3;   // drop signal handler frames
 }
 
-// Default constructor
-perf_event::perf_event() {}
+perf_event::perf_event() {
+  _current_sample = record(record_type::sample);
+  _current_sample.reserve_callchain(kMaxFrames);
+}
 
-// Create a timer-based sampling event
-perf_event::perf_event(uint64_t sample_period_ns, pid_t pid) :
-    _sample_period_ns(sample_period_ns), _pid(pid) {
-
-  init_kperf();
-
-  // Set up sample type (we support IP, thread info, and callchain)
-  _sample_type = static_cast<uint64_t>(sample::ip) |
-                 static_cast<uint64_t>(sample::pid_tid) |
-                 static_cast<uint64_t>(sample::time) |
-                 static_cast<uint64_t>(sample::callchain) |
-                 static_cast<uint64_t>(sample::cpu);
-
-  // Store current thread for signaling
-  _signal_thread = pthread_self();
-
-  // Create dispatch queue for timer
+perf_event::perf_event(uint64_t sample_period_ns, pid_t pid)
+    : _sample_period_ns(sample_period_ns),
+      _pid(pid),
+      _signal_thread(pthread_self()) {
   _queue = dispatch_queue_create("com.coz.sampling", DISPATCH_QUEUE_SERIAL);
+  _current_sample = record(record_type::sample);
+  _current_sample.reserve_callchain(kMaxFrames);
 }
 
-// Move constructor
-perf_event::perf_event(perf_event&& other) {
+perf_event::perf_event(perf_event&& other) noexcept {
+  *this = std::move(other);
+}
+
+perf_event::~perf_event() {
+  close();
+}
+
+void perf_event::operator=(perf_event&& other) noexcept {
+  if(this == &other) return;
+  close();
+
   _active = other._active;
   _sample_count = other._sample_count;
   _sample_type = other._sample_type;
@@ -100,186 +53,145 @@ perf_event::perf_event(perf_event&& other) {
   _ready_signal = other._ready_signal;
   _pid = other._pid;
   _signal_thread = other._signal_thread;
+  _has_sample = other._has_sample;
+  _current_sample = other._current_sample;
 
   other._timer = nullptr;
   other._queue = nullptr;
   other._active = false;
+  other._has_sample = false;
 }
 
-// Destructor
-perf_event::~perf_event() {
-  close();
-}
-
-// Move assignment
-void perf_event::operator=(perf_event&& other) {
-  if (this != &other) {
-    close();
-
-    _active = other._active;
-    _sample_count = other._sample_count;
-    _sample_type = other._sample_type;
-    _sample_period_ns = other._sample_period_ns;
-    _timer = other._timer;
-    _queue = other._queue;
-    _ready_signal = other._ready_signal;
-    _pid = other._pid;
-    _signal_thread = other._signal_thread;
-
-    other._timer = nullptr;
-    other._queue = nullptr;
-    other._active = false;
-  }
-}
-
-// Get sample count
 uint64_t perf_event::get_count() const {
   return _sample_count;
 }
 
-// Start sampling
 void perf_event::start() {
-  if (_active) return;
-
+  if(_active)
+    return;
   _active = true;
   _sample_count = 0;
 
-  // Start kperf sampling
-  int ret = kperf_sample_on();
-  if (ret != 0) {
-    WARNING << "kperf_sample_on failed: " << ret;
-  }
+  if(!_queue || _ready_signal == 0)
+    return;
 
-  // Create a timer that fires periodically
-  if (_queue) {
-    _timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, _queue);
+  _timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, _queue);
+  if(!_timer)
+    return;
 
-    if (_timer) {
-      // Convert nanoseconds to dispatch time
-      uint64_t interval_ns = _sample_period_ns;
-      dispatch_time_t start = dispatch_time(DISPATCH_TIME_NOW, interval_ns);
-
-      dispatch_source_set_timer(_timer, start, interval_ns, interval_ns / 10);
-
-      // Capture necessary state for the timer handler
-      int signal = _ready_signal;
-      pthread_t thread = _signal_thread;
-      uint64_t* count_ptr = &_sample_count;
-
-      dispatch_source_set_event_handler(_timer, ^{
-        // Trigger a sample
-        kperf_sample_set(1);
-
-        // Increment sample count
-        __atomic_add_fetch(count_ptr, 1, __ATOMIC_RELAXED);
-
-        // Signal the profiler thread if configured
-        if (signal != 0) {
-          pthread_kill(thread, signal);
-        }
-      });
-
-      dispatch_resume(_timer);
-    }
-  }
+  uint64_t interval = std::max<uint64_t>(_sample_period_ns, 1);
+  dispatch_time_t start_time = dispatch_time(DISPATCH_TIME_NOW, interval);
+  dispatch_source_set_timer(_timer, start_time, interval, interval / 10);
+  dispatch_set_context(_timer, this);
+  dispatch_source_set_event_handler_f(_timer, &perf_event::timer_callback);
+  dispatch_resume(_timer);
 }
 
-// Stop sampling
 void perf_event::stop() {
-  if (!_active) return;
-
+  if(!_active)
+    return;
   _active = false;
 
-  // Stop kperf sampling
-  kperf_sample_off();
-
-  // Cancel and release timer
-  if (_timer) {
+  if(_timer) {
     dispatch_source_cancel(_timer);
     dispatch_release(_timer);
     _timer = nullptr;
   }
 }
 
-// Close the event
 void perf_event::close() {
   stop();
-
-  if (_queue) {
+  if(_queue) {
     dispatch_release(_queue);
     _queue = nullptr;
   }
+  _has_sample = false;
 }
 
-// Configure signal delivery
 void perf_event::set_ready_signal(int sig) {
   _ready_signal = sig;
   _signal_thread = pthread_self();
 }
 
-// Record methods
-uint64_t perf_event::record::get_ip() const {
-  return _ip;
-}
+void perf_event::capture_sample(void* ucontext) {
+  _current_sample.reset(record_type::sample);
+  _current_sample._pid = (_pid == 0) ? getpid() : _pid;
 
-uint64_t perf_event::record::get_pid() const {
-  return _pid;
-}
-
-uint64_t perf_event::record::get_tid() const {
-  return _tid;
-}
-
-uint64_t perf_event::record::get_time() const {
-  return _time;
-}
-
-uint32_t perf_event::record::get_cpu() const {
-  return _cpu;
-}
-
-wrapped_array<uint64_t> perf_event::record::get_callchain() const {
-  if (_callchain.empty()) {
-    return wrapped_array<uint64_t>(nullptr, 0);
+  // Extract PC directly from ucontext - this is the most accurate
+  // location where the signal interrupted execution
+  uint64_t context_pc = 0;
+  if(ucontext) {
+    auto* ctx = static_cast<ucontext_t*>(ucontext);
+#if defined(__arm64__) || defined(__aarch64__)
+    // Use macOS-provided macro which handles PAC (pointer authentication)
+    context_pc = __darwin_arm_thread_state64_get_pc(ctx->uc_mcontext->__ss);
+#elif defined(__x86_64__)
+    context_pc = ctx->uc_mcontext->__ss.__rip;
+#endif
   }
-  return wrapped_array<uint64_t>(
-      const_cast<uint64_t*>(_callchain.data()),
-      _callchain.size());
+
+  // Get backtrace for callchain
+  std::array<void*, kMaxFrames> frames{};
+  int captured = backtrace(frames.data(), static_cast<int>(frames.size()));
+  int start = std::min<int>(captured, static_cast<int>(kTrimFrames));
+
+  // Use context_pc as the primary IP - let match_line() filter via memory_map
+  // This avoids expensive dladdr() calls on every sample
+  uint64_t ip = context_pc;
+  if(ip == 0 && start < captured) {
+    ip = reinterpret_cast<uint64_t>(frames[start]);
+  }
+
+  _current_sample._ip = ip;
+
+  // Build callchain - include context_pc at the front if we have it
+  if(context_pc) {
+    _current_sample._callchain.push_back(context_pc);
+  }
+  for(int i = start; i < captured; i++) {
+    _current_sample._callchain.push_back(
+        reinterpret_cast<uint64_t>(frames[i]));
+  }
+
+  _current_sample._time = mach_absolute_time();
+  _current_sample._tid = static_cast<uint64_t>(pthread_mach_thread_np(pthread_self()));
+  _has_sample = true;  // Always report sample, let profiler filter via memory_map
 }
 
-// Iterator methods
+uint64_t perf_event::record::get_ip() const { return _ip; }
+uint64_t perf_event::record::get_pid() const { return _pid; }
+uint64_t perf_event::record::get_tid() const { return _tid; }
+uint64_t perf_event::record::get_time() const { return _time; }
+uint32_t perf_event::record::get_cpu() const { return _cpu; }
+ccutil::wrapped_array<uint64_t> perf_event::record::get_callchain() const {
+  if(_callchain.empty()) {
+    return ccutil::wrapped_array<uint64_t>(nullptr, 0);
+  }
+  return ccutil::wrapped_array<uint64_t>(
+      const_cast<uint64_t*>(_callchain.data()), _callchain.size());
+}
+
 perf_event::record perf_event::iterator::get() {
-  record r(record_type::sample);
-
-  // On macOS, we don't have a ring buffer like Linux perf
-  // We use kperf's lightweight sampling which doesn't provide
-  // individual sample records to userspace
-  // Instead, we return synthetic records based on the current thread state
-
-  // Get current thread
-  thread_t thread = mach_thread_self();
-
-  // Get thread info
-  thread_identifier_info_data_t info;
-  mach_msg_type_number_t count = THREAD_IDENTIFIER_INFO_COUNT;
-  kern_return_t kr = thread_info(thread, THREAD_IDENTIFIER_INFO,
-                                   (thread_info_t)&info, &count);
-
-  if (kr == KERN_SUCCESS) {
-    r._tid = info.thread_id;
-    r._pid = getpid();
-  }
-
-  // Get timestamp
-  r._time = mach_absolute_time();
-
-  // Note: We can't easily get IP and callchain without kdebug trace buffer
-  // For now, return empty values
-  r._ip = 0;
-
-  mach_port_deallocate(mach_task_self(), thread);
-
+  record r = _source._current_sample;
+  _source._has_sample = false;
+  _at_end = true;
   return r;
+}
+
+perf_event::iterator perf_event::begin() {
+  return iterator(*this, !_has_sample);
+}
+
+void perf_event::timer_callback(void* context) {
+  auto* self = static_cast<perf_event*>(context);
+  if(!self || self->_ready_signal == 0)
+    return;
+
+  __atomic_add_fetch(&self->_sample_count, 1, __ATOMIC_RELAXED);
+
+  if(self->_signal_thread) {
+    pthread_kill(self->_signal_thread, self->_ready_signal);
+  }
 }
 
 #endif // __APPLE__

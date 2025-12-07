@@ -49,6 +49,11 @@ static coz_counter_t* _call_coz_get_counter(int type, const char* name) {
     if(dlsym) {
       // Locate the _coz_get_counter method
       void* p = dlsym(RTLD_DEFAULT, "_coz_get_counter");
+#if defined(__APPLE__)
+      if(!p) {
+        p = dlsym(RTLD_DEFAULT, "__coz_get_counter");
+      }
+#endif
   
       // Use memcpy to avoid pedantic GCC complaint about storing function pointer in void*
       memcpy(&fn, &p, sizeof(p));

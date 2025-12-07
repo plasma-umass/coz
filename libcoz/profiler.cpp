@@ -36,6 +36,10 @@
 #include "progress_point.h"
 #include "util.h"
 
+#ifdef __APPLE__
+#include "mac_interpose.h"
+#endif
+
 #include "ccutil/log.h"
 #include "ccutil/spinlock.h"
 #include "ccutil/timer.h"
@@ -82,8 +86,13 @@ void profiler::startup(const string& outfile,
   l.lock();
 
   // Create the profiler thread
-  INFO << "Starting profiler thread";
+#ifdef __APPLE__
+  // On macOS, use bypass guard to call the real pthread_create
+  coz::pthread_interpose_guard guard;
+  int rc = pthread_create(&_profiler_thread, nullptr, profiler::start_profiler_thread, (void*)&l);
+#else
   int rc = real::pthread_create(&_profiler_thread, nullptr, profiler::start_profiler_thread, (void*)&l);
+#endif
   REQUIRE(rc == 0) << "Failed to start profiler thread";
 
   // Double-lock l. This blocks until the profiler thread unlocks l
@@ -178,7 +187,11 @@ void profiler::profiler_thread(spinlock& l) {
     // Save the starting time and sample count
     size_t start_time = get_time();
     size_t starting_samples = selected->get_samples();
-    size_t starting_delay_time = _global_delay.load();
+    // Record starting delay state for this experiment - add_delays() will only
+    // count waits for delays added AFTER this point
+    _experiment_start_delay.store(_global_delay.load());
+    // Reset actual delay counter - will only count delays from this experiment
+    _actual_delay.store(0);
 
     // Save throughput point values at the start of the experiment
     vector<unique_ptr<throughput_point::saved>> saved_throughput_points;
@@ -210,9 +223,18 @@ void profiler::profiler_thread(spinlock& l) {
 
     // Compute experiment parameters
     float speedup = (float)delay_size / (float)SamplePeriod;
-    size_t experiment_delay = _global_delay.load() - starting_delay_time;
-    size_t duration = get_time() - start_time - experiment_delay;
+    size_t end_time = get_time();
+    size_t elapsed = end_time - start_time;
     size_t selected_samples = selected->get_samples() - starting_samples;
+
+    // The delay inserted is exactly: selected_samples * delay_size
+    // This is the "virtual time saved" that we're simulating
+    size_t expected_delay = selected_samples * delay_size;
+
+    // Duration is elapsed minus the expected delay
+    // This gives us the "virtual" time if the selected line were actually faster
+    size_t duration = (elapsed > expected_delay) ? elapsed - expected_delay : elapsed;
+
 
     // Log the experiment parameters
     output << "experiment\t"
@@ -240,9 +262,10 @@ void profiler::profiler_thread(spinlock& l) {
       s->log(output);
     }
 
-    // Lengthen the experiment if the min_delta is too small
-    if(min_delta < ExperimentTargetDelta) {
+    // Lengthen the experiment if the min_delta is too small, but cap at max
+    if(min_delta < ExperimentTargetDelta && experiment_length < ExperimentMaxTime) {
       experiment_length *= 2;
+      if(experiment_length > ExperimentMaxTime) experiment_length = ExperimentMaxTime;
     } else if(min_delta > ExperimentTargetDelta*2 && experiment_length >= ExperimentMinTime*2) {
       experiment_length /= 2;
     }
@@ -306,6 +329,7 @@ void profiler::shutdown() {
 
     // Join with the profiler thread
     real::pthread_join(_profiler_thread, nullptr);
+
   }
 }
 
@@ -374,6 +398,7 @@ void profiler::begin_sampling(thread_state* state) {
 #else
   // macOS version using kperf-based timer sampling
   state->sampler = perf_event(SamplePeriod);
+  state->sampler.set_ready_signal(SampleSignal);
   state->process_timer = timer(SampleSignal);
   state->sampler.start();
 #endif
@@ -396,18 +421,36 @@ void profiler::end_sampling() {
 std::pair<line*,bool> profiler::match_line(perf_event::record& sample) {
   // bool -> true: hit selected_line
   std::pair<line*, bool> match_res(nullptr, false);
-  // flag use to increase the sample only for the first line in the source scope. could it be last line in callchain?
+  // flag use to increase the sample only for the first line in the source scope
   bool first_hit = false;
+  auto is_instrumentation = [](line* candidate) {
+    if(!candidate)
+      return false;
+    std::shared_ptr<file> f = candidate->get_file();
+    if(!f)
+      return false;
+    const std::string& name = f->get_name();
+    const char suffix[] = "coz.h";
+    if(name.length() < sizeof(suffix))
+      return false;
+    return name.compare(name.length() - (sizeof(suffix) - 1), sizeof(suffix) - 1, suffix) == 0;
+  };
+
   if(!sample.is_sample())
     return match_res;
+
   // Check if the sample occurred in known code
   line* l = memory_map::get_instance().find_line(sample.get_ip()).get();
   if(l){
-    match_res.first = l;
-    first_hit = true;
     if(_selected_line == l){
+      match_res.first = l;
       match_res.second = true;
       return match_res;
+    }
+    // Skip instrumentation code (coz.h) - don't select profiler overhead
+    if(!is_instrumentation(l)) {
+      match_res.first = l;
+      first_hit = true;
     }
   }
   // Walk the callchain
@@ -415,28 +458,29 @@ std::pair<line*,bool> profiler::match_line(perf_event::record& sample) {
     // Need to subtract one. PC is the return address, but we're looking for the callsite.
     l = memory_map::get_instance().find_line(pc-1).get();
     if(l){
-      if(!first_hit){
-        first_hit = true;
-        match_res.first = l;
-      }
       if(_selected_line == l){
         match_res.first = l;
-	match_res.second = true;
+        match_res.second = true;
         return match_res;
+      }
+      // Skip instrumentation code (coz.h)
+      if(!first_hit && !is_instrumentation(l)){
+        first_hit = true;
+        match_res.first = l;
       }
     }
   }
 
-  // No hits. Return null
   return match_res;
 }
+
 
 void profiler::add_delays(thread_state* state) {
   // Add delays if there is an experiment running
   if(_experiment_active.load()) {
     // Take a snapshot of the global and local delays
     size_t global_delay = _global_delay;
-    size_t delay_size = _delay_size;
+    size_t experiment_start = _experiment_start_delay;
 
     // Is this thread ahead or behind on delays?
     if(state->local_delay > global_delay) {
@@ -445,10 +489,24 @@ void profiler::add_delays(thread_state* state) {
 
     } else if(state->local_delay < global_delay) {
       // Thread is behind: Pause this thread to catch up
-      
+
       // Pause and record the exact amount of time this thread paused
       state->sampler.stop();
-      state->local_delay += wait(global_delay - state->local_delay);
+      size_t actual_wait = wait(global_delay - state->local_delay);
+      state->local_delay += actual_wait;
+
+      // Only count waits for delays from the CURRENT experiment
+      // (delays added after experiment_start_delay)
+      if(global_delay > experiment_start) {
+        // Calculate how much of this wait is for current-experiment delays
+        size_t pre_experiment_delay = (state->local_delay - actual_wait < experiment_start)
+                                      ? experiment_start - (state->local_delay - actual_wait)
+                                      : 0;
+        size_t current_experiment_wait = (actual_wait > pre_experiment_delay)
+                                         ? actual_wait - pre_experiment_delay
+                                         : 0;
+        _actual_delay.fetch_add(current_experiment_wait);
+      }
       state->sampler.start();
     }
 
@@ -463,14 +521,30 @@ void profiler::process_samples(thread_state* state) {
     if(r.is_sample()) {
       // Find and matches the line that contains this sample
       std::pair<line*, bool> sampled_line = match_line(r);
+      if(sampled_line.first == nullptr) {
+        static int debug_samples = 0;
+        if(debug_samples < 5) {
+          fprintf(stderr, "Sample missing mapping for IP 0x%llx\n",
+                  (unsigned long long)r.get_ip());
+          debug_samples++;
+        }
+      }
       if(sampled_line.first) {
         sampled_line.first->add_sample();
       }
 
       if(_experiment_active) {
         // Add a delay if the sample is in the selected line
-        if(sampled_line.second)
-          state->local_delay += _delay_size;
+        if(sampled_line.second) {
+          // Safety: limit delay accumulation to prevent runaway delays
+          // Max delay per experiment = 2 seconds worth
+          constexpr size_t MaxDelayPerExperiment = 2ULL * 1000 * 1000 * 1000;
+          size_t current_delay = state->local_delay;
+          size_t experiment_start = _experiment_start_delay.load();
+          if(current_delay < experiment_start + MaxDelayPerExperiment) {
+            state->local_delay += _delay_size;
+          }
+        }
 
       } else if(sampled_line.first != nullptr && _next_line.load() == nullptr) {
         _next_line.store(sampled_line.first);
@@ -495,6 +569,11 @@ void* profiler::start_profiler_thread(void* arg) {
 void profiler::samples_ready(int signum, siginfo_t* info, void* p) {
   thread_state* state = get_instance().get_thread_state();
   if(state && !state->check_in_use()) {
+#ifdef __APPLE__
+    // Pass ucontext to capture_sample so it can extract the PC
+    // This is critical for capturing leaf functions without stack frames
+    state->sampler.capture_sample(p);
+#endif
     // Process all available samples
     profiler::get_instance().process_samples(state);
   }
