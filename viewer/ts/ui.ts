@@ -1,4 +1,4 @@
-// Ensure the brower supports the File API
+// Ensure the browser supports the File API
 if (!(<any> window).File || !(<any> window).FileReader) {
   alert('The File APIs are not fully supported in this browser.');
 }
@@ -40,7 +40,7 @@ function get_minimum_parts_for_unique_path(paths: string[]): number {
         shortest_parts = Math.min(shortest_parts, parts.length);
         return parts.slice(parts.length - minimum, parts.length).join('/');
       })
-    
+
     is_unique = !has_duplicates(trimmed_paths);
 
     if (is_unique) {
@@ -103,6 +103,22 @@ function display_warning(title: string, text: string): void {
   }, 5000);
 }
 
+function display_success(title: string, text: string): void {
+  const success = $(
+    `<div class="alert alert-success alert-dismissible" role="alert" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border-left: 4px solid #10b981;">
+      <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+      <strong>${title}:</strong> ${text}
+    </div>`);
+  $('#warning-area').append(success);
+
+  // Fade out after 3 seconds.
+  setTimeout(() => {
+    success.fadeOut(500, () => {
+      success.alert('close');
+    });
+  }, 3000);
+}
+
 function update(resize?: boolean) {
   if (current_profile === undefined) return;
 
@@ -111,13 +127,27 @@ function update(resize?: boolean) {
 
   // Draw plots
   let num_plots = current_profile.drawPlots(resize);
-  
+
   // Clear the message area
   d3.select('#plot-message').text('');
-  
+
   // Display a warning if there are no plots
   if (num_plots == 0) {
-    d3.select('#plot-message').html('<h1>No Data to Plot</h1><p>Your profile does not contain enough observations to generate any plots. Try reducing the minimum number of points required to show a plot using the slider, or run your program for a longer time to collect more data.</p>');
+    d3.select('#plot-message').html(`
+      <div class="welcome-container">
+        <div class="welcome-icon" style="color: var(--accent-color);">&#9888;</div>
+        <h1>No Data to Plot</h1>
+        <p class="welcome-subtitle">Your profile doesn't contain enough observations to generate plots.</p>
+        <div class="getting-started" style="max-width: 500px; margin: 2rem auto;">
+          <h4 style="text-align: center; margin-bottom: 1rem;">Try these solutions:</h4>
+          <ul style="color: var(--text-secondary); text-align: left;">
+            <li>Reduce the minimum points using the slider</li>
+            <li>Run your program longer to collect more data</li>
+            <li>Ensure progress points are being hit during execution</li>
+          </ul>
+        </div>
+      </div>
+    `);
   }
 
   // Draw the legend
@@ -140,7 +170,7 @@ function update(resize?: boolean) {
     }
     return path;
   });
-  
+
   let minimum_parts = get_minimum_parts_for_unique_path(all_paths);
 
   // Shorten path strings
@@ -152,46 +182,163 @@ function update(resize?: boolean) {
     });
 }
 
-// Set a handler for the load profile button
-d3.select('#load-profile-btn').on('click', function() {
-  // Reset the filename field
-  d3.select('#load-profile-filename').attr('value', '');
+// Load a profile from file contents
+function loadProfileFromText(contents: string, filename?: string) {
+  current_profile = new Profile(contents, d3.select('#plot-area'), d3.select('#legend'), get_min_points, display_warning);
 
-  // Disable the open button
-  d3.select('#load-profile-open-btn').classed('disabled', true);
-});
+  // Auto-reduce minimum points if needed to show at least one graph
+  autoAdjustMinPoints();
 
-// Set a handler for the fake browse button
-d3.select('#load-profile-browse-btn').on('click', function() {
-  $('#load-profile-file').trigger('click');
-});
+  update();
+  if (filename) {
+    display_success('Profile Loaded', `Successfully loaded ${filename}`);
+  }
+}
 
-// Set a handler for file selection
+// Automatically reduce minimum points slider until at least one graph appears
+function autoAdjustMinPoints() {
+  if (!current_profile) return;
+
+  const slider = document.getElementById('minpoints_field') as HTMLInputElement;
+  if (!slider) return;
+
+  const maxValue = parseInt(slider.max, 10);
+  let currentValue = parseInt(slider.value, 10);
+
+  // Check if current setting produces plots
+  let plotCount = current_profile.countPlots(currentValue);
+
+  if (plotCount > 0) {
+    // Already have plots, no adjustment needed
+    return;
+  }
+
+  // Try reducing minimum points until we get at least one plot
+  for (let minPoints = currentValue - 1; minPoints >= 0; minPoints--) {
+    plotCount = current_profile.countPlots(minPoints);
+    if (plotCount > 0) {
+      // Found a value that works - update the slider
+      slider.value = String(minPoints);
+      d3.select('#minpoints_display').text(String(minPoints));
+      display_warning('Auto-adjusted', `Reduced minimum points to ${minPoints} to display available data`);
+      return;
+    }
+  }
+
+  // No value produces plots - the profile truly has no plottable data
+}
+
+// Handle file loading from a File object
+function handleFileLoad(file: File) {
+  if (!file.name.endsWith('.coz')) {
+    display_warning('Invalid File', 'Please select a .coz profile file');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    let contents: string = (<any> event.target).result;
+    loadProfileFromText(contents, file.name);
+  };
+
+  reader.onerror = function(event) {
+    display_warning('Error', 'Unable to read file. Error code: ' + (<any> event.target).error.code);
+  };
+
+  reader.readAsText(file);
+}
+
+// Setup drag and drop functionality
+function setupDropZone(element: HTMLElement, onDrop: (file: File) => void) {
+  // Prevent default drag behaviors
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    element.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    }, false);
+  });
+
+  // Highlight drop zone when dragging over it
+  ['dragenter', 'dragover'].forEach(eventName => {
+    element.addEventListener(eventName, () => {
+      element.classList.add('drag-over');
+    }, false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    element.addEventListener(eventName, () => {
+      element.classList.remove('drag-over');
+    }, false);
+  });
+
+  // Handle dropped files
+  element.addEventListener('drop', (e: DragEvent) => {
+    const files = e.dataTransfer ? e.dataTransfer.files : null;
+    if (files && files.length > 0) {
+      onDrop(files[0]);
+    }
+  }, false);
+}
+
+// Setup the main drop zone on the welcome page
+const mainDropZone = document.getElementById('drop-zone');
+if (mainDropZone) {
+  setupDropZone(mainDropZone, (file) => {
+    handleFileLoad(file);
+  });
+
+  // Click to browse
+  mainDropZone.addEventListener('click', () => {
+    const input = document.getElementById('drop-zone-input') as HTMLInputElement;
+    if (input) {
+      input.click();
+    }
+  });
+
+  const dropZoneInput = document.getElementById('drop-zone-input') as HTMLInputElement;
+  if (dropZoneInput) {
+    dropZoneInput.addEventListener('change', () => {
+      if (dropZoneInput.files && dropZoneInput.files.length > 0) {
+        handleFileLoad(dropZoneInput.files[0]);
+        dropZoneInput.value = '';
+      }
+    });
+  }
+}
+
+// Setup modal drop zone
+const modalDropZone = document.getElementById('modal-drop-zone');
+if (modalDropZone) {
+  setupDropZone(modalDropZone, (file) => {
+    handleFileLoad(file);
+    // Close the modal
+    $('#load-profile-dlg').modal('hide');
+  });
+}
+
+// Setup global drag and drop on the entire page
+document.body.addEventListener('dragover', (e) => {
+  e.preventDefault();
+}, false);
+
+document.body.addEventListener('drop', (e: DragEvent) => {
+  e.preventDefault();
+  const files = e.dataTransfer ? e.dataTransfer.files : null;
+  if (files && files.length > 0 && files[0].name.endsWith('.coz')) {
+    handleFileLoad(files[0]);
+  }
+}, false);
+
+// Set a handler for file selection - immediately load the file
 d3.select('#load-profile-file').on('change', function() {
   let file_browser = this;
-  let open_button = d3.select('#load-profile-open-btn');
 
-  d3.select('#load-profile-filename').attr('value', file_browser.value.replace(/C:\\fakepath\\/i, ''));
-
-  open_button.classed('disabled', false)
-    .on('click', function() {
-      var reader = new FileReader();
-      reader.onload = function(event) {
-        let contents: string = (<any> event.target).result;
-        current_profile = new Profile(contents, d3.select('#plot-area'), d3.select('#legend'), get_min_points, display_warning);
-        update();
-      };
-
-      reader.onerror = function(event) {
-        console.error("Unable to read file. Error code: " + (<any> event.target).error.code);
-      };
-
-      // Read the profile
-      reader.readAsText(file_browser.files[0]);
-
-      // Clear the file browser value
-      file_browser.value = '';
-    });
+  if (file_browser.files && file_browser.files.length > 0) {
+    handleFileLoad(file_browser.files[0]);
+    file_browser.value = '';
+    // Close the modal
+    $('#load-profile-dlg').modal('hide');
+  }
 });
 
 // Update the plots and minpoints display when dragged or clicked
@@ -204,34 +351,99 @@ d3.select('#sortby_field').on('change', update);
 
 d3.select(window).on('resize', function() { update(true); });
 
+
+// Theme toggle handler
+const themeToggle = document.getElementById('theme-toggle') as HTMLInputElement;
+if (themeToggle) {
+  // Load saved preference or default to dark mode
+  const savedTheme = localStorage.getItem('coz-theme');
+  if (savedTheme === 'light') {
+    document.documentElement.classList.add('light-mode');
+    themeToggle.checked = false;
+  } else {
+    // Dark mode (default) - checkbox is checked
+    themeToggle.checked = true;
+  }
+
+  themeToggle.addEventListener('change', () => {
+    if (themeToggle.checked) {
+      // Dark mode
+      document.documentElement.classList.remove('light-mode');
+      localStorage.setItem('coz-theme', 'dark');
+    } else {
+      // Light mode
+      document.documentElement.classList.add('light-mode');
+      localStorage.setItem('coz-theme', 'light');
+    }
+  });
+}
+
+// Sample profiles configuration
 let sample_profiles = ['blackscholes', 'dedup', 'ferret', 'fluidanimate', 'sqlite', 'swaptions'];
 let sample_profile_objects: {[name: string]: Profile} = {};
 
+// Create sample profile buttons for the modal
 let samples_sel = d3.select('#samples').selectAll('.sample-profile').data(sample_profiles)
   .enter().append('button')
-    .attr('class', 'btn btn-sm btn-default sample-profile')
+    .attr('class', 'btn btn-sm sample-profile')
     .attr('data-dismiss', 'modal')
     .attr('loaded', 'no')
     .text(function(d) { return d; })
     .on('click', function(d) {
-      let sel = d3.select(this);
-      if (sel.attr('loaded') !== 'yes') {
-        // Avoid race condition: Set first.
-        sel.attr('loaded', 'yes');
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', `profiles/${d}.coz`);
-        xhr.onload = function() {
-          current_profile = sample_profile_objects[d] =
-            new Profile(xhr.responseText, d3.select('#plot-area'), d3.select('#legend'), get_min_points, display_warning);
-          update();
-        };
-        xhr.onerror = function() {
-          sel.attr('loaded', 'no');
-          display_warning("Error", `Failed to load profile for ${d}.`);
-        };
-        xhr.send();
-      } else {
-        current_profile = sample_profile_objects[d];
-        update();
-      }
+      loadSampleProfile(d, d3.select(this));
     });
+
+// Create quick sample buttons for the welcome page
+let quick_samples_sel = d3.select('#quick-samples').selectAll('.sample-profile').data(sample_profiles)
+  .enter().append('button')
+    .attr('class', 'btn btn-sm sample-profile')
+    .attr('loaded', 'no')
+    .text(function(d) { return d; })
+    .on('click', function(d) {
+      loadSampleProfile(d, d3.select(this));
+    });
+
+// Function to load a sample profile
+function loadSampleProfile(name: string, sel: d3.Selection<any>) {
+  if (sel.attr('loaded') !== 'yes') {
+    // Show loading state
+    sel.text('Loading...').attr('disabled', 'true');
+
+    // Avoid race condition: Set first.
+    sel.attr('loaded', 'yes');
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', `profiles/${name}.coz`);
+    xhr.onload = function() {
+      current_profile = sample_profile_objects[name] =
+        new Profile(xhr.responseText, d3.select('#plot-area'), d3.select('#legend'), get_min_points, display_warning);
+      update();
+      display_success('Sample Loaded', `Loaded ${name} profile`);
+
+      // Reset button state
+      sel.text(name).attr('disabled', null);
+    };
+    xhr.onerror = function() {
+      sel.attr('loaded', 'no');
+      sel.text(name).attr('disabled', null);
+      display_warning("Error", `Failed to load profile for ${name}.`);
+    };
+    xhr.send();
+  } else {
+    current_profile = sample_profile_objects[name];
+    update();
+  }
+}
+
+// Add keyboard shortcut for opening file dialog and help
+document.addEventListener('keydown', (e) => {
+  // Ctrl/Cmd + O to open file dialog
+  if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
+    e.preventDefault();
+    $('#load-profile-dlg').modal('show');
+  }
+  // ? key to show help modal (when not typing in an input)
+  if (e.key === '?' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+    e.preventDefault();
+    $('#help-modal').modal('show');
+  }
+});

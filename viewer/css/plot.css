@@ -1,39 +1,66 @@
+/* ==========================================================================
+   Coz Profiler - Plot Styles
+   ========================================================================== */
 
+/* Plot container */
 div.plot {
   position: absolute;
+  background: var(--bg-card, #1e1e3f);
+  border-radius: var(--border-radius, 12px);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  padding: 0.5rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
+div.plot:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+/* Plot title */
 div.plot-title {
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 12px;
+  font-size: 11px;
   text-align: center;
   white-space: nowrap;
-  margin: 0.75em 0 0 0;
-  font-weight: bold;
-  color: black;
+  margin: 0.5rem 0 0 0;
+  font-weight: 600;
+  color: var(--text-primary, #e2e8f0);
   z-index: 0;
+  padding: 0 0.5rem;
+  letter-spacing: 0.025em;
 }
 
-div.plot-message {
-  color: #EEE;
-  
+div.plot-title:hover {
+  white-space: normal;
+  overflow: visible;
 }
+
+/* Plot message area */
+div.plot-message {
+  color: var(--text-muted, #64748b);
+}
+
+/* ==========================================================================
+   Axes
+   ========================================================================== */
 
 .xaxis path,
 .xaxis line,
 .yaxis path,
 .yaxis line {
-    fill: none;
-    stroke: #ddd;
-    stroke-width: 1;
-    shape-rendering: crispEdges;
+  fill: none;
+  stroke: var(--border-color, rgba(255, 255, 255, 0.15));
+  stroke-width: 1;
+  shape-rendering: crispEdges;
 }
 
 .xaxis text,
 .yaxis text {
-  font-family: sans-serif;
-  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 10px;
+  fill: var(--text-muted, #64748b);
 }
 
 .xaxis path.domain,
@@ -41,80 +68,277 @@ div.plot-message {
   stroke-width: 0;
 }
 
+/* Axis titles */
 text.xtitle,
 text.ytitle {
-  font-family: sans-serif;
-  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  fill: var(--text-secondary, #94a3b8);
 }
+
+/* ==========================================================================
+   Gridlines
+   ========================================================================== */
 
 .xgrid .tick,
 .ygrid .tick {
-  stroke: #ddd;
+  stroke: var(--border-color, rgba(255, 255, 255, 0.08));
   stroke-width: 1;
   shape-rendering: crispEdges;
 }
 
+/* Zero lines */
 line.xzero,
 line.yzero {
   fill: none;
-  stroke: #888;
+  stroke: var(--text-muted, rgba(255, 255, 255, 0.3));
   stroke-width: 1;
+  stroke-dasharray: 4, 2;
   shape-rendering: crispEdges;
 }
 
+/* ==========================================================================
+   Data Series
+   ========================================================================== */
+
 .series circle {
   stroke: none;
+  transition: r 0.15s ease, opacity 0.15s ease;
 }
 
 .series path {
-  stroke-width: 2;
+  stroke-width: 2.5;
   fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .series circle.highlight {
   fill: white;
-  stroke-width: 2;
+  stroke-width: 3;
+  r: 6;
 }
 
-/* Series colors from colorbrewer.org */
-.series0 circle { fill: rgba(31,120,180,1); }
-.series0 path { stroke: rgba(31,120,180,0.75); }
-.series0 circle.highlight { stroke: rgba(31,120,180,1); }
-i.series0 { color: rgba(31,120,180,1); }
+/* Series colors - Modern palette with better contrast */
+.series0 circle { fill: #6366f1; }
+.series0 path { stroke: rgba(99, 102, 241, 0.9); }
+.series0 circle.highlight { stroke: #6366f1; }
+i.series0 { color: #6366f1; }
 
-.series1 circle { fill: rgba(51,160,44,1); }
-.series1 path { stroke: rgba(51,160,44,0.75); }
-.series1 circle.highlight { stroke: rgba(51,160,44,1); }
-i.series1 { color: rgba(51,160,44,1); }
+.series1 circle { fill: #10b981; }
+.series1 path { stroke: rgba(16, 185, 129, 0.9); }
+.series1 circle.highlight { stroke: #10b981; }
+i.series1 { color: #10b981; }
 
-.series2 circle { fill: rgba(227,26,28,1); }
-.series2 path { stroke: rgba(227,26,28,0.75); }
-.series2 circle.highlight { stroke: rgba(227,26,28,1); }
-i.series2 { color: rgba(227,26,28,1); }
+.series2 circle { fill: #f43f5e; }
+.series2 path { stroke: rgba(244, 63, 94, 0.9); }
+.series2 circle.highlight { stroke: #f43f5e; }
+i.series2 { color: #f43f5e; }
 
-.series3 circle { fill: rgba(255,127,0,1); }
-.series3 path { stroke: rgba(255,127,0,0.75); }
-.series3 circle.highlight { stroke: rgba(255,127,0,1); }
-i.series3 { color: rgba(255,127,0,1); }
+.series3 circle { fill: #f59e0b; }
+.series3 path { stroke: rgba(245, 158, 11, 0.9); }
+.series3 circle.highlight { stroke: #f59e0b; }
+i.series3 { color: #f59e0b; }
 
-.series4 circle { fill: rgba(106,61,154,1); }
-.series4 path { stroke: rgba(106,61,154,0.75); }
-.series4 circle.highlight { stroke: rgba(106,61,154,1); }
-i.series4 { color: rgba(106,61,154,1); }
+.series4 circle { fill: #8b5cf6; }
+.series4 path { stroke: rgba(139, 92, 246, 0.9); }
+.series4 circle.highlight { stroke: #8b5cf6; }
+i.series4 { color: #8b5cf6; }
 
-/* Additional legend styles */
+/* Additional series colors for more progress points */
+.series5 circle { fill: #06b6d4; }
+.series5 path { stroke: rgba(6, 182, 212, 0.9); }
+.series5 circle.highlight { stroke: #06b6d4; }
+i.series5 { color: #06b6d4; }
+
+.series6 circle { fill: #ec4899; }
+.series6 path { stroke: rgba(236, 72, 153, 0.9); }
+.series6 circle.highlight { stroke: #ec4899; }
+i.series6 { color: #ec4899; }
+
+.series7 circle { fill: #84cc16; }
+.series7 path { stroke: rgba(132, 204, 22, 0.9); }
+.series7 circle.highlight { stroke: #84cc16; }
+i.series7 { color: #84cc16; }
+
+/* ==========================================================================
+   Legend
+   ========================================================================== */
+
+p.legend-entry {
+  display: flex;
+  align-items: center;
+  padding: 0.4rem 0;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-primary, #e2e8f0);
+  transition: opacity 0.15s ease;
+  border-radius: var(--border-radius-sm, 6px);
+  padding-left: 0.5rem;
+  margin-left: -0.5rem;
+}
+
+p.legend-entry:hover {
+  background: var(--primary-light, rgba(99, 102, 241, 0.1));
+}
+
 p.legend-entry i {
-  margin-right: 0.5em;
+  margin-right: 0.75rem;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+  font-size: 1rem;
 }
 
-p.noseries { color: gray; }
+p.legend-entry i:hover {
+  transform: scale(1.3);
+}
 
-/* Tooltips displayed on points */
+p.noseries {
+  color: var(--text-muted, #64748b);
+  font-style: italic;
+}
+
+/* ==========================================================================
+   Tooltips
+   ========================================================================== */
+
 .d3-tip {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 12px;
-  padding: 6px;
-  background: rgba(0, 0, 0, 0.8);
-  color: #fff;
-  border-radius: 3px;
+  padding: 10px 14px;
+  background: var(--bg-card, rgba(30, 30, 63, 0.98));
+  color: var(--text-primary, #e2e8f0);
+  border-radius: var(--border-radius-sm, 8px);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   z-index: 100;
+  line-height: 1.5;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.d3-tip strong {
+  color: var(--text-secondary, #94a3b8);
+  font-weight: 500;
+}
+
+/* Tooltip arrows */
+.d3-tip:after {
+  box-sizing: border-box;
+  display: inline;
+  font-size: 10px;
+  width: 100%;
+  line-height: 1;
+  color: var(--bg-card, rgba(30, 30, 63, 0.98));
+  position: absolute;
+  pointer-events: none;
+}
+
+.d3-tip.n:after {
+  content: "▼";
+  margin: -1px 0 0 0;
+  top: 100%;
+  left: 0;
+  text-align: center;
+}
+
+.d3-tip.e:after {
+  content: "◀";
+  margin: -4px 0 0 0;
+  top: 50%;
+  left: -8px;
+}
+
+.d3-tip.s:after {
+  content: "▲";
+  margin: 0 0 1px 0;
+  top: -8px;
+  left: 0;
+  text-align: center;
+}
+
+.d3-tip.w:after {
+  content: "▶";
+  margin: -4px 0 0 -1px;
+  top: 50%;
+  left: 100%;
+}
+
+/* ==========================================================================
+   SVG Background
+   ========================================================================== */
+
+svg {
+  background: transparent;
+}
+
+/* ==========================================================================
+   Animations
+   ========================================================================== */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+div.plot {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* ==========================================================================
+   Responsive adjustments
+   ========================================================================== */
+
+@media (max-width: 767px) {
+  div.plot-title {
+    font-size: 10px;
+  }
+
+  .xaxis text,
+  .yaxis text {
+    font-size: 9px;
+  }
+
+  text.xtitle,
+  text.ytitle {
+    font-size: 10px;
+  }
+
+  .d3-tip {
+    font-size: 11px;
+    padding: 8px 12px;
+  }
+}
+
+/* ==========================================================================
+   Light Mode Adjustments
+   ========================================================================== */
+
+:root.light-mode div.plot {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+:root.light-mode div.plot:hover {
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+}
+
+:root.light-mode line.xzero,
+:root.light-mode line.yzero {
+  stroke: rgba(0, 0, 0, 0.3);
+}
+
+:root.light-mode .d3-tip {
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+:root.light-mode .d3-tip:after {
+  color: rgba(255, 255, 255, 0.98);
 }
