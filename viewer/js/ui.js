@@ -327,11 +327,10 @@ let sample_profile_objects = {};
 let samples_sel = d3.select('#samples').selectAll('.sample-profile').data(sample_profiles)
     .enter().append('button')
     .attr('class', 'btn btn-sm sample-profile')
-    .attr('data-dismiss', 'modal')
     .attr('loaded', 'no')
     .text(function (d) { return d; })
     .on('click', function (d) {
-    loadSampleProfile(d, d3.select(this));
+    loadSampleProfile(d, d3.select(this), true);
 });
 // Create quick sample buttons for the welcome page
 let quick_samples_sel = d3.select('#quick-samples').selectAll('.sample-profile').data(sample_profiles)
@@ -343,7 +342,7 @@ let quick_samples_sel = d3.select('#quick-samples').selectAll('.sample-profile')
     loadSampleProfile(d, d3.select(this));
 });
 // Function to load a sample profile
-function loadSampleProfile(name, sel) {
+function loadSampleProfile(name, sel, closeModal) {
     if (sel.attr('loaded') !== 'yes') {
         // Show loading state
         sel.text('Loading...').attr('disabled', 'true');
@@ -358,6 +357,10 @@ function loadSampleProfile(name, sel) {
             display_success('Sample Loaded', `Loaded ${name} profile`);
             // Reset button state
             sel.text(name).attr('disabled', null);
+            // Close the modal if requested
+            if (closeModal) {
+                $('#load-profile-dlg').modal('hide');
+            }
         };
         xhr.onerror = function () {
             sel.attr('loaded', 'no');
@@ -369,6 +372,10 @@ function loadSampleProfile(name, sel) {
     else {
         current_profile = sample_profile_objects[name];
         update();
+        // Close the modal if requested
+        if (closeModal) {
+            $('#load-profile-dlg').modal('hide');
+        }
     }
 }
 // Add keyboard shortcut for opening file dialog and help

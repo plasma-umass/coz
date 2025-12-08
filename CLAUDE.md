@@ -77,6 +77,14 @@ coz run --- ./toy/toy
    - `COZ_BEGIN(name)` / `COZ_END(name)`: Latency measurement points
    - Uses weak dlsym to locate `_coz_get_counter` at runtime
 
+4. **viewer** (`viewer/`): Web-based profile visualization UI
+   - TypeScript/JavaScript single-page application for viewing `.coz` profile files
+   - `ts/profile.ts`: Profile parsing and D3.js plot rendering (loess smoothing, interactive tooltips)
+   - `ts/ui.ts`: UI logic including file loading, drag-and-drop, theme toggle, keyboard shortcuts
+   - `index.htm`: Main HTML with sidebar controls, welcome page, and help modals
+   - `css/ui.css`, `css/plot.css`: Modern dark/light theme styling
+   - Uses Bootstrap 3, D3.js v3, jQuery, and science.js for statistics
+
 ### Causal Profiling Mechanism
 
 Coz uses **virtual speedups** to measure optimization potential causally rather than observationally. Instead of actually optimizing code, it simulates the effect by slowing down everything else proportionally.
@@ -193,6 +201,7 @@ coz run --- ./myapp
 # View results (opens browser or use hosted viewer)
 coz plot
 # Or visit: https://coz-profiler.github.io/coz-ui/
+# Or run the local viewer (see below)
 ```
 
 If you only want to collect lines from your own sources (and not the C++ standard library), pass one or more `--source-scope` globs or set `COZ_SOURCE_SCOPE`. Coz also honors `COZ_FILTER_SYSTEM=1` as a quick toggle to drop system headers after the DWARF pass. For example:
@@ -243,6 +252,50 @@ find_package(coz-profiler)
 # Provides coz::coz (library+includes) and coz::profiler (binary)
 target_link_libraries(myapp PRIVATE coz::coz)
 ```
+
+### Profile Viewer
+
+The `viewer/` directory contains a local web-based UI for visualizing `.coz` profile files. This is an alternative to the hosted viewer at https://coz-profiler.github.io/coz-ui/.
+
+**Building the viewer:**
+
+```bash
+cd viewer
+npm install    # Installs TypeScript and compiles ts/*.ts to js/*.js
+```
+
+**Running the viewer:**
+
+```bash
+# Install a simple HTTP server (one-time)
+npm i -g http-server
+
+# Serve the viewer
+cd viewer
+http-server
+
+# Open http://localhost:8080/ in your browser
+```
+
+**Viewer features:**
+- **Drag-and-drop**: Drop `.coz` files directly onto the page or use the file browser
+- **Sample profiles**: Built-in profiles from PARSEC benchmarks (blackscholes, dedup, ferret, fluidanimate, sqlite, swaptions)
+- **Interactive plots**: D3.js visualizations with loess-smoothed trend lines and tooltips showing exact speedup values
+- **Progress point legend**: Click progress point icons to toggle visibility
+- **Sort options**: Sort plots by impact (default), alphabetical, max speedup, or min speedup
+- **Minimum points filter**: Slider to filter out lines with insufficient data points
+- **Dark/light theme**: Toggle between themes (preference saved in localStorage)
+- **Keyboard shortcuts**: `Ctrl+O` to open file dialog, `?` to show help
+
+**Development:**
+
+TypeScript source files are in `ts/`. After modifying them, rebuild with:
+
+```bash
+npx tsc -p tsconfig.json
+```
+
+The compiled JavaScript files are output to `js/` and committed to the repo for convenience.
 
 ## System Requirements
 
