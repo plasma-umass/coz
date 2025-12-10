@@ -59,6 +59,18 @@ if(INSTALL_COZ)
     include(CMakePackageConfigHelpers)
     install(PROGRAMS coz DESTINATION bin)
     install(FILES LICENSE.md DESTINATION licenses)
+
+    # Install the viewer web application
+    install(DIRECTORY viewer/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/coz/viewer
+        PATTERN "node_modules" EXCLUDE
+        PATTERN "ts" EXCLUDE
+        PATTERN ".claude" EXCLUDE
+        PATTERN "*.ts" EXCLUDE
+        PATTERN "tsconfig.json" EXCLUDE
+        PATTERN "package*.json" EXCLUDE
+        PATTERN "Makefile" EXCLUDE
+        PATTERN "*.map" EXCLUDE)
     configure_package_config_file(
         cmake/coz-profilerConfig.cmake.in
         ${CMAKE_CURRENT_BINARY_DIR}/coz-profilerConfig.cmake

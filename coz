@@ -124,18 +124,72 @@ def _coz_run(args):
 def open_browser(url):
   import webbrowser
   webbrowser.open_new_tab(url)
-  
+
+def _find_viewer_directory():
+  """Find the viewer directory relative to this script's location."""
+  coz_prefix = dirname(realpath(sys.argv[0]))
+
+  # Candidate viewer locations
+  viewer_locations = [
+    # Development: viewer directory adjacent to script
+    os.path.join(coz_prefix, 'viewer'),
+
+    # Installed: share/coz/viewer relative to bin
+    os.path.join(coz_prefix, '..', 'share', 'coz', 'viewer'),
+  ]
+
+  for candidate in viewer_locations:
+    index_path = os.path.join(candidate, 'index.htm')
+    if os.path.exists(index_path):
+      return abspath(candidate)
+
+  return None
+
 def _coz_plot(args):
-  coz_plot_url = 'https://coz-profiler.github.io/coz-ui/'
+  import http.server
+  import socketserver
   import threading
-  t1 = threading.Thread(target=open_browser,args=(coz_plot_url,))
-  t1.start()
-  #if sys.platform == 'darwin':
-  #  subprocess.call(['open', coz_plot_url])
-  #elif sys.platform == 'win32':
-  #  os.startfile(coz_plot_url)
-  #else:
-  #  subprocess.call(['xdg-open', coz_plot_url])
+
+  viewer_dir = _find_viewer_directory()
+
+  if viewer_dir is None:
+    # Fall back to online viewer
+    sys.stderr.write('warning: could not find local viewer, opening online viewer\n')
+    coz_plot_url = 'https://coz-profiler.github.io/coz-ui/'
+    t1 = threading.Thread(target=open_browser, args=(coz_plot_url,))
+    t1.start()
+    return
+
+  # Find an available port
+  port = args.port
+
+  class QuietHandler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+      super().__init__(*args, directory=viewer_dir, **kwargs)
+
+    def log_message(self, format, *args):
+      # Suppress default logging
+      pass
+
+  try:
+    with socketserver.TCPServer(("", port), QuietHandler) as httpd:
+      url = f'http://localhost:{port}/'
+      print(f'Serving coz viewer at {url}')
+      print(f'Press Ctrl+C to stop the server')
+
+      # Open browser in a separate thread
+      t1 = threading.Thread(target=open_browser, args=(url,))
+      t1.start()
+
+      try:
+        httpd.serve_forever()
+      except KeyboardInterrupt:
+        print('\nShutting down server...')
+  except OSError as e:
+    if e.errno == 48 or e.errno == 98:  # Address already in use (macOS/Linux)
+      sys.stderr.write(f'error: port {port} is already in use. Try --port <number>\n')
+      sys.exit(1)
+    raise
   
 
 # Special format handler for line reference arguments
@@ -197,6 +251,11 @@ _run_parser.set_defaults(func=_coz_run, parser=_run_parser)
 ######### Build the parser for the `coz plot` subcommand
 _plot_parser = _subparsers.add_parser('plot',
                                       help='Plot the speedup results from one or more causal profiling runs.')
+
+_plot_parser.add_argument('--port', '-p',
+                          metavar='<port>',
+                          type=int, default=8080,
+                          help='Port for the local web server (default=8080)')
 
 # Use defaults to recover handler function and parser object from parser output
 _plot_parser.set_defaults(func=_coz_plot, parser=_plot_parser)

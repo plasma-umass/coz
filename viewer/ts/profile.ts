@@ -415,6 +415,11 @@ class Profile {
     legend_entries_sel.exit().remove();
   }
 
+  // Returns the number of plots that would be generated with the given min_points
+  public countPlots(min_points: number): number {
+    return this.getSpeedupData(min_points).length;
+  }
+
   public drawPlots(no_animate: boolean): number {
     const container = this._plot_container;
     const min_points = this._get_min_points();
