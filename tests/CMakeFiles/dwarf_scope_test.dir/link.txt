@@ -1,0 +1,1 @@
+/usr/bin/c++  -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names -L/opt/homebrew/opt/libyaml/lib CMakeFiles/dwarf_scope_test.dir/dwarf/dwarf_scope_test.cpp.o -o dwarf_scope_test
