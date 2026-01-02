@@ -7,7 +7,18 @@
 
 #include "profiler.h"
 
-#include <asm/unistd.h>
+#ifndef __APPLE__
+  #include <asm/unistd.h>
+#else
+  // macOS doesn't have gettid(), provide implementation
+  #include <pthread.h>
+  #include "perf_macos.h"
+  static inline pid_t gettid() {
+    uint64_t tid;
+    pthread_threadid_np(NULL, &tid);
+    return (pid_t)tid;
+  }
+#endif
 #include <execinfo.h>
 #include <limits.h>
 #include <poll.h>
@@ -343,7 +354,8 @@ void* profiler::start_thread(void* p) {
 }
 
 void profiler::begin_sampling(thread_state* state) {
-  // Set the perf_event sampler configuration
+#ifndef __APPLE__
+  // Set the perf_event sampler configuration (Linux)
   struct perf_event_attr pe;
   memset(&pe, 0, sizeof(pe));
   pe.type = PERF_TYPE_SOFTWARE;
@@ -360,6 +372,13 @@ void profiler::begin_sampling(thread_state* state) {
   state->process_timer = timer(SampleSignal);
   state->process_timer.start_interval(SamplePeriod * SampleBatchSize);
   state->sampler.start();
+#else
+  // macOS version using timer-based sampling
+  state->sampler = perf_event(SamplePeriod);
+  state->process_timer = timer(SampleSignal);
+  state->process_timer.start_interval(SamplePeriod * SampleBatchSize);
+  state->sampler.start();
+#endif
 }
 
 void profiler::end_sampling() {
@@ -444,7 +463,7 @@ void profiler::add_delays(thread_state* state) {
 void profiler::process_samples(thread_state* state) {
   for(perf_event::record r : state->sampler) {
     if(r.is_sample()) {
-      // Find and matches the line that contains this sample
+      // Find and match the line that contains this sample
       std::pair<line*, bool> sampled_line = match_line(r);
       if(sampled_line.first) {
         sampled_line.first->add_sample();
@@ -476,11 +495,18 @@ void* profiler::start_profiler_thread(void* arg) {
 }
 
 void profiler::samples_ready(int signum, siginfo_t* info, void* p) {
+  // On macOS, samples are captured by the sampling thread via thread suspension.
+  // This signal handler just triggers sample processing.
+
   thread_state* state = get_instance().get_thread_state();
-  if(state && !state->check_in_use()) {
-    // Process all available samples
-    profiler::get_instance().process_samples(state);
+  if (!state) {
+    return;
   }
+  if (state->check_in_use()) {
+    return;
+  }
+  // Process all available samples
+  profiler::get_instance().process_samples(state);
 }
 
 void profiler::on_error(int signum, siginfo_t* info, void* p) {

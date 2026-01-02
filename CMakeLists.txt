@@ -10,9 +10,76 @@ set(CONAN_CMAKE_SILENT_OUTPUT ON)
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR}/cmake)
 
 find_package(Threads REQUIRED)
-find_package(libelfin REQUIRED)
 
-add_compile_options(-gdwarf-3)
+option(USE_SYSTEM_LIBELFIN "Link against libelfin discovered via pkg-config" OFF)
+
+if(USE_SYSTEM_LIBELFIN)
+    find_package(libelfin REQUIRED)
+else()
+    # Check for local libelfin directory first (may contain patches/modifications)
+    if(EXISTS "${PROJECT_SOURCE_DIR}/libelfin/elf/elf.cc")
+        set(libelfin_SOURCE_DIR "${PROJECT_SOURCE_DIR}/libelfin")
+        message(STATUS "Using local libelfin from ${libelfin_SOURCE_DIR}")
+        set(LIBELFIN_LOCAL TRUE)
+    else()
+        # Fetch libelfin from GitHub
+        include(FetchContent)
+
+        set(LIBELFIN_GIT_TAG "8779775beea1ee5444ba53d14e354dbcf42a811d" CACHE STRING
+            "Git tag/branch/commit for libelfin (default: includes pre-built to_string.cc)")
+        set(LIBELFIN_GIT_REPO "https://github.com/plasma-umass/libelfin.git" CACHE STRING
+            "Git repository URL for libelfin")
+
+        FetchContent_Declare(
+            libelfin
+            GIT_REPOSITORY ${LIBELFIN_GIT_REPO}
+            GIT_TAG        ${LIBELFIN_GIT_TAG}
+        )
+
+        FetchContent_GetProperties(libelfin)
+        if(NOT libelfin_POPULATED)
+            FetchContent_Populate(libelfin)
+        endif()
+        message(STATUS "Fetched libelfin to ${libelfin_SOURCE_DIR}")
+        set(LIBELFIN_LOCAL FALSE)
+    endif()
+
+    set(LIBELFIN_ELF_SOURCES
+        ${libelfin_SOURCE_DIR}/elf/elf.cc
+        ${libelfin_SOURCE_DIR}/elf/mmap_loader.cc
+        ${libelfin_SOURCE_DIR}/elf/to_string.cc)
+
+    set(LIBELFIN_DWARF_SOURCES
+        ${libelfin_SOURCE_DIR}/dwarf/abbrev.cc
+        ${libelfin_SOURCE_DIR}/dwarf/attrs.cc
+        ${libelfin_SOURCE_DIR}/dwarf/cursor.cc
+        ${libelfin_SOURCE_DIR}/dwarf/die.cc
+        ${libelfin_SOURCE_DIR}/dwarf/die_str_map.cc
+        ${libelfin_SOURCE_DIR}/dwarf/dwarf.cc
+        ${libelfin_SOURCE_DIR}/dwarf/elf.cc
+        ${libelfin_SOURCE_DIR}/dwarf/expr.cc
+        ${libelfin_SOURCE_DIR}/dwarf/line.cc
+        ${libelfin_SOURCE_DIR}/dwarf/rangelist.cc
+        ${libelfin_SOURCE_DIR}/dwarf/to_string.cc
+        ${libelfin_SOURCE_DIR}/dwarf/value.cc)
+
+    add_library(libelfin_internal STATIC
+        ${LIBELFIN_ELF_SOURCES}
+        ${LIBELFIN_DWARF_SOURCES})
+
+    target_include_directories(libelfin_internal PUBLIC
+        ${libelfin_SOURCE_DIR}
+        ${libelfin_SOURCE_DIR}/elf
+        ${libelfin_SOURCE_DIR}/dwarf)
+    target_compile_features(libelfin_internal PUBLIC cxx_std_11)
+    set_target_properties(libelfin_internal PROPERTIES
+        POSITION_INDEPENDENT_CODE ON)
+    add_library(libelfin::libelfin ALIAS libelfin_internal)
+endif()
+
+# Always emit debug info so line tables are available when resolving
+# progress points, but let the toolchain decide which DWARF version to use.
+add_compile_options(-g)
 
 option(INSTALL_COZ "Enable installation of coz. (Projects embedding coz may want to turn this OFF.)" ON)
 
@@ -21,6 +88,18 @@ if(INSTALL_COZ)
     include(CMakePackageConfigHelpers)
     install(PROGRAMS coz DESTINATION bin)
     install(FILES LICENSE.md DESTINATION licenses)
+
+    # Install the viewer web application
+    install(DIRECTORY viewer/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/coz/viewer
+        PATTERN "node_modules" EXCLUDE
+        PATTERN "ts" EXCLUDE
+        PATTERN ".claude" EXCLUDE
+        PATTERN "*.ts" EXCLUDE
+        PATTERN "tsconfig.json" EXCLUDE
+        PATTERN "package*.json" EXCLUDE
+        PATTERN "Makefile" EXCLUDE
+        PATTERN "*.map" EXCLUDE)
     configure_package_config_file(
         cmake/coz-profilerConfig.cmake.in
         ${CMAKE_CURRENT_BINARY_DIR}/coz-profilerConfig.cmake
@@ -44,11 +123,27 @@ add_subdirectory(libcoz)
 
 option(BUILD_BENCHMARKS "Build benchmarks" OFF)
 if(BUILD_BENCHMARKS)
-    if(NOT (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
-        message(FATAL_ERROR "Build benchmarks with debug information - use Debug or RelWithDebInfo")
+    if(NOT CMAKE_BUILD_TYPE)
+        set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
+        message(STATUS "BUILD_BENCHMARKS=ON: defaulting CMAKE_BUILD_TYPE to RelWithDebInfo")
+    elseif(NOT (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
+        message(STATUS "BUILD_BENCHMARKS=ON: forcing debug info by switching to RelWithDebInfo")
+        set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
     endif()
     find_package(SQLite3 REQUIRED)
     find_package(BZip2 REQUIRED)
     add_subdirectory(benchmarks)
 endif()
 
+add_subdirectory(tests)
+
+if(APPLE)
+    # 1. Specify the location of private frameworks to the linker
+    # This adds the -iframework /System/Library/PrivateFrameworks flag
+    target_link_options(coz PRIVATE "-iframework" "/System/Library/PrivateFrameworks")
+
+    # 2. Link against the specific (private) framework
+    # The name is likely 'Kperf' based on the symbol names.
+    # The quotes are important so CMake treats "-framework Kperf" as a single argument.
+    target_link_libraries(coz PRIVATE "-framework Kperf")
+endif()

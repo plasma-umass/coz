@@ -18,6 +18,7 @@
 #include <string>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace dwarf {
   class die;
@@ -132,13 +133,20 @@ private:
  */
 class memory_map {
 public:
+  struct queued_range {
+    std::string filename;
+    size_t line;
+    interval range;
+    bool preferred;
+  };
   inline const std::map<std::string, std::shared_ptr<file>>& files() const { return _files; }
   inline const std::map<interval, std::shared_ptr<line>>& ranges() const { return _ranges; }
   
   /// Build a map from addresses to source lines by examining binaries that match the provided
   /// scope patterns, adding only source files matching the source scope patterns.
   void build(const std::unordered_set<std::string>& binary_scope,
-             const std::unordered_set<std::string>& source_scope);
+             const std::unordered_set<std::string>& source_scope,
+             bool allow_system_sources);
   
   std::shared_ptr<line> find_line(const std::string& name);
   std::shared_ptr<line> find_line(uintptr_t addr);
@@ -166,13 +174,19 @@ private:
   
   /// Find a debug version of provided file and add all of its in-scope lines to the map
   bool process_file(const std::string& name, uintptr_t load_address,
-                    const std::unordered_set<std::string>& source_scope);
+                    const std::unordered_set<std::string>& source_scope,
+                    bool allow_system_sources);
   
   /// Add entries for all inlined calls
   void process_inlines(const dwarf::die& d,
                        const dwarf::line_table& table,
                        const std::unordered_set<std::string>& source_scope,
-                       uintptr_t load_address);
+                       uintptr_t load_address,
+                       bool allow_system_sources,
+                       std::vector<queued_range>& pending,
+                       const std::string& parent_file = std::string(),
+                       size_t parent_line = 0,
+                       bool parent_in_scope = false);
   
   std::map<std::string, std::shared_ptr<file>> _files;
   std::map<interval, std::shared_ptr<line>> _ranges;

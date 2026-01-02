@@ -7,10 +7,12 @@
 
 #include "log.h"
 
+#ifndef __APPLE__
+// Linux-specific timer using POSIX timer API
 class timer {
 public:
   timer() : _initialized(false) {}
-  
+
   timer(int sig) {
     struct sigevent ev;
     memset(&ev, 0, sizeof(ev));
@@ -77,9 +79,84 @@ public:
 private:
   timer(const timer&) = delete;
   void operator=(const timer&) = delete;
-  
+
   timer_t _timer;
   bool _initialized;
 };
 
+#else
+// macOS timer using setitimer with ITIMER_PROF
+#include <sys/time.h>
+#include <signal.h>
+
+class timer {
+public:
+  timer() : _initialized(false), _sig(0) {}
+  timer(int sig) : _initialized(true), _sig(sig) {
+    // Store the signal for later use
+    // On macOS, SIGPROF is delivered when ITIMER_PROF fires
+  }
+
+  // Allow move construction and assignment
+  timer(timer&& other) : _sig(other._sig), _initialized(other._initialized) {
+    other._initialized = false;
+  }
+
+  timer& operator=(timer&& other) {
+    if (this != &other) {
+      _sig = other._sig;
+      _initialized = other._initialized;
+      other._initialized = false;
+    }
+    return *this;
+  }
+
+  ~timer() {
+    if (_initialized) {
+      // Stop the timer
+      struct itimerval it;
+      memset(&it, 0, sizeof(it));
+      setitimer(ITIMER_PROF, &it, nullptr);
+    }
+  }
+
+  void start_interval(size_t time_ns) {
+    ASSERT(_initialized) << "Can't start an uninitialized timer";
+
+    // Convert nanoseconds to microseconds
+    size_t time_us = time_ns / 1000;
+    if (time_us < 1000) time_us = 1000; // Minimum 1ms
+
+    struct itimerval it;
+    it.it_value.tv_sec = time_us / 1000000;
+    it.it_value.tv_usec = time_us % 1000000;
+    it.it_interval.tv_sec = time_us / 1000000;
+    it.it_interval.tv_usec = time_us % 1000000;
+
+    REQUIRE(setitimer(ITIMER_PROF, &it, nullptr) == 0) << "Failed to start interval timer";
+  }
+
+  void start_oneshot(size_t time_ns) {
+    ASSERT(_initialized) << "Can't start an uninitialized timer";
+
+    size_t time_us = time_ns / 1000;
+    if (time_us < 1000) time_us = 1000;
+
+    struct itimerval it;
+    memset(&it, 0, sizeof(it));
+    it.it_value.tv_sec = time_us / 1000000;
+    it.it_value.tv_usec = time_us % 1000000;
+
+    REQUIRE(setitimer(ITIMER_PROF, &it, nullptr) == 0) << "Failed to start one-shot timer";
+  }
+
+private:
+  timer(const timer&) = delete;
+  timer& operator=(const timer&) = delete;
+
+  int _sig;
+  bool _initialized;
+};
 #endif
+
+#endif // CCUTIL_TIMER_H
