@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [master, wip_*]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libsqlite3-dev \
+          libbz2-dev
+
+    - name: Configure perf permissions
+      run: |
+        # Allow perf_event_open for profiling
+        echo 1 | sudo tee /proc/sys/kernel/perf_event_paranoid
+
+    - name: Build coz
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        make -j$(nproc)
+
+    - name: Build toy benchmark
+      run: |
+        cd build
+        cmake .. -DBUILD_BENCHMARKS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        make -j$(nproc) toy
+
+    - name: Verify build artifacts
+      run: |
+        test -f build/libcoz/libcoz.so
+        test -x build/benchmarks/toy/toy
+        echo "Build artifacts verified"
+
+    - name: Run toy benchmark with coz
+      run: |
+        cd build
+        # Run coz with the toy benchmark for a short duration
+        timeout 30 ../coz run -o profile.coz --- ./benchmarks/toy/toy || true
+
+        # Check that profile was created
+        if [ ! -f profile.coz ]; then
+          echo "ERROR: profile.coz was not created"
+          exit 1
+        fi
+
+        echo "Profile created successfully"
+
+    - name: Validate profile output
+      run: |
+        cd build
+
+        # Check profile has content
+        if [ ! -s profile.coz ]; then
+          echo "ERROR: profile.coz is empty"
+          exit 1
+        fi
+
+        # Check for expected profile format (should contain experiment lines)
+        if ! grep -q "experiment" profile.coz; then
+          echo "WARNING: No experiment data in profile (may need longer run)"
+          cat profile.coz
+        else
+          echo "Profile contains experiment data"
+          # Show summary
+          echo "Profile summary:"
+          echo "  Lines: $(wc -l < profile.coz)"
+          echo "  Experiments: $(grep -c 'experiment' profile.coz || echo 0)"
+          head -20 profile.coz
+        fi
+
+    - name: Upload profile artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: coz-profile
+        path: build/profile.coz
+        retention-days: 7
