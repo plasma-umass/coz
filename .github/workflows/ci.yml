@@ -108,23 +108,36 @@ jobs:
 
         python3 << 'VALIDATION_SCRIPT'
         import sys
+        import re
 
         # Parse profile.coz
+        # Format: experiment\tselected=path:line\tspeedup=X.XX\tduration=N\tselected-samples=N
+        # Followed by: throughput-point\tname=path:line\tdelta=N
         experiments = []
+        current_exp = None
+
         with open('profile.coz', 'r') as f:
             for line in f:
+                line = line.strip()
                 if line.startswith('experiment'):
-                    parts = line.strip().split('\t')
-                    if len(parts) >= 5:
-                        # Format: experiment, selected, speedup%, duration_ns, progress_delta
-                        selected = parts[1]
-                        speedup = float(parts[2])
-                        progress_delta = float(parts[4]) if parts[4] != '' else 0
-                        experiments.append({
-                            'selected': selected,
-                            'speedup': speedup,
-                            'delta': progress_delta
-                        })
+                    # Parse key=value pairs
+                    parts = line.split('\t')
+                    exp = {}
+                    for part in parts[1:]:
+                        if '=' in part:
+                            key, val = part.split('=', 1)
+                            exp[key] = val
+                    current_exp = exp
+                elif line.startswith('throughput-point') and current_exp:
+                    # Parse throughput point and attach to current experiment
+                    parts = line.split('\t')
+                    for part in parts[1:]:
+                        if '=' in part:
+                            key, val = part.split('=', 1)
+                            if key == 'delta':
+                                current_exp['delta'] = float(val)
+                    experiments.append(current_exp)
+                    current_exp = None
 
         # Filter for toy.cpp:18 (the loop in a())
         line18_exps = [e for e in experiments if 'toy.cpp:18' in e['selected']]
@@ -138,7 +151,7 @@ jobs:
         # Group by speedup percentage and calculate average delta
         speedup_deltas = {}
         for e in line18_exps:
-            s = int(e['speedup'])
+            s = int(float(e['speedup']) * 100)  # Convert decimal (0.40) to percentage (40)
             if s not in speedup_deltas:
                 speedup_deltas[s] = []
             speedup_deltas[s].append(e['delta'])
