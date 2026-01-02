@@ -9,6 +9,8 @@
 
 #ifdef __APPLE__
   #include "elf_compat.h"
+  #include "macho_support.h"
+  #include <mach-o/dyld.h>
 #else
   #include <elf.h>
 #endif
@@ -236,6 +238,22 @@ static elf::elf locate_debug_executable(const string filename) {
   return f;
 }
 
+#ifdef __APPLE__
+unordered_map<string, uintptr_t> get_loaded_files() {
+  unordered_map<string, uintptr_t> result;
+
+  uint32_t count = _dyld_image_count();
+  for(uint32_t i = 0; i < count; i++) {
+    const char* name = _dyld_get_image_name(i);
+    if(name && name[0] == '/') {
+      intptr_t slide = _dyld_get_image_vmaddr_slide(i);
+      result[name] = static_cast<uintptr_t>(slide);
+    }
+  }
+
+  return result;
+}
+#else
 unordered_map<string, uintptr_t> get_loaded_files() {
   unordered_map<string, uintptr_t> result;
 
@@ -279,6 +297,7 @@ unordered_map<string, uintptr_t> get_loaded_files() {
 
   return result;
 }
+#endif
 
 bool wildcard_match(string::const_iterator subject,
                     string::const_iterator subject_end,
@@ -662,6 +681,15 @@ void memory_map::process_inlines(const dwarf::die& d,
 bool memory_map::process_file(const string& name, uintptr_t load_address,
                               const unordered_set<string>& source_scope,
                               bool allow_system_sources) {
+#ifdef __APPLE__
+  // On macOS, use macho_support to load DWARF from Mach-O binaries
+  auto loader = macho_support::load_debug_info(name);
+  if(!loader) {
+    return false;
+  }
+  dwarf::dwarf d(loader);
+  // On macOS, load_address is already the ASLR slide from dyld
+#else
   elf::elf f = locate_debug_executable(name);
   // If a debug version of the file could not be located, return false
   if(!f.valid()) {
@@ -684,6 +712,7 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
 
   // Read the DWARF information from the chosen file
   dwarf::dwarf d(dwarf::elf::create_loader(f));
+#endif
 
   vector<memory_map::queued_range> pending;
 
@@ -695,9 +724,18 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
       size_t prev_line;
       uintptr_t prev_address = 0;
       set<string> included_files;
-      const auto& table = unit.get_line_table();
-      if(!table.valid())
+      dwarf::line_table table;
+      try {
+        table = unit.get_line_table();
+      } catch (const dwarf::format_error& e) {
+        // DWARF 5 format errors are common on macOS - skip this CU
         continue;
+      } catch (const std::exception& e) {
+        continue;
+      }
+      if(!table.valid()) {
+        continue;
+      }
       vector<subprogram_range> subprograms;
       collect_subprogram_ranges(unit.root(),
                                 table,
