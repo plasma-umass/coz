@@ -198,10 +198,11 @@ g++ -g -o myapp myapp.cpp -ldl
 # Run with coz
 coz run --- ./myapp
 
-# View results (opens browser or use hosted viewer)
+# View results (automatically opens profile in browser)
 coz plot
-# Or visit: https://coz-profiler.github.io/coz-ui/
-# Or run the local viewer (see below)
+
+# Or load a specific profile
+coz plot -i /path/to/profile.coz
 ```
 
 If you only want to collect lines from your own sources (and not the C++ standard library), pass one or more `--source-scope` globs or set `COZ_SOURCE_SCOPE`. Coz also honors `COZ_FILTER_SYSTEM=1` as a quick toggle to drop system headers after the DWARF pass. For example:
@@ -255,73 +256,55 @@ target_link_libraries(myapp PRIVATE coz::coz)
 
 ### Profile Viewer
 
-The `viewer/` directory contains a local web-based UI for visualizing `.coz` profile files. This is an alternative to the hosted viewer at https://coz-profiler.github.io/coz-ui/.
+Run `coz plot` to view profiles. This launches a local web server and automatically opens your `profile.coz` in the browser. Use `coz plot -i /path/to/file.coz` to load a specific profile.
 
-**Building the viewer:**
-
-```bash
-cd viewer
-npm install    # Installs TypeScript and compiles ts/*.ts to js/*.js
-```
-
-**Running the viewer:**
-
-```bash
-# Install a simple HTTP server (one-time)
-npm i -g http-server
-
-# Serve the viewer
-cd viewer
-http-server
-
-# Open http://localhost:8080/ in your browser
-```
+The viewer source is in `viewer/` (TypeScript/JavaScript single-page application).
 
 **Viewer features:**
-- **Drag-and-drop**: Drop `.coz` files directly onto the page or use the file browser
-- **Sample profiles**: Built-in profiles from PARSEC benchmarks (blackscholes, dedup, ferret, fluidanimate, sqlite, swaptions)
-- **Interactive plots**: D3.js visualizations with loess-smoothed trend lines and tooltips showing exact speedup values
-- **Progress point legend**: Click progress point icons to toggle visibility
-- **Sort options**: Sort plots by impact (default), alphabetical, max speedup, or min speedup
-- **Minimum points filter**: Slider to filter out lines with insufficient data points
-- **Dark/light theme**: Toggle between themes (preference saved in localStorage)
-- **Keyboard shortcuts**: `Ctrl+O` to open file dialog, `?` to show help
+- Automatic profile loading from current directory
+- Drag-and-drop support for loading additional profiles
+- Interactive D3.js plots with loess-smoothed trend lines
+- Sort by impact, alphabetical, max/min speedup
+- Minimum points filter slider
+- Dark/light theme toggle
+- Keyboard shortcuts: `Ctrl+O` to open file, `?` for help
 
-**Development:**
-
-TypeScript source files are in `ts/`. After modifying them, rebuild with:
+**Viewer development:**
 
 ```bash
-npx tsc -p tsconfig.json
+cd viewer
+npm install              # Install dependencies
+npx tsc -p tsconfig.json # Rebuild after editing ts/*.ts
 ```
 
-The compiled JavaScript files are output to `js/` and committed to the repo for convenience.
+The compiled JavaScript files are in `js/` and committed to the repo.
 
 ## System Requirements
 
 ### Linux
 - Linux 2.6.32+ with `perf_event_open` support
 - Set perf paranoia: `echo 1 | sudo tee /proc/sys/kernel/perf_event_paranoid`
-- Dependencies: libdwarf-dev, libelfin, pthread, dl, rt
+- Build dependencies: build-essential, cmake, pkg-config (libelfin fetched automatically)
 
 ### macOS
 - macOS 10.10+ (kperf framework availability)
 - Requires elevated privileges or SIP adjustments for kperf access
-- Dependencies: libelfin, pthread, dl
+- Build dependencies: cmake, pkg-config (libelfin fetched automatically)
 - **Important**: Uses private kperf API which may change without notice
 - Cannot be used in App Store applications due to private API usage
 
 ## Dependencies
 
-- **libelfin**: DWARF/ELF parsing (must be installed from https://github.com/plasma-umass/libelfin)
+- **libelfin**: DWARF/ELF parsing (fetched automatically during build via CMake FetchContent)
 - Build requires: CMake, C++11 compiler, Python 3, pkg-config
+- On Debian/Ubuntu: `sudo apt-get install build-essential cmake pkg-config`
 - Benchmark dependencies: libbz2-dev, libsqlite3-dev
 
 ## Output Format
 
 Profiler writes to `profile.coz` (configurable). Format includes:
 - Experiment records: speedup%, source location, progress delta, duration
-- Loaded at https://coz-profiler.github.io/coz-ui/ for visualization
+- View with `coz plot` command
 
 ### Interpreting Results
 
@@ -381,6 +364,13 @@ The authors demonstrated significant speedups on real applications:
 - JIT languages need debug info support (not currently implemented)
 - Programs must have meaningful progress points for accurate profiling
 
+## Releases
+
+GitHub releases include pre-built packages for Linux:
+- `.tar.gz` - Generic Linux tarball with install script
+- `.deb` - Debian/Ubuntu packages (amd64, arm64)
+- `.rpm` - Fedora/RHEL/CentOS packages (x86_64, aarch64)
+
 ## References
 
 **Original Paper**: Charlie Curtsinger and Emery D. Berger. 2015. "Coz: Finding Code that Counts with Causal Profiling." In Proceedings of the 25th Symposium on Operating Systems Principles (SOSP '15). ACM. DOI: 10.1145/2815400.2815409
@@ -388,4 +378,3 @@ The authors demonstrated significant speedups on real applications:
 - Paper: https://arxiv.org/abs/1608.03676
 - Received Best Paper Award at SOSP 2015
 - Project homepage: https://github.com/plasma-umass/coz
-- Web viewer: https://coz-profiler.github.io/coz-ui/

@@ -218,37 +218,36 @@ jobs:
 
         # Set up RPM build directory structure
         mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-        mkdir -p rpmbuild/BUILDROOT/coz-${VERSION}-1.${RPM_ARCH}
 
-        # Create the installed file structure
-        BUILDROOT="rpmbuild/BUILDROOT/coz-${VERSION}-1.${RPM_ARCH}"
-        mkdir -p "${BUILDROOT}/usr/bin"
-        mkdir -p "${BUILDROOT}/usr/lib64"
-        mkdir -p "${BUILDROOT}/usr/include"
-        mkdir -p "${BUILDROOT}/usr/share/coz"
-        mkdir -p "${BUILDROOT}/usr/share/doc/coz"
+        # Stage files in SOURCES (won't be deleted by rpmbuild)
+        STAGING="rpmbuild/SOURCES/staging"
+        mkdir -p "${STAGING}/usr/bin"
+        mkdir -p "${STAGING}/usr/lib64"
+        mkdir -p "${STAGING}/usr/include"
+        mkdir -p "${STAGING}/usr/share/coz"
+        mkdir -p "${STAGING}/usr/share/doc/coz"
 
-        # Copy files
-        cp coz "${BUILDROOT}/usr/bin/"
-        cp build/libcoz/libcoz.so "${BUILDROOT}/usr/lib64/"
-        cp include/coz.h "${BUILDROOT}/usr/include/"
+        # Copy files to staging
+        cp coz "${STAGING}/usr/bin/"
+        cp build/libcoz/libcoz.so "${STAGING}/usr/lib64/"
+        cp include/coz.h "${STAGING}/usr/include/"
 
         # Copy viewer
-        cp -r viewer "${BUILDROOT}/usr/share/coz/"
-        rm -rf "${BUILDROOT}/usr/share/coz/viewer/node_modules"
-        rm -rf "${BUILDROOT}/usr/share/coz/viewer/ts"
-        rm -f "${BUILDROOT}/usr/share/coz/viewer/tsconfig.json"
-        rm -f "${BUILDROOT}/usr/share/coz/viewer/package*.json"
-        rm -f "${BUILDROOT}/usr/share/coz/viewer/Makefile"
-        rm -f "${BUILDROOT}/usr/share/coz/viewer/js/*.map"
+        cp -r viewer "${STAGING}/usr/share/coz/"
+        rm -rf "${STAGING}/usr/share/coz/viewer/node_modules"
+        rm -rf "${STAGING}/usr/share/coz/viewer/ts"
+        rm -f "${STAGING}/usr/share/coz/viewer/tsconfig.json"
+        rm -f "${STAGING}/usr/share/coz/viewer/package*.json"
+        rm -f "${STAGING}/usr/share/coz/viewer/Makefile"
+        rm -f "${STAGING}/usr/share/coz/viewer/js/*.map"
 
         # Copy documentation
-        cp README.md "${BUILDROOT}/usr/share/doc/coz/"
-        cp LICENSE.md "${BUILDROOT}/usr/share/doc/coz/"
+        cp README.md "${STAGING}/usr/share/doc/coz/"
+        cp LICENSE.md "${STAGING}/usr/share/doc/coz/"
 
         # Set permissions
-        chmod 755 "${BUILDROOT}/usr/bin/coz"
-        chmod 755 "${BUILDROOT}/usr/lib64/libcoz.so"
+        chmod 755 "${STAGING}/usr/bin/coz"
+        chmod 755 "${STAGING}/usr/lib64/libcoz.so"
 
         # Create spec file
         cat > rpmbuild/SPECS/coz.spec << EOF
@@ -267,7 +266,7 @@ jobs:
         improve overall program performance.
 
         %install
-        cp -a %{_builddir}/../BUILDROOT/coz-${VERSION}-1.${RPM_ARCH}/* %{buildroot}/
+        cp -a %{_sourcedir}/staging/* %{buildroot}/
 
         %files
         %license /usr/share/doc/coz/LICENSE.md
@@ -287,9 +286,8 @@ jobs:
 
         # Build the RPM
         rpmbuild --define "_topdir $(pwd)/rpmbuild" \
-                 --define "_builddir $(pwd)/rpmbuild/BUILD" \
+                 --define "_sourcedir $(pwd)/rpmbuild/SOURCES" \
                  --define "_rpmdir $(pwd)/rpmbuild/RPMS" \
-                 --define "_buildrootdir $(pwd)/rpmbuild/BUILDROOT" \
                  --target "${RPM_ARCH}" \
                  -bb rpmbuild/SPECS/coz.spec
 
