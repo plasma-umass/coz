@@ -33,6 +33,9 @@ benchmarks/word_count/word_count_datafiles
 build/
 _deps/
 
+# libelfin is fetched via CMake FetchContent
+libelfin/
+
 viewer/node_modules
 rust/Cargo.lock
 rust/target

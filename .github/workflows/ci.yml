@@ -12,8 +12,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        submodules: recursive
 
     - name: Install dependencies
       run: |
@@ -73,18 +71,42 @@ jobs:
           exit 1
         fi
 
+        echo "=== Profile Contents ==="
+        cat profile.coz
+        echo ""
+
         # Check for expected profile format (should contain experiment lines)
-        if ! grep -q "experiment" profile.coz; then
-          echo "WARNING: No experiment data in profile (may need longer run)"
-          cat profile.coz
-        else
-          echo "Profile contains experiment data"
-          # Show summary
-          echo "Profile summary:"
-          echo "  Lines: $(wc -l < profile.coz)"
-          echo "  Experiments: $(grep -c 'experiment' profile.coz || echo 0)"
-          head -20 profile.coz
+        EXPERIMENT_COUNT=$(grep -c 'experiment' profile.coz || echo 0)
+        echo "=== Profile Summary ==="
+        echo "  Total lines: $(wc -l < profile.coz)"
+        echo "  Experiments: $EXPERIMENT_COUNT"
+
+        if [ "$EXPERIMENT_COUNT" -eq 0 ]; then
+          echo "ERROR: No experiment data in profile"
+          exit 1
         fi
+
+        # Validate profile references toy.cpp (the benchmark source)
+        if grep -q "toy.cpp" profile.coz; then
+          echo "  Source file: toy.cpp found in profile"
+        else
+          echo "WARNING: toy.cpp not found in profile experiments"
+        fi
+
+        # Check that experiments have valid format: experiment\tselected\tspeedup\t...
+        # Valid experiments should have tab-separated fields
+        VALID_EXPERIMENTS=$(grep '^experiment' profile.coz | head -1)
+        if [ -n "$VALID_EXPERIMENTS" ]; then
+          FIELD_COUNT=$(echo "$VALID_EXPERIMENTS" | awk -F'\t' '{print NF}')
+          echo "  Fields per experiment: $FIELD_COUNT"
+          if [ "$FIELD_COUNT" -lt 5 ]; then
+            echo "ERROR: Experiment format appears invalid (expected at least 5 fields)"
+            exit 1
+          fi
+        fi
+
+        echo ""
+        echo "Profile validation PASSED"
 
     - name: Upload profile artifact
       uses: actions/upload-artifact@v4
