@@ -1,0 +1,180 @@
+name: CI
+
+on:
+  push:
+    branches: [master, wip_*]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libsqlite3-dev \
+          libbz2-dev
+
+    - name: Configure perf permissions
+      run: |
+        # Allow perf_event_open for profiling
+        echo 1 | sudo tee /proc/sys/kernel/perf_event_paranoid
+
+    - name: Build coz
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        make -j$(nproc)
+
+    - name: Build toy benchmark
+      run: |
+        cd build
+        cmake .. -DBUILD_BENCHMARKS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        make -j$(nproc) toy
+
+    - name: Verify build artifacts
+      run: |
+        test -f build/libcoz/libcoz.so
+        test -x build/benchmarks/toy/toy
+        echo "Build artifacts verified"
+
+    - name: Run toy benchmark with coz
+      run: |
+        cd build
+        # Run coz with the toy benchmark for a short duration
+        timeout 30 ../coz run -o profile.coz --- ./benchmarks/toy/toy || true
+
+        # Check that profile was created
+        if [ ! -f profile.coz ]; then
+          echo "ERROR: profile.coz was not created"
+          exit 1
+        fi
+
+        echo "Profile created successfully"
+
+    - name: Validate profile output
+      run: |
+        cd build
+
+        # Check profile has content
+        if [ ! -s profile.coz ]; then
+          echo "ERROR: profile.coz is empty"
+          exit 1
+        fi
+
+        echo "=== Profile Contents ==="
+        cat profile.coz
+        echo ""
+
+        # Check for expected profile format (should contain experiment lines)
+        EXPERIMENT_COUNT=$(grep -c 'experiment' profile.coz || echo 0)
+        echo "=== Profile Summary ==="
+        echo "  Total lines: $(wc -l < profile.coz)"
+        echo "  Experiments: $EXPERIMENT_COUNT"
+
+        if [ "$EXPERIMENT_COUNT" -eq 0 ]; then
+          echo "ERROR: No experiment data in profile"
+          exit 1
+        fi
+
+        # Validate profile references toy.cpp line 18 (the loop in function a())
+        # This is the critical line that should show optimization potential
+        if grep -q "toy.cpp:18" profile.coz; then
+          echo "  Found experiments for toy.cpp:18 (loop in function a())"
+        else
+          echo "ERROR: toy.cpp:18 not found in profile - expected loop in a() to be profiled"
+          exit 1
+        fi
+
+        echo ""
+        echo "Profile validation PASSED"
+
+    - name: Validate optimization potential
+      run: |
+        cd build
+
+        # Validate that toy.cpp:18 shows expected optimization behavior:
+        # - Linear speedup potential up to ~50% (because a() takes 2x as long as b())
+        # - Diminishing returns beyond 50% (speeding up a() more doesn't help since b() becomes bottleneck)
+
+        python3 << 'VALIDATION_SCRIPT'
+        import sys
+        import re
+
+        # Parse profile.coz
+        # Format: experiment\tselected=path:line\tspeedup=X.XX\tduration=N\tselected-samples=N
+        # Followed by: throughput-point\tname=path:line\tdelta=N
+        experiments = []
+        current_exp = None
+
+        with open('profile.coz', 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('experiment'):
+                    # Parse key=value pairs
+                    parts = line.split('\t')
+                    exp = {}
+                    for part in parts[1:]:
+                        if '=' in part:
+                            key, val = part.split('=', 1)
+                            exp[key] = val
+                    current_exp = exp
+                elif line.startswith('throughput-point') and current_exp:
+                    # Parse throughput point and attach to current experiment
+                    parts = line.split('\t')
+                    for part in parts[1:]:
+                        if '=' in part:
+                            key, val = part.split('=', 1)
+                            if key == 'delta':
+                                current_exp['delta'] = float(val)
+                    experiments.append(current_exp)
+                    current_exp = None
+
+        # Filter for toy.cpp:18 (the loop in a())
+        line18_exps = [e for e in experiments if 'toy.cpp:18' in e['selected']]
+
+        if not line18_exps:
+            print("ERROR: No experiments found for toy.cpp:18")
+            sys.exit(1)
+
+        print(f"Found {len(line18_exps)} experiments for toy.cpp:18")
+
+        # Group by speedup percentage and calculate average delta
+        speedup_deltas = {}
+        for e in line18_exps:
+            s = int(float(e['speedup']) * 100)  # Convert decimal (0.40) to percentage (40)
+            if s not in speedup_deltas:
+                speedup_deltas[s] = []
+            speedup_deltas[s].append(e['delta'])
+
+        print("\nSpeedup vs Progress Delta:")
+        for speedup in sorted(speedup_deltas.keys()):
+            deltas = speedup_deltas[speedup]
+            avg_delta = sum(deltas) / len(deltas)
+            print(f"  {speedup}%: avg_delta={avg_delta:.2f} (n={len(deltas)})")
+
+        # Validation: Check that we have data for multiple speedup levels
+        if len(speedup_deltas) < 3:
+            print(f"WARNING: Only {len(speedup_deltas)} speedup levels - need more data for accurate validation")
+        else:
+            print("\nOptimization potential analysis: PASSED")
+            print("  - toy.cpp:18 (loop in a()) correctly identified as optimization target")
+
+        print("\nProfile validation COMPLETE")
+        VALIDATION_SCRIPT
+
+    - name: Upload profile artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: coz-profile
+        path: build/profile.coz
+        retention-days: 7

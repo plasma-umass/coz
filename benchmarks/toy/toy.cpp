@@ -7,27 +7,48 @@
 
 #include <coz.h>
 #include <thread>
+#include <stdio.h>
 
-  volatile size_t x;
   char padding[1024];
-  volatile size_t y;
 
+const unsigned long long its = 100000000ULL;
 
 void a() {
-  for(x=0; x<2000000; x++) {}
+  volatile unsigned long long x;
+  for(x=0; x<its; x++) {}
 }
 
 void b() {
-  for(y=0; y<1900000; y++) {}
+  volatile unsigned long long y;
+  for(y=0; y<its/2; y++) {}
 }
 
+#ifndef TOY_SEQUENTIAL
+#define TOY_SEQUENTIAL 0
+#endif
+
 int main() {
-  for (int i = 0; i < 1000; i++) {
+  printf("Starting.\n");
+#if TOY_SEQUENTIAL
+  printf("One thread.\n");
+#else
+  printf("Two threads\n");
+#endif
+  
+  for (int i = 0; i < 100; i++) {
+#if TOY_SEQUENTIAL
+    a();
+    b();
+#else
     std::thread a_thread(a);
     std::thread b_thread(b);
     
     a_thread.join();
     b_thread.join();
+#endif
     COZ_PROGRESS;
+    printf(".");
+    fflush(stdout);
   }
+  printf("\n");
 }

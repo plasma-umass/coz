@@ -455,3 +455,28 @@ document.addEventListener('keydown', (e) => {
     $('#help-modal').modal('show');
   }
 });
+
+// Check for ?load= query parameter and auto-load profile
+function checkAutoLoad() {
+  const params = new URLSearchParams(window.location.search);
+  const loadFile = params.get('load');
+
+  if (loadFile) {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', loadFile);
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        loadProfileFromText(xhr.responseText, loadFile);
+      } else {
+        display_warning('Error', `Failed to load profile: ${loadFile}`);
+      }
+    };
+    xhr.onerror = function() {
+      display_warning('Error', `Failed to load profile: ${loadFile}`);
+    };
+    xhr.send();
+  }
+}
+
+// Auto-load on page ready
+document.addEventListener('DOMContentLoaded', checkAutoLoad);

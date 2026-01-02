@@ -149,6 +149,7 @@ def _coz_plot(args):
   import http.server
   import socketserver
   import threading
+  import urllib.parse
 
   viewer_dir = _find_viewer_directory()
 
@@ -160,21 +161,51 @@ def _coz_plot(args):
     t1.start()
     return
 
+  # Check for profile.coz in current directory (or use specified input file)
+  profile_path = abspath(args.input) if args.input else None
+  if profile_path is None:
+    default_profile = abspath(curdir + path_sep + 'profile.coz')
+    if os.path.exists(default_profile):
+      profile_path = default_profile
+
   # Find an available port
   port = args.port
 
-  class QuietHandler(http.server.SimpleHTTPRequestHandler):
+  class CozHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
       super().__init__(*args, directory=viewer_dir, **kwargs)
+
+    def do_GET(self):
+      # Serve profile.coz from current directory when requested
+      if self.path == '/current-profile.coz' and profile_path:
+        try:
+          with open(profile_path, 'rb') as f:
+            content = f.read()
+          self.send_response(200)
+          self.send_header('Content-Type', 'text/plain')
+          self.send_header('Content-Length', len(content))
+          self.end_headers()
+          self.wfile.write(content)
+          return
+        except Exception as e:
+          self.send_error(404, f'Profile not found: {e}')
+          return
+      # Default handler for other files
+      super().do_GET()
 
     def log_message(self, format, *args):
       # Suppress default logging
       pass
 
   try:
-    with socketserver.TCPServer(("", port), QuietHandler) as httpd:
-      url = f'http://localhost:{port}/'
-      print(f'Serving coz viewer at {url}')
+    with socketserver.TCPServer(("", port), CozHandler) as httpd:
+      # Build URL with query parameter if profile exists
+      if profile_path:
+        url = f'http://localhost:{port}/?load=current-profile.coz'
+        print(f'Loading profile: {profile_path}')
+      else:
+        url = f'http://localhost:{port}/'
+      print(f'Serving coz viewer at http://localhost:{port}/')
       print(f'Press Ctrl+C to stop the server')
 
       # Open browser in a separate thread
@@ -251,6 +282,11 @@ _run_parser.set_defaults(func=_coz_run, parser=_run_parser)
 ######### Build the parser for the `coz plot` subcommand
 _plot_parser = _subparsers.add_parser('plot',
                                       help='Plot the speedup results from one or more causal profiling runs.')
+
+_plot_parser.add_argument('--input', '-i',
+                          metavar='<profile.coz>',
+                          default=None,
+                          help='Profile file to load (default: profile.coz in current directory if present)')
 
 _plot_parser.add_argument('--port', '-p',
                           metavar='<port>',

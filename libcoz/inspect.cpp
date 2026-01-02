@@ -31,8 +31,8 @@
 #include <vector>
 
 #include <algorithm>
-#include <libelfin/dwarf/dwarf++.hh>
-#include <libelfin/elf/elf++.hh>
+#include <dwarf++.hh>
+#include <elf++.hh>
 
 #include "util.h"
 
