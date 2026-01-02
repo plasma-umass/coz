@@ -78,17 +78,13 @@ has wrappers for several other languages, listed below:
 
 ### Install build prerequisites
 
-On Debian/Ubuntu this covers everything (including the TypeScript viewer tooling and docs):
+On Debian/Ubuntu:
 
 ```shell
-sudo apt-get update
-sudo apt-get install -y build-essential cmake docutils-common git python3 pkg-config
-sudo apt-get install -y nodejs npm
-# Optional, but required if you plan to build the bundled benchmarks
-sudo apt-get install -y libbz2-dev libsqlite3-dev
+sudo apt-get install -y build-essential cmake pkg-config
 ```
 
-The repository vendors libelfin, so you do **not** need to build or install it separately.
+libelfin is fetched automatically during the build, so no additional dependencies are required.
 
 ### Configure and build
 
@@ -96,9 +92,9 @@ Use the standard out-of-source workflow (shown with `build/`, but any directory 
 
 ```shell
 cmake -S . -B build          # Configure (defaults to Release with debug info)
-cmake --build build -j       # Build libcoz, the CLI, and the tests
-ctest --test-dir build -V    # Optional: run the regression tests
-cmake --install build        # Optional: install into CMAKE_INSTALL_PREFIX
+cmake --build build -j       # Build libcoz and the CLI
+sudo cmake --install build   # Install to /usr/local (or CMAKE_INSTALL_PREFIX)
+sudo ldconfig                # Update shared library cache
 ```
 
 Before running Coz on Linux, relax `perf_event_paranoid` so sampling works:
