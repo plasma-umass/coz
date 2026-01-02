@@ -150,7 +150,7 @@ When coz tests a hypothetical optimization it will report the effect of that opt
 Coz has command line options to specify progress points when profiling the application instead of modifying its source. This feature is currently disabled because it did not work particularly well. Adding support for better command line-specified progress points is planned in the near future.
 
 ## Processing Results
-To plot profile results, go to http://plasma-umass.github.io/coz/ and load your profile. This page also includes several sample profiles from PARSEC benchmarks.
+Run `coz plot` to launch a local web server and open the viewer in your browser. Alternatively, visit [https://coz-profiler.github.io/coz-ui/](https://coz-profiler.github.io/coz-ui/) and load your `profile.coz` file. The online viewer also includes sample profiles from PARSEC benchmarks.
 
 ## Sample Applications
 The `benchmarks/` directory includes several small programs with progress points already wired up. Once you configure with `-DBUILD_BENCHMARKS=ON` (see above), you can run them straight from the build tree:
