@@ -42,6 +42,11 @@ static void* pthread_handle = NULL;   //< The `dlopen` handle to libpthread
  * Get the `dlopen` handle for libpthread
  */
 static void* get_pthread_handle() {
+#ifdef __APPLE__
+  // On macOS, pthread is part of libSystem which is always loaded
+  // Use RTLD_NEXT to skip our wrappers and find the real functions
+  return RTLD_NEXT;
+#else
   if(pthread_handle == NULL && !__atomic_exchange_n(&in_dlopen, true, __ATOMIC_ACQ_REL)) {
     pthread_handle = dlopen("libpthread.so.0", RTLD_NOW | RTLD_GLOBAL);
     REQUIRE(pthread_handle != NULL) << dlerror();
@@ -49,6 +54,7 @@ static void* get_pthread_handle() {
   }
 
   return pthread_handle;
+#endif
 }
 
 /*
