@@ -118,7 +118,7 @@ A number of the benchmarks are from the Phoenix benchmark suite, and several req
 
 ### Viewer
 
-After profiling, run `coz plot` to automatically open your results in the browser. If you're on a remote system, transfer `profile.coz` to your local machine and visit [https://coz-profiler.github.io/coz-ui/](https://coz-profiler.github.io/coz-ui/) to load it.
+After profiling, run `coz plot` to automatically open your results in the browser. To view a specific profile, use `coz plot -i /path/to/profile.coz`.
 
 You may need to adjust the "Minimum Points" slider to see results if the profile has limited data.
 
@@ -148,7 +148,7 @@ When coz tests a hypothetical optimization it will report the effect of that opt
 Coz has command line options to specify progress points when profiling the application instead of modifying its source. This feature is currently disabled because it did not work particularly well. Adding support for better command line-specified progress points is planned in the near future.
 
 ## Processing Results
-Run `coz plot` to launch a local web server and automatically open your profile in the browser. For remote systems, visit [https://coz-profiler.github.io/coz-ui/](https://coz-profiler.github.io/coz-ui/) and load your `profile.coz` file. The online viewer also includes sample profiles from PARSEC benchmarks.
+Run `coz plot` to launch a local web server and automatically open your profile in the browser. You can also visit [https://coz-profiler.github.io/coz-ui/](https://coz-profiler.github.io/coz-ui/) to use the online viewer, which includes sample profiles from PARSEC benchmarks.
 
 ## Sample Applications
 The `benchmarks/` directory includes several small programs with progress points already wired up. Once you configure with `-DBUILD_BENCHMARKS=ON` (see above), you can run them straight from the build tree:
