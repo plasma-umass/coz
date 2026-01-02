@@ -31,6 +31,7 @@ benchmarks/string_match/string_match_datafiles
 benchmarks/word_count/word_count_datafiles
 
 build/
+_deps/
 
 viewer/node_modules
 rust/Cargo.lock

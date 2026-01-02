@@ -16,32 +16,60 @@ option(USE_SYSTEM_LIBELFIN "Link against libelfin discovered via pkg-config" OFF
 if(USE_SYSTEM_LIBELFIN)
     find_package(libelfin REQUIRED)
 else()
+    # Check for local libelfin directory first (may contain patches/modifications)
+    if(EXISTS "${PROJECT_SOURCE_DIR}/libelfin/elf/elf.cc")
+        set(libelfin_SOURCE_DIR "${PROJECT_SOURCE_DIR}/libelfin")
+        message(STATUS "Using local libelfin from ${libelfin_SOURCE_DIR}")
+        set(LIBELFIN_LOCAL TRUE)
+    else()
+        # Fetch libelfin from GitHub
+        include(FetchContent)
+
+        set(LIBELFIN_GIT_TAG "8779775beea1ee5444ba53d14e354dbcf42a811d" CACHE STRING
+            "Git tag/branch/commit for libelfin (default: includes pre-built to_string.cc)")
+        set(LIBELFIN_GIT_REPO "https://github.com/plasma-umass/libelfin.git" CACHE STRING
+            "Git repository URL for libelfin")
+
+        FetchContent_Declare(
+            libelfin
+            GIT_REPOSITORY ${LIBELFIN_GIT_REPO}
+            GIT_TAG        ${LIBELFIN_GIT_TAG}
+        )
+
+        FetchContent_GetProperties(libelfin)
+        if(NOT libelfin_POPULATED)
+            FetchContent_Populate(libelfin)
+        endif()
+        message(STATUS "Fetched libelfin to ${libelfin_SOURCE_DIR}")
+        set(LIBELFIN_LOCAL FALSE)
+    endif()
+
     set(LIBELFIN_ELF_SOURCES
-        ${PROJECT_SOURCE_DIR}/libelfin/elf/elf.cc
-        ${PROJECT_SOURCE_DIR}/libelfin/elf/mmap_loader.cc
-        ${PROJECT_SOURCE_DIR}/libelfin/elf/to_string.cc)
+        ${libelfin_SOURCE_DIR}/elf/elf.cc
+        ${libelfin_SOURCE_DIR}/elf/mmap_loader.cc
+        ${libelfin_SOURCE_DIR}/elf/to_string.cc)
 
     set(LIBELFIN_DWARF_SOURCES
-        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/abbrev.cc
-        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/attrs.cc
-        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/cursor.cc
-        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/die.cc
-        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/die_str_map.cc
-        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/dwarf.cc
-        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/elf.cc
-        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/expr.cc
-        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/line.cc
-        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/rangelist.cc
-        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/to_string.cc
-        ${PROJECT_SOURCE_DIR}/libelfin/dwarf/value.cc)
+        ${libelfin_SOURCE_DIR}/dwarf/abbrev.cc
+        ${libelfin_SOURCE_DIR}/dwarf/attrs.cc
+        ${libelfin_SOURCE_DIR}/dwarf/cursor.cc
+        ${libelfin_SOURCE_DIR}/dwarf/die.cc
+        ${libelfin_SOURCE_DIR}/dwarf/die_str_map.cc
+        ${libelfin_SOURCE_DIR}/dwarf/dwarf.cc
+        ${libelfin_SOURCE_DIR}/dwarf/elf.cc
+        ${libelfin_SOURCE_DIR}/dwarf/expr.cc
+        ${libelfin_SOURCE_DIR}/dwarf/line.cc
+        ${libelfin_SOURCE_DIR}/dwarf/rangelist.cc
+        ${libelfin_SOURCE_DIR}/dwarf/to_string.cc
+        ${libelfin_SOURCE_DIR}/dwarf/value.cc)
 
     add_library(libelfin_internal STATIC
         ${LIBELFIN_ELF_SOURCES}
         ${LIBELFIN_DWARF_SOURCES})
     target_include_directories(libelfin_internal PUBLIC
-        ${PROJECT_SOURCE_DIR}/libelfin
-        ${PROJECT_SOURCE_DIR}/libelfin/elf
-        ${PROJECT_SOURCE_DIR}/libelfin/dwarf)
+        ${libelfin_SOURCE_DIR}
+        ${libelfin_SOURCE_DIR}/elf
+        ${libelfin_SOURCE_DIR}/dwarf)
     target_compile_features(libelfin_internal PUBLIC cxx_std_11)
     set_target_properties(libelfin_internal PROPERTIES
         POSITION_INDEPENDENT_CODE ON)
