@@ -1,0 +1,162 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g., v0.2.2)'
+        required: true
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            arch: x86_64
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config
+
+    - name: Get version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.tag }}"
+        else
+          VERSION="${GITHUB_REF#refs/tags/}"
+        fi
+        # Strip 'v' prefix for version number
+        VERSION_NUM="${VERSION#v}"
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "version_num=${VERSION_NUM}" >> $GITHUB_OUTPUT
+
+    - name: Build coz
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=/usr
+        make -j$(nproc)
+
+    - name: Create release package
+      run: |
+        VERSION="${{ steps.version.outputs.version_num }}"
+        ARCH="${{ matrix.arch }}"
+        PACKAGE_NAME="coz-${VERSION}-linux-${ARCH}"
+
+        mkdir -p "${PACKAGE_NAME}/bin"
+        mkdir -p "${PACKAGE_NAME}/lib"
+        mkdir -p "${PACKAGE_NAME}/include"
+        mkdir -p "${PACKAGE_NAME}/share/coz"
+
+        # Copy binaries
+        cp coz "${PACKAGE_NAME}/bin/"
+        cp build/libcoz/libcoz.so "${PACKAGE_NAME}/lib/"
+
+        # Copy headers
+        cp include/coz.h "${PACKAGE_NAME}/include/"
+
+        # Copy viewer (excluding development files)
+        cp -r viewer "${PACKAGE_NAME}/share/coz/"
+        rm -rf "${PACKAGE_NAME}/share/coz/viewer/node_modules"
+        rm -rf "${PACKAGE_NAME}/share/coz/viewer/ts"
+        rm -f "${PACKAGE_NAME}/share/coz/viewer/tsconfig.json"
+        rm -f "${PACKAGE_NAME}/share/coz/viewer/package*.json"
+        rm -f "${PACKAGE_NAME}/share/coz/viewer/Makefile"
+        rm -f "${PACKAGE_NAME}/share/coz/viewer/js/*.map"
+
+        # Copy documentation
+        cp README.md "${PACKAGE_NAME}/"
+        cp LICENSE.md "${PACKAGE_NAME}/"
+
+        # Create install script
+        cat > "${PACKAGE_NAME}/install.sh" << 'INSTALL_EOF'
+#!/bin/bash
+set -e
+
+PREFIX="${1:-/usr/local}"
+
+echo "Installing coz to ${PREFIX}..."
+
+install -d "${PREFIX}/bin"
+install -d "${PREFIX}/lib"
+install -d "${PREFIX}/include"
+install -d "${PREFIX}/share/coz"
+
+install -m 755 bin/coz "${PREFIX}/bin/"
+install -m 755 lib/libcoz.so "${PREFIX}/lib/"
+install -m 644 include/coz.h "${PREFIX}/include/"
+cp -r share/coz/viewer "${PREFIX}/share/coz/"
+
+echo "Installation complete!"
+echo ""
+echo "To use coz, ensure ${PREFIX}/lib is in your library path:"
+echo "  export LD_LIBRARY_PATH=${PREFIX}/lib:\$LD_LIBRARY_PATH"
+echo ""
+echo "Run 'coz run --- ./your-program' to profile."
+INSTALL_EOF
+        chmod +x "${PACKAGE_NAME}/install.sh"
+
+        # Create tarball
+        tar -czvf "${PACKAGE_NAME}.tar.gz" "${PACKAGE_NAME}"
+
+        echo "PACKAGE_NAME=${PACKAGE_NAME}" >> $GITHUB_ENV
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.PACKAGE_NAME }}
+        path: ${{ env.PACKAGE_NAME }}.tar.gz
+        retention-days: 5
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Get version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.tag }}"
+        else
+          VERSION="${GITHUB_REF#refs/tags/}"
+        fi
+        VERSION_NUM="${VERSION#v}"
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "version_num=${VERSION_NUM}" >> $GITHUB_OUTPUT
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: List artifacts
+      run: find artifacts -type f
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        name: Coz ${{ steps.version.outputs.version_num }}
+        draft: false
+        prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+        generate_release_notes: true
+        files: |
+          artifacts/**/*.tar.gz
