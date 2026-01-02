@@ -29,15 +29,31 @@ that Counts with Causal Profiling
 
 ## Installation
 
-On Debian and Ubuntu, you can install Coz via apt:
+### Pre-built Packages (Recommended)
 
+Download the latest release for your platform from the [GitHub Releases page](https://github.com/plasma-umass/coz/releases).
+
+**Debian/Ubuntu (`.deb`):**
 ```shell
-sudo apt install coz-profiler
+# Download the .deb for your architecture (amd64 or arm64)
+sudo dpkg -i coz_VERSION_amd64.deb
 ```
 
-An OpenSUSE package was prepared by user
-[@zethra](https://github.com/zethra) and is available at
-<https://build.opensuse.org/package/show/home:zethra/coz-profiler>.
+**Fedora/RHEL/CentOS (`.rpm`):**
+```shell
+# Download the .rpm for your architecture (x86_64 or aarch64)
+sudo rpm -i coz-VERSION-1.x86_64.rpm
+```
+
+**Generic Linux (tarball):**
+```shell
+tar xzf coz-VERSION-linux-x86_64.tar.gz
+cd coz-VERSION-linux-x86_64
+sudo ./install.sh        # Installs to /usr/local by default
+sudo ldconfig
+```
+
+### Requirements
 
 Coz works on Linux systems (running version 2.6.32 or later, with support
 for the `perf_event_open` system call) and macOS (using Apple's kperf framework).
@@ -62,17 +78,13 @@ has wrappers for several other languages, listed below:
 
 ### Install build prerequisites
 
-On Debian/Ubuntu this covers everything (including the TypeScript viewer tooling and docs):
+On Debian/Ubuntu:
 
 ```shell
-sudo apt-get update
-sudo apt-get install -y build-essential cmake docutils-common git python3 pkg-config
-sudo apt-get install -y nodejs npm
-# Optional, but required if you plan to build the bundled benchmarks
-sudo apt-get install -y libbz2-dev libsqlite3-dev
+sudo apt-get install -y build-essential cmake pkg-config
 ```
 
-The repository vendors libelfin, so you do **not** need to build or install it separately.
+libelfin is fetched automatically during the build, so no additional dependencies are required.
 
 ### Configure and build
 
@@ -80,9 +92,9 @@ Use the standard out-of-source workflow (shown with `build/`, but any directory 
 
 ```shell
 cmake -S . -B build          # Configure (defaults to Release with debug info)
-cmake --build build -j       # Build libcoz, the CLI, and the tests
-ctest --test-dir build -V    # Optional: run the regression tests
-cmake --install build        # Optional: install into CMAKE_INSTALL_PREFIX
+cmake --build build -j       # Build libcoz and the CLI
+sudo cmake --install build   # Install to /usr/local (or CMAKE_INSTALL_PREFIX)
+sudo ldconfig                # Update shared library cache
 ```
 
 Before running Coz on Linux, relax `perf_event_paranoid` so sampling works:
@@ -106,11 +118,9 @@ A number of the benchmarks are from the Phoenix benchmark suite, and several req
 
 ### Viewer
 
-After profiling, open the results locally (`coz plot`, which launches the bundled HTML UI) or visit [https://coz-profiler.github.io/coz-ui/](https://coz-profiler.github.io/coz-ui/) and drop in your `profile.coz`.
+After profiling, run `coz plot` to automatically open your results in the browser. To view a specific profile, use `coz plot -i /path/to/profile.coz`.
 
-If you are on a remote system, you can open the Coz viewer in your browser: [https://coz-profiler.github.io/coz-ui/](https://coz-profiler.github.io/coz-ui/) and then load the file `profile.coz`, which you will have to transfer to your local machine.
-
-(You may need to move the "Minimum Points" slider on the left side to see the results.)
+You may need to adjust the "Minimum Points" slider to see results if the profile has limited data.
 
 ## Using Coz
 Using Coz requires a small amount of setup, but you can jump ahead to the section on the included [sample applications](#sample-applications) in this repository if you want to try Coz right away.
@@ -138,7 +148,7 @@ When coz tests a hypothetical optimization it will report the effect of that opt
 Coz has command line options to specify progress points when profiling the application instead of modifying its source. This feature is currently disabled because it did not work particularly well. Adding support for better command line-specified progress points is planned in the near future.
 
 ## Processing Results
-To plot profile results, go to http://plasma-umass.github.io/coz/ and load your profile. This page also includes several sample profiles from PARSEC benchmarks.
+Run `coz plot` to view your profile in the browser.
 
 ## Sample Applications
 The `benchmarks/` directory includes several small programs with progress points already wired up. Once you configure with `-DBUILD_BENCHMARKS=ON` (see above), you can run them straight from the build tree:
@@ -148,7 +158,7 @@ The `benchmarks/` directory includes several small programs with progress points
 coz run --- ./build-bench/benchmarks/toy/toy
 ```
 
-These programs may need several runs before Coz accumulates enough samples to emit a useful profile. Upload `profile.coz` to the viewer when you are done.
+These programs may need several runs before Coz accumulates enough samples to emit a useful profile. Run `coz plot` to view the results.
 
 ## CMake
 When you install coz it installs a cmake config file. To add coz to a cmake project simply use the command `find_package(coz-profiler)`. This will import a target for the library and includes called `coz::coz` and a target for the coz binary `coz::profiler`. For guidance on how to use these targets refer to the CMake documentation.
