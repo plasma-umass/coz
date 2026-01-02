@@ -334,6 +334,8 @@ bool get_section_type(const char* sectname, dwarf::section_type* out) {
   else if(std::strcmp(suffix, "pubtypes") == 0) *out = dwarf::section_type::pubtypes;
   else if(std::strcmp(suffix, "ranges") == 0) *out = dwarf::section_type::ranges;
   else if(std::strcmp(suffix, "str") == 0) *out = dwarf::section_type::str;
+  // Handle both full name and Mach-O truncated name (16 char limit)
+  else if(std::strcmp(suffix, "str_offsets") == 0 || std::strcmp(suffix, "str_offs") == 0) *out = dwarf::section_type::str_offsets;
   else if(std::strcmp(suffix, "types") == 0) *out = dwarf::section_type::types;
   else if(assign_line_str(out,
                           suffix,
@@ -525,6 +527,7 @@ std::string generate_dsym_bundle(const std::string& binary_path) {
 
 std::shared_ptr<dwarf::loader> load_debug_info(const std::string& binary_path) {
   std::string dsym = find_dsym_bundle(binary_path);
+
   if(dsym.empty()) {
     dsym = generate_dsym_bundle(binary_path);
   }
