@@ -11,51 +11,27 @@
 
 #ifdef __APPLE__
 
-#include <dispatch/dispatch.h>
 #include <mach/mach.h>
 #include <mach/mach_time.h>
 #include <pthread.h>
 #include <sys/types.h>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 
-#include "ccutil/log.h"
 #include "ccutil/wrapped_array.h"
 
-// Forward declarations for kperf private API
-// These are undocumented private APIs from kperf.framework
-extern "C" {
-  int kperf_sample_set(unsigned int actionid);
-  int kperf_sample_on(void);
-  int kperf_sample_off(void);
-  int kperf_timer_period_set(unsigned int actionid, uint64_t tick_count);
-  int kperf_timer_action_set(unsigned int timer, uint32_t actionid);
-  int kperf_action_count_set(unsigned int count);
-  int kperf_action_samplers_set(unsigned int actionid, uint32_t sample_what);
-  int kperf_timer_count_set(unsigned int count);
-  int kperf_lightweight_pet_set(uint32_t enabled);
+// Ring buffer size for samples (must be power of 2)
+#define SAMPLE_BUFFER_SIZE 256
+#define SAMPLE_BUFFER_MASK (SAMPLE_BUFFER_SIZE - 1)
 
-  // Sampling flags
-  #define KPERF_SAMPLER_TINFO        (1U << 0)  // Thread info
-  #define KPERF_SAMPLER_TSNAP        (1U << 1)  // Thread snapshot
-  #define KPERF_SAMPLER_KSTACK       (1U << 2)  // Kernel stack
-  #define KPERF_SAMPLER_USTACK       (1U << 3)  // User stack
-  #define KPERF_SAMPLER_PMC_THREAD   (1U << 4)  // PMC thread
-  #define KPERF_SAMPLER_PMC_CPU      (1U << 5)  // PMC CPU
-  #define KPERF_SAMPLER_PMC_CONFIG   (1U << 6)  // PMC config
-  #define KPERF_SAMPLER_MEMINFO      (1U << 7)  // Memory info
-  #define KPERF_SAMPLER_TH_DISPATCH  (1U << 8)  // Thread dispatch
-  #define KPERF_SAMPLER_TK_SNAPSHOT  (1U << 9)  // Task snapshot
-}
-
-// kdebug trace points for kperf
-#define KDBG_CODE(Class, SubClass, Code) \
-    (((Class & 0xff) << 24) | ((SubClass & 0xff) << 16) | ((Code & 0x3fff) << 2))
-
-#define PERF_CODE(SubClass, Code) KDBG_CODE(31, SubClass, Code)
-#define PERF_SAMPLE 8
+// Sample structure stored in ring buffer
+struct sample_entry {
+  uint64_t ip;
+  uint64_t time;
+  uint64_t tid;
+};
 
 class perf_event {
 public:
@@ -65,7 +41,7 @@ public:
   /// Default constructor
   perf_event();
 
-  /// Create a timer-based sampling event (macOS version)
+  /// Create a sampling event for the current thread (macOS version)
   perf_event(uint64_t sample_period_ns, pid_t pid = 0);
 
   /// Move constructor
@@ -91,6 +67,9 @@ public:
 
   /// Configure signal delivery when samples are ready
   void set_ready_signal(int sig);
+
+  /// Get the ready signal
+  int get_ready_signal() const { return _ready_signal; }
 
   /// Sample data types (simplified for macOS)
   enum class sample : uint64_t {
@@ -143,15 +122,13 @@ public:
     uint64_t _tid = 0;
     uint64_t _time = 0;
     uint32_t _cpu = 0;
-    std::vector<uint64_t> _callchain;
   };
 
   class iterator {
   public:
-    iterator(perf_event& source, bool at_end = false) :
-        _source(source), _at_end(at_end) {}
+    iterator(perf_event& source, bool at_end = false);
 
-    void next() { _at_end = true; }
+    void next();
     record get();
     bool has_data() const { return !_at_end; }
 
@@ -162,28 +139,36 @@ public:
   private:
     perf_event& _source;
     bool _at_end;
+    size_t _read_index;
   };
 
   /// Get iterator to beginning
-  iterator begin() {
-    return iterator(*this, false);
-  }
+  iterator begin();
 
   /// Get iterator to end
-  iterator end() {
-    return iterator(*this, true);
-  }
+  iterator end();
+
+  // Ring buffer for samples
+  sample_entry _samples[SAMPLE_BUFFER_SIZE];
+  std::atomic<size_t> _write_index{0};
+  size_t _read_index = 0;
+
+  /// Whether sampling is active
+  std::atomic<bool> _active{false};
+
+  /// Sample count
+  std::atomic<uint64_t> _sample_count{0};
+
+  /// Mach thread port for the target thread
+  mach_port_t _target_thread;
+
+  /// pthread_t for the target thread (used to signal sample processing)
+  pthread_t _target_pthread;
 
 private:
   // Disallow copy and assignment
   perf_event(const perf_event&) = delete;
   void operator=(const perf_event&) = delete;
-
-  /// Whether sampling is active
-  bool _active = false;
-
-  /// Sample count
-  uint64_t _sample_count = 0;
 
   /// Sample type configuration
   uint64_t _sample_type = 0;
@@ -191,21 +176,18 @@ private:
   /// Sample period in nanoseconds
   uint64_t _sample_period_ns = 0;
 
-  /// Timer for periodic sampling
-  dispatch_source_t _timer = nullptr;
-
-  /// Queue for timer
-  dispatch_queue_t _queue = nullptr;
-
   /// Signal to deliver when samples are ready
   int _ready_signal = 0;
 
   /// Process ID to sample (0 = current process)
   pid_t _pid = 0;
-
-  /// Thread to signal
-  pthread_t _signal_thread;
 };
+
+// Global sampling thread management
+void macos_sampling_start();
+void macos_sampling_stop();
+void macos_sampling_register_event(perf_event* event);
+void macos_sampling_unregister_event(perf_event* event);
 
 #endif // __APPLE__
 #endif // CAUSAL_RUNTIME_PERF_MACOS_H
