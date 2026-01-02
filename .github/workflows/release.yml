@@ -84,31 +84,25 @@ jobs:
         cp LICENSE.md "${PACKAGE_NAME}/"
 
         # Create install script
-        cat > "${PACKAGE_NAME}/install.sh" << 'INSTALL_EOF'
-#!/bin/bash
-set -e
-
-PREFIX="${1:-/usr/local}"
-
-echo "Installing coz to ${PREFIX}..."
-
-install -d "${PREFIX}/bin"
-install -d "${PREFIX}/lib"
-install -d "${PREFIX}/include"
-install -d "${PREFIX}/share/coz"
-
-install -m 755 bin/coz "${PREFIX}/bin/"
-install -m 755 lib/libcoz.so "${PREFIX}/lib/"
-install -m 644 include/coz.h "${PREFIX}/include/"
-cp -r share/coz/viewer "${PREFIX}/share/coz/"
-
-echo "Installation complete!"
-echo ""
-echo "To use coz, ensure ${PREFIX}/lib is in your library path:"
-echo "  export LD_LIBRARY_PATH=${PREFIX}/lib:\$LD_LIBRARY_PATH"
-echo ""
-echo "Run 'coz run --- ./your-program' to profile."
-INSTALL_EOF
+        cat > "${PACKAGE_NAME}/install.sh" << 'INSTALLEOF'
+        #!/bin/bash
+        set -e
+        PREFIX="${1:-/usr/local}"
+        echo "Installing coz to ${PREFIX}..."
+        install -d "${PREFIX}/bin"
+        install -d "${PREFIX}/lib"
+        install -d "${PREFIX}/include"
+        install -d "${PREFIX}/share/coz"
+        install -m 755 bin/coz "${PREFIX}/bin/"
+        install -m 755 lib/libcoz.so "${PREFIX}/lib/"
+        install -m 644 include/coz.h "${PREFIX}/include/"
+        cp -r share/coz/viewer "${PREFIX}/share/coz/"
+        echo "Installation complete!"
+        echo "To use coz, ensure ${PREFIX}/lib is in your library path:"
+        echo "  export LD_LIBRARY_PATH=${PREFIX}/lib:$LD_LIBRARY_PATH"
+        echo "Run 'coz run --- ./your-program' to profile."
+        INSTALLEOF
+        sed -i 's/^        //' "${PACKAGE_NAME}/install.sh"
         chmod +x "${PACKAGE_NAME}/install.sh"
 
         # Create tarball
