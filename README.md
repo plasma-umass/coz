@@ -29,15 +29,31 @@ that Counts with Causal Profiling
 
 ## Installation
 
-On Debian and Ubuntu, you can install Coz via apt:
+### Pre-built Packages (Recommended)
 
+Download the latest release for your platform from the [GitHub Releases page](https://github.com/plasma-umass/coz/releases).
+
+**Debian/Ubuntu (`.deb`):**
 ```shell
-sudo apt install coz-profiler
+# Download the .deb for your architecture (amd64 or arm64)
+sudo dpkg -i coz_VERSION_amd64.deb
 ```
 
-An OpenSUSE package was prepared by user
-[@zethra](https://github.com/zethra) and is available at
-<https://build.opensuse.org/package/show/home:zethra/coz-profiler>.
+**Fedora/RHEL/CentOS (`.rpm`):**
+```shell
+# Download the .rpm for your architecture (x86_64 or aarch64)
+sudo rpm -i coz-VERSION-1.x86_64.rpm
+```
+
+**Generic Linux (tarball):**
+```shell
+tar xzf coz-VERSION-linux-x86_64.tar.gz
+cd coz-VERSION-linux-x86_64
+sudo ./install.sh        # Installs to /usr/local by default
+sudo ldconfig
+```
+
+### Requirements
 
 Coz works on Linux systems (running version 2.6.32 or later, with support
 for the `perf_event_open` system call) and macOS (using Apple's kperf framework).
