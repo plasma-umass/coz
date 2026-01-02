@@ -148,7 +148,24 @@ void init_coz(void) {
   // Replace 'MAIN' in the binary_scope with the real path of the main executable
   if(binary_scope.find("MAIN") != binary_scope.end()) {
     binary_scope.erase("MAIN");
+#ifdef __APPLE__
+    // On macOS, find the main executable by looking for the one with mach_header type MH_EXECUTE
+    // _NSGetExecutablePath is the reliable way to get the main executable
+    char path[PATH_MAX];
+    uint32_t size = sizeof(path);
+    string main_name;
+    if (_NSGetExecutablePath(path, &size) == 0) {
+      // Resolve any symlinks
+      char real_path[PATH_MAX];
+      if (realpath(path, real_path)) {
+        main_name = real_path;
+      } else {
+        main_name = path;
+      }
+    }
+#else
     string main_name = readlink_str("/proc/self/exe");
+#endif
     binary_scope.insert(main_name);
     INFO << "Including MAIN, which is " << main_name;
   }
