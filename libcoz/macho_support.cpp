@@ -334,8 +334,8 @@ bool get_section_type(const char* sectname, dwarf::section_type* out) {
   else if(std::strcmp(suffix, "pubtypes") == 0) *out = dwarf::section_type::pubtypes;
   else if(std::strcmp(suffix, "ranges") == 0) *out = dwarf::section_type::ranges;
   else if(std::strcmp(suffix, "str") == 0) *out = dwarf::section_type::str;
-  // Handle both full name and Mach-O truncated name (16 char limit)
-  else if(std::strcmp(suffix, "str_offsets") == 0 || std::strcmp(suffix, "str_offs") == 0) *out = dwarf::section_type::str_offsets;
+  // Note: str_offsets section is used in DWARF 5 but not all libelfin versions support it
+  // Skip it for now - the essential sections for line info are present
   else if(std::strcmp(suffix, "types") == 0) *out = dwarf::section_type::types;
   else if(assign_line_str(out,
                           suffix,

@@ -23,6 +23,7 @@ if(APPLE)
         macho_support.h
         mac_interpose.cpp
         mac_interpose.h
+        elf_compat.h
     )
 endif()
 
