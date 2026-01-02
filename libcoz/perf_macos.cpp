@@ -10,100 +10,290 @@
 
 #include "perf_macos.h"
 
-#include <dispatch/dispatch.h>
+#include <cerrno>
+#include <cstring>
 #include <mach/mach.h>
 #include <mach/mach_time.h>
+#include <mach/thread_act.h>
+#include <mach/thread_info.h>
 #include <pthread.h>
 #include <signal.h>
-#include <sys/sysctl.h>
+#include <sys/time.h>
 #include <unistd.h>
 
-extern "C" int kperf_lightweight_pet_set(uint32_t enabled) {
-    size_t size = sizeof(enabled);
-    // This controls the "lightweight PET" mode via sysctl.
-    // Returns 0 on success, or -1 / errno on failure.
-    return sysctlbyname("kperf.lightweight_pet",
-                        nullptr, nullptr,
-                        &enabled, size);
-}
+#include <algorithm>
+#include <vector>
 
-#include "util.h"
+#include "ccutil/spinlock.h"
+
 #include "ccutil/log.h"
 #include "ccutil/wrapped_array.h"
 
 using ccutil::wrapped_array;
 
-// Global state for kperf initialization
-static bool g_kperf_initialized = false;
-static pthread_mutex_t g_kperf_mutex = PTHREAD_MUTEX_INITIALIZER;
+// Get thread ID from Mach port
+static inline uint64_t get_thread_id_from_port(mach_port_t thread_port) {
+  thread_identifier_info_data_t info;
+  mach_msg_type_number_t info_count = THREAD_IDENTIFIER_INFO_COUNT;
+  kern_return_t kr = thread_info(thread_port, THREAD_IDENTIFIER_INFO,
+                                  (thread_info_t)&info, &info_count);
+  if (kr == KERN_SUCCESS) {
+    return info.thread_id;
+  }
+  return 0;
+}
 
-// Initialize kperf for sampling
-static void init_kperf() {
-  pthread_mutex_lock(&g_kperf_mutex);
+// Get PC from a suspended thread using Mach APIs
+static inline uint64_t get_pc_from_thread(mach_port_t thread_port) {
+#if defined(__arm64__) || defined(__aarch64__)
+  arm_thread_state64_t state;
+  mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+  kern_return_t kr = thread_get_state(thread_port, ARM_THREAD_STATE64,
+                                       (thread_state_t)&state, &count);
+  if (kr == KERN_SUCCESS) {
+    // On ARM64, use arm_thread_state64_get_pc for PAC compatibility
+    return arm_thread_state64_get_pc(state);
+  }
+#elif defined(__x86_64__)
+  x86_thread_state64_t state;
+  mach_msg_type_number_t count = x86_THREAD_STATE64_COUNT;
+  kern_return_t kr = thread_get_state(thread_port, x86_THREAD_STATE64,
+                                       (thread_state_t)&state, &count);
+  if (kr == KERN_SUCCESS) {
+    return state.__rip;
+  }
+#endif
+  return 0;
+}
 
-  if (!g_kperf_initialized) {
-    // Set up kperf for lightweight PET (Profile Every Thread) mode
-    // This is the safest mode that works without kernel debugging enabled
+// Global sampling state - use function-local statics to avoid initialization order issues
+static spinlock& get_events_lock() {
+  static spinlock lock;
+  return lock;
+}
 
-    // Configure action 1 to sample user stacks and thread info
-    uint32_t samplers = KPERF_SAMPLER_USTACK | KPERF_SAMPLER_TINFO;
-    int ret = kperf_action_samplers_set(1, samplers);
-    if (ret != 0) {
-      WARNING << "kperf_action_samplers_set failed: " << ret
-	      << ". Sampling may not work correctly. "
-	      << "Try running with sudo or adjusting System Integrity Protection.";
-    }
+static std::vector<perf_event*>& get_registered_events() {
+  static std::vector<perf_event*> events;
+  return events;
+}
+static pthread_t g_sampling_thread;
+static std::atomic<bool> g_sampling_active{false};
+static mach_port_t g_sampling_thread_port = MACH_PORT_NULL;
+static uint64_t g_sample_period_ns = 1000000; // 1ms default
 
-    // Set action count to 1
-    kperf_action_count_set(1);
 
-    // Enable lightweight PET mode
-    kperf_lightweight_pet_set(1);
+// Store a sample for a given event and signal the target thread
+static void store_sample(perf_event* event, uint64_t ip, uint64_t tid, pthread_t target_pthread) {
+  if (!event->_active.load(std::memory_order_relaxed)) return;
+  if (ip == 0) return;
 
-    g_kperf_initialized = true;
+  // Write sample to ring buffer
+  size_t write_idx = event->_write_index.load(std::memory_order_relaxed);
+  size_t next_idx = (write_idx + 1) & SAMPLE_BUFFER_MASK;
+
+  // Store sample
+  event->_samples[write_idx].ip = ip;
+  event->_samples[write_idx].time = mach_absolute_time();
+  event->_samples[write_idx].tid = tid;
+
+  // Update write index
+  event->_write_index.store(next_idx, std::memory_order_release);
+
+  // Increment sample count
+  event->_sample_count.fetch_add(1, std::memory_order_relaxed);
+
+  // Signal the target thread to process samples (if signal is configured)
+  int sig = event->get_ready_signal();
+  if (sig != 0 && target_pthread != 0) {
+    pthread_kill(target_pthread, sig);
+  }
+}
+
+// Sample ALL threads in the process (not just registered ones)
+// This is needed because pthread interposition may not work on macOS
+static void sample_all_threads() {
+  spinlock& lock = get_events_lock();
+  std::vector<perf_event*>& events = get_registered_events();
+
+  // Get all threads in the current task
+  thread_act_array_t threads;
+  mach_msg_type_number_t thread_count;
+  kern_return_t kr = task_threads(mach_task_self(), &threads, &thread_count);
+  if (kr != KERN_SUCCESS) {
+    return;
   }
 
-  pthread_mutex_unlock(&g_kperf_mutex);
+  // Find the main thread's event (first registered one that's active)
+  lock.lock();
+  perf_event* main_event = nullptr;
+  pthread_t main_pthread = 0;
+  for (perf_event* event : events) {
+    if (event->_active.load(std::memory_order_relaxed) &&
+        event->_target_thread != g_sampling_thread_port) {
+      main_event = event;
+      main_pthread = event->_target_pthread;
+      break;
+    }
+  }
+  lock.unlock();
+
+  // Sample each thread
+  for (mach_msg_type_number_t i = 0; i < thread_count; i++) {
+    mach_port_t thread = threads[i];
+
+    // Skip the sampling thread
+    if (thread == g_sampling_thread_port) continue;
+
+    // Suspend the target thread
+    kr = thread_suspend(thread);
+    if (kr != KERN_SUCCESS) {
+      continue;
+    }
+
+    // Get the PC
+    uint64_t ip = get_pc_from_thread(thread);
+    uint64_t tid = get_thread_id_from_port(thread);
+
+    // Resume immediately
+    thread_resume(thread);
+
+    // Store the sample using the main event (samples from all threads go here)
+    if (ip != 0 && main_event != nullptr) {
+      store_sample(main_event, ip, tid, main_pthread);
+    }
+  }
+
+  // Deallocate the thread list
+  for (mach_msg_type_number_t i = 0; i < thread_count; i++) {
+    mach_port_deallocate(mach_task_self(), threads[i]);
+  }
+  vm_deallocate(mach_task_self(), (vm_address_t)threads, thread_count * sizeof(thread_act_t));
+}
+
+// Sampling thread function
+static void* sampling_thread_func(void* arg) {
+  // Get our own Mach thread port
+  g_sampling_thread_port = mach_thread_self();
+
+  // Block SIGPROF in sampling thread to avoid self-interference
+  sigset_t mask;
+  sigemptyset(&mask);
+  sigaddset(&mask, SIGPROF);
+  pthread_sigmask(SIG_BLOCK, &mask, nullptr);
+
+  // Calculate sleep interval
+  struct timespec sleep_time;
+  sleep_time.tv_sec = g_sample_period_ns / 1000000000;
+  sleep_time.tv_nsec = g_sample_period_ns % 1000000000;
+
+  while (g_sampling_active.load(std::memory_order_relaxed)) {
+    sample_all_threads();
+    nanosleep(&sleep_time, nullptr);
+  }
+
+  return nullptr;
+}
+
+// Start the global sampling thread
+void macos_sampling_start() {
+  if (g_sampling_active.load(std::memory_order_relaxed)) {
+    return;
+  }
+
+  g_sampling_active.store(true, std::memory_order_release);
+
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+  int rc = pthread_create(&g_sampling_thread, &attr, sampling_thread_func, nullptr);
+  if (rc != 0) {
+    g_sampling_active.store(false, std::memory_order_release);
+  }
+
+  pthread_attr_destroy(&attr);
+}
+
+// Stop the global sampling thread
+void macos_sampling_stop() {
+  if (!g_sampling_active.load(std::memory_order_relaxed)) return;
+
+  g_sampling_active.store(false, std::memory_order_release);
+  pthread_join(g_sampling_thread, nullptr);
+}
+
+// Register an event for sampling
+void macos_sampling_register_event(perf_event* event) {
+  spinlock& lock = get_events_lock();
+  std::vector<perf_event*>& events = get_registered_events();
+
+  lock.lock();
+  events.push_back(event);
+  size_t count = events.size();
+  lock.unlock();
+
+  // Start sampling thread if this is the first event
+  if (count == 1) {
+    macos_sampling_start();
+  }
+}
+
+// Unregister an event
+void macos_sampling_unregister_event(perf_event* event) {
+  spinlock& lock = get_events_lock();
+  std::vector<perf_event*>& events = get_registered_events();
+
+  lock.lock();
+  auto it = std::find(events.begin(), events.end(), event);
+  if (it != events.end()) {
+    events.erase(it);
+  }
+  lock.unlock();
 }
 
 // Default constructor
-perf_event::perf_event() {}
+perf_event::perf_event() : _active(false), _sample_count(0), _target_thread(MACH_PORT_NULL), _target_pthread(0) {}
 
-// Create a timer-based sampling event
+// Create a sampling event for current thread
 perf_event::perf_event(uint64_t sample_period_ns, pid_t pid) :
-    _sample_period_ns(sample_period_ns), _pid(pid) {
+    _sample_period_ns(sample_period_ns), _pid(pid), _active(false), _sample_count(0) {
 
-  init_kperf();
+  // Get the Mach port and pthread_t for the current thread
+  _target_thread = mach_thread_self();
+  _target_pthread = pthread_self();
 
-  // Set up sample type (we support IP, thread info, and callchain)
+  // Set up sample type
   _sample_type = static_cast<uint64_t>(sample::ip) |
                  static_cast<uint64_t>(sample::pid_tid) |
-                 static_cast<uint64_t>(sample::time) |
-                 static_cast<uint64_t>(sample::callchain) |
-                 static_cast<uint64_t>(sample::cpu);
+                 static_cast<uint64_t>(sample::time);
 
-  // Store current thread for signaling
-  _signal_thread = pthread_self();
-
-  // Create dispatch queue for timer
-  _queue = dispatch_queue_create("com.coz.sampling", DISPATCH_QUEUE_SERIAL);
+  // Set global sample period
+  g_sample_period_ns = sample_period_ns;
 }
 
 // Move constructor
-perf_event::perf_event(perf_event&& other) {
-  _active = other._active;
-  _sample_count = other._sample_count;
-  _sample_type = other._sample_type;
-  _sample_period_ns = other._sample_period_ns;
-  _timer = other._timer;
-  _queue = other._queue;
-  _ready_signal = other._ready_signal;
-  _pid = other._pid;
-  _signal_thread = other._signal_thread;
+perf_event::perf_event(perf_event&& other) :
+    _sample_count(other._sample_count.load()),
+    _sample_type(other._sample_type),
+    _sample_period_ns(other._sample_period_ns),
+    _ready_signal(other._ready_signal),
+    _pid(other._pid),
+    _target_thread(other._target_thread),
+    _target_pthread(other._target_pthread),
+    _write_index(other._write_index.load()),
+    _read_index(other._read_index) {
 
-  other._timer = nullptr;
-  other._queue = nullptr;
-  other._active = false;
+  _active.store(other._active.load(std::memory_order_relaxed), std::memory_order_relaxed);
+
+  // Copy samples
+  for (size_t i = 0; i < SAMPLE_BUFFER_SIZE; i++) {
+    _samples[i] = other._samples[i];
+  }
+
+  other._active.store(false, std::memory_order_relaxed);
+  other._sample_count = 0;
+  other._target_thread = MACH_PORT_NULL;
+  other._target_pthread = 0;
 }
 
 // Destructor
@@ -116,105 +306,57 @@ void perf_event::operator=(perf_event&& other) {
   if (this != &other) {
     close();
 
-    _active = other._active;
-    _sample_count = other._sample_count;
+    _active.store(other._active.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    _sample_count = other._sample_count.load();
     _sample_type = other._sample_type;
     _sample_period_ns = other._sample_period_ns;
-    _timer = other._timer;
-    _queue = other._queue;
     _ready_signal = other._ready_signal;
     _pid = other._pid;
-    _signal_thread = other._signal_thread;
+    _target_thread = other._target_thread;
+    _target_pthread = other._target_pthread;
+    _write_index = other._write_index.load();
+    _read_index = other._read_index;
 
-    other._timer = nullptr;
-    other._queue = nullptr;
-    other._active = false;
+    for (size_t i = 0; i < SAMPLE_BUFFER_SIZE; i++) {
+      _samples[i] = other._samples[i];
+    }
+
+    other._active.store(false, std::memory_order_relaxed);
+    other._sample_count = 0;
+    other._target_thread = MACH_PORT_NULL;
+    other._target_pthread = 0;
   }
 }
 
 // Get sample count
 uint64_t perf_event::get_count() const {
-  return _sample_count;
+  return _sample_count.load(std::memory_order_relaxed);
 }
 
 // Start sampling
 void perf_event::start() {
-  if (_active) return;
+  if (_active.load(std::memory_order_relaxed)) return;
 
-  _active = true;
-  _sample_count = 0;
-
-  // Start kperf sampling
-  int ret = kperf_sample_on();
-  if (ret != 0) {
-    WARNING << "kperf_sample_on failed: " << ret;
-  }
-
-  // Create a timer that fires periodically
-  if (_queue) {
-    _timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, _queue);
-
-    if (_timer) {
-      // Convert nanoseconds to dispatch time
-      uint64_t interval_ns = _sample_period_ns;
-      dispatch_time_t start = dispatch_time(DISPATCH_TIME_NOW, interval_ns);
-
-      dispatch_source_set_timer(_timer, start, interval_ns, interval_ns / 10);
-
-      // Capture necessary state for the timer handler
-      int signal = _ready_signal;
-      pthread_t thread = _signal_thread;
-      uint64_t* count_ptr = &_sample_count;
-
-      dispatch_source_set_event_handler(_timer, ^{
-        // Trigger a sample
-        kperf_sample_set(1);
-
-        // Increment sample count
-        __atomic_add_fetch(count_ptr, 1, __ATOMIC_RELAXED);
-
-        // Signal the profiler thread if configured
-        if (signal != 0) {
-          pthread_kill(thread, signal);
-        }
-      });
-
-      dispatch_resume(_timer);
-    }
-  }
+  _active.store(true, std::memory_order_release);
+  macos_sampling_register_event(this);
 }
 
 // Stop sampling
 void perf_event::stop() {
-  if (!_active) return;
+  if (!_active.load(std::memory_order_relaxed)) return;
 
-  _active = false;
-
-  // Stop kperf sampling
-  kperf_sample_off();
-
-  // Cancel and release timer
-  if (_timer) {
-    dispatch_source_cancel(_timer);
-    dispatch_release(_timer);
-    _timer = nullptr;
-  }
+  _active.store(false, std::memory_order_release);
+  macos_sampling_unregister_event(this);
 }
 
 // Close the event
 void perf_event::close() {
   stop();
-
-  if (_queue) {
-    dispatch_release(_queue);
-    _queue = nullptr;
-  }
 }
 
 // Configure signal delivery
 void perf_event::set_ready_signal(int sig) {
   _ready_signal = sig;
-  _signal_thread = pthread_self();
 }
 
 // Record methods
@@ -239,47 +381,57 @@ uint32_t perf_event::record::get_cpu() const {
 }
 
 wrapped_array<uint64_t> perf_event::record::get_callchain() const {
-  if (_callchain.empty()) {
-    return wrapped_array<uint64_t>(nullptr, 0);
-  }
-  return wrapped_array<uint64_t>(
-      const_cast<uint64_t*>(_callchain.data()),
-      _callchain.size());
+  // No callchain support in thread suspension sampling
+  return wrapped_array<uint64_t>(nullptr, 0);
 }
 
-// Iterator methods
+// Iterator constructor
+perf_event::iterator::iterator(perf_event& source, bool at_end) :
+    _source(source), _at_end(at_end) {
+  _read_index = source._read_index;
+
+  // Check if there's any data
+  if (!at_end) {
+    size_t write_idx = source._write_index.load(std::memory_order_acquire);
+    if (_read_index == write_idx) {
+      _at_end = true;
+    }
+  }
+}
+
+void perf_event::iterator::next() {
+  if (_at_end) return;
+
+  _read_index = (_read_index + 1) & SAMPLE_BUFFER_MASK;
+  _source._read_index = _read_index;
+
+  // Check if we've caught up to the writer
+  size_t write_idx = _source._write_index.load(std::memory_order_acquire);
+  if (_read_index == write_idx) {
+    _at_end = true;
+  }
+}
+
 perf_event::record perf_event::iterator::get() {
   record r(record_type::sample);
 
-  // On macOS, we don't have a ring buffer like Linux perf
-  // We use kperf's lightweight sampling which doesn't provide
-  // individual sample records to userspace
-  // Instead, we return synthetic records based on the current thread state
-
-  // Get current thread
-  thread_t thread = mach_thread_self();
-
-  // Get thread info
-  thread_identifier_info_data_t info;
-  mach_msg_type_number_t count = THREAD_IDENTIFIER_INFO_COUNT;
-  kern_return_t kr = thread_info(thread, THREAD_IDENTIFIER_INFO,
-                                   (thread_info_t)&info, &count);
-
-  if (kr == KERN_SUCCESS) {
-    r._tid = info.thread_id;
+  if (!_at_end) {
+    const sample_entry& s = _source._samples[_read_index];
+    r._ip = s.ip;
+    r._time = s.time;
+    r._tid = s.tid;
     r._pid = getpid();
   }
 
-  // Get timestamp
-  r._time = mach_absolute_time();
-
-  // Note: We can't easily get IP and callchain without kdebug trace buffer
-  // For now, return empty values
-  r._ip = 0;
-
-  mach_port_deallocate(mach_task_self(), thread);
-
   return r;
+}
+
+perf_event::iterator perf_event::begin() {
+  return iterator(*this, false);
+}
+
+perf_event::iterator perf_event::end() {
+  return iterator(*this, true);
 }
 
 #endif // __APPLE__
