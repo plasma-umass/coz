@@ -66,6 +66,7 @@ else()
     add_library(libelfin_internal STATIC
         ${LIBELFIN_ELF_SOURCES}
         ${LIBELFIN_DWARF_SOURCES})
+
     target_include_directories(libelfin_internal PUBLIC
         ${libelfin_SOURCE_DIR}
         ${libelfin_SOURCE_DIR}/elf
