@@ -479,8 +479,7 @@ static void collect_subprogram_ranges(const dwarf::die& d,
         }
       }
     }
-  } catch(dwarf::format_error e) {
-    (void)e;
+  } catch(const dwarf::format_error&) {
   }
 
   for(const auto& child : d) {
@@ -554,8 +553,7 @@ dwarf::value find_attribute(const dwarf::die& d, dwarf::DW_AT attr) {
       if(v.valid())
         return v;
     }
-  } catch(dwarf::format_error e) {
-    (void)e;
+  } catch(const dwarf::format_error&) {
   }
 
   return dwarf::value();
@@ -661,8 +659,7 @@ void memory_map::process_inlines(const dwarf::die& d,
       }
       return;
     }
-  } catch(dwarf::format_error e) {
-    (void)e;
+  } catch(const dwarf::format_error&) {
   }
 
   for(const auto& child : d) {
@@ -792,8 +789,7 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
         INFO << "Included source file " << filename;
       }
 
-    } catch(dwarf::format_error e) {
-      (void)e;
+    } catch(const dwarf::format_error&) {
     }
   }
 

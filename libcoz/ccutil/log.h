@@ -4,27 +4,27 @@
 #include <iostream>
 
 namespace ccutil {
-  static const char* InfoColor = "\033[01;34m";
-  static const char* WarningColor = "\033[01;33m";
-  static const char* FatalColor = "\033[01;31m";
-  static const char* SourceColor = "\033[34m";
-  static const char* EndColor = "\033[0m";
+  __attribute__((unused)) static const char* InfoColor = "\033[01;34m";
+  __attribute__((unused)) static const char* WarningColor = "\033[01;33m";
+  __attribute__((unused)) static const char* FatalColor = "\033[01;31m";
+  __attribute__((unused)) static const char* SourceColor = "\033[34m";
+  __attribute__((unused)) static const char* EndColor = "\033[0m";
 
   class logger_base {
   public:
-    logger_base indent(size_t n, size_t tab_size = 2) {
+    logger_base indent(size_t /*n*/, size_t /*tab_size*/ = 2) {
       return logger_base();
     }
-    
-    template<typename T> logger_base  operator<<(T t) {
+
+    template<typename T> logger_base  operator<<(T /*t*/) {
       return logger_base();
     }
   };
 
   class logger : public logger_base {
   private:
-    bool _done;
     bool _exit;
+    bool _done;
   public:
     logger(bool exit = false, bool done = true) : _exit(exit), _done(done) {}
   

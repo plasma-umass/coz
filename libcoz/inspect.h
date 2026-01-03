@@ -192,26 +192,31 @@ private:
   std::map<interval, std::shared_ptr<line>> _ranges;
 };
 
+__attribute__((unused))
 static std::ostream& operator<<(std::ostream& os, const interval& i) {
   os << std::hex << "0x" << i.get_base() << "-0x" << i.get_limit() << std::dec;
   return os;
 }
 
+__attribute__((unused))
 static std::ostream& operator<<(std::ostream& os, const file& f) {
   os << f.get_name();
   return os;
 }
 
+__attribute__((unused))
 static std::ostream& operator<<(std::ostream& os, const file* f) {
   os << *f;
   return os;
 }
 
+__attribute__((unused))
 static std::ostream& operator<<(std::ostream& os, const line& l) {
   os << l.get_file() << ":" << l.get_line();
   return os;
 }
 
+__attribute__((unused))
 static std::ostream& operator<<(std::ostream& os, const line* l) {
   os << *l;
   return os;
