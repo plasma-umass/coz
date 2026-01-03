@@ -142,11 +142,13 @@ public:
   class saved {
   public:
     saved() {}
-  
+
     /// Save the state of a throughput point
     saved(const latency_point* origin) : _origin(origin),
                                          _begin_start_count(origin->get_begin_count()),
                                          _end_start_count(origin->get_end_count()) {}
+
+    virtual ~saved() = default;
 
     /// Log the change in this progress point since it was saved
     virtual void log(std::ostream& os) const {

@@ -438,7 +438,6 @@ void profiler::add_delays(thread_state* state) {
   if(_experiment_active.load()) {
     // Take a snapshot of the global and local delays
     size_t global_delay = _global_delay;
-    size_t delay_size = _delay_size;
 
     // Is this thread ahead or behind on delays?
     if(state->local_delay > global_delay) {
@@ -494,7 +493,7 @@ void* profiler::start_profiler_thread(void* arg) {
   return nullptr;
 }
 
-void profiler::samples_ready(int signum, siginfo_t* info, void* p) {
+void profiler::samples_ready(int /*signum*/, siginfo_t* /*info*/, void* /*p*/) {
   // On macOS, samples are captured by the sampling thread via thread suspension.
   // This signal handler just triggers sample processing.
 
@@ -509,7 +508,7 @@ void profiler::samples_ready(int signum, siginfo_t* info, void* p) {
   profiler::get_instance().process_samples(state);
 }
 
-void profiler::on_error(int signum, siginfo_t* info, void* p) {
+void profiler::on_error(int signum, siginfo_t* info, void* /*p*/) {
   if(signum == SIGSEGV) {
     fprintf(stderr, "Segmentation fault at %p\n", info->si_addr);
   } else if(signum == SIGABRT) {

@@ -40,7 +40,7 @@ enum { HW_BREAKPOINT_X = 4};
 class perf_event {
 public:
   enum class record_type;
-  class record;
+  struct record;
   class sample_record;
   
   /// Default constructor

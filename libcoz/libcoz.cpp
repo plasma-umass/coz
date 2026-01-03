@@ -19,6 +19,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 #include "inspect.h"
 #include "profiler.h"
@@ -88,21 +89,19 @@ static string readlink_str(const char* path) {
   }
 #else
   // Linux: use readlink on /proc/self/exe
-  size_t exe_size = 1024;
+  std::vector<char> exe_path(1024);
   ssize_t exe_used;
 
   while(true) {
-    char exe_path[exe_size];
-
-    exe_used = readlink(path, exe_path, exe_size - 1);
+    exe_used = readlink(path, exe_path.data(), exe_path.size() - 1);
     REQUIRE(exe_used > 0) << "Unable to read link " << path;
 
-    if(exe_used < exe_size - 1) {
+    if(static_cast<size_t>(exe_used) < exe_path.size() - 1) {
       exe_path[exe_used] = '\0';
-      return string(exe_path);
+      return string(exe_path.data());
     }
 
-    exe_size += 1024;
+    exe_path.resize(exe_path.size() + 1024);
   }
 #endif
 }
@@ -176,13 +175,14 @@ void init_coz(void) {
   memory_map::get_instance().build(binary_scope, source_scope, !filter_system_sources);
 
   // Register any sampling progress points
-  for(const string& line_name : progress_points) {
-    /*shared_ptr<line> l = memory_map::get_instance().find_line(line_name);
+  for(const string& name : progress_points) {
+    (void)name;  // Currently unused
+    /*shared_ptr<line> l = memory_map::get_instance().find_line(name);
     if(l) {
-      progress_point* p = new sampling_progress_point(line_name, l);
+      progress_point* p = new sampling_progress_point(name, l);
       profiler::get_instance().sampling_progress_point(p);
     } else {
-      WARNING << "Progress line \"" << line_name << "\" was not found.";
+      WARNING << "Progress line \"" << name << "\" was not found.";
     }*/
     FATAL << "Sampling-based progress points are temporarily unsupported";
   }
