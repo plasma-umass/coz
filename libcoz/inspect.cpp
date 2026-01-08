@@ -525,6 +525,8 @@ void memory_map::build(const unordered_set<string>& binary_scope,
         }
       } catch(const system_error& e) {
         WARNING << "Processing file \"" << f.first << "\" failed: " << e.what();
+      } catch(const exception& e) {
+        WARNING << "Processing file \"" << f.first << "\" threw: " << e.what();
       }
     }
   }
@@ -728,7 +730,7 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
       try {
         table = unit.get_line_table();
       } catch (const dwarf::format_error& e) {
-        // DWARF 5 format errors are common on macOS - skip this CU
+        // Skip CUs with format errors
         continue;
       } catch (const std::exception& e) {
         continue;
