@@ -28,8 +28,16 @@
 
 #include "ccutil/log.h"
 #include "ccutil/wrapped_array.h"
+#include "inspect.h"
 
 using ccutil::wrapped_array;
+
+// Callback for direct sample processing (set by profiler)
+static std::atomic<void(*)(uint64_t ip)> g_sample_callback{nullptr};
+
+void macos_set_sample_callback(void(*callback)(uint64_t ip)) {
+  g_sample_callback.store(callback, std::memory_order_release);
+}
 
 // Get thread ID from Mach port
 static inline uint64_t get_thread_id_from_port(mach_port_t thread_port) {
@@ -157,7 +165,15 @@ static void sample_all_threads() {
     // Resume immediately
     thread_resume(thread);
 
-    // Store the sample using the main event (samples from all threads go here)
+    // Process the sample directly via callback for immediate line counting
+    if (ip != 0) {
+      auto callback = g_sample_callback.load(std::memory_order_acquire);
+      if (callback) {
+        callback(ip);
+      }
+    }
+
+    // Also store the sample for signal-based processing (experiment delays)
     if (ip != 0 && main_event != nullptr) {
       store_sample(main_event, ip, tid, main_pthread);
     }

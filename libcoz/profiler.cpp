@@ -43,6 +43,17 @@
 
 using namespace std;
 
+#ifdef __APPLE__
+// Callback function for direct sample processing from macOS sampling thread
+static void macos_sample_callback(uint64_t ip) {
+  // Look up the line for this IP and increment its sample count
+  std::shared_ptr<line> l = memory_map::get_instance().find_line(ip);
+  if (l) {
+    l->add_sample();
+  }
+}
+#endif
+
 /**
  * Start the profiler
  */
@@ -64,6 +75,11 @@ void profiler::startup(const string& outfile,
   
   real::sigaction(SIGSEGV, &sa, nullptr);
   real::sigaction(SIGABRT, &sa, nullptr);
+
+#ifdef __APPLE__
+  // Set up direct sample callback for immediate line counting on macOS
+  macos_set_sample_callback(macos_sample_callback);
+#endif
 
   // Save the output file name
   _output_filename = outfile;
