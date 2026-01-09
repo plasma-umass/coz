@@ -481,9 +481,13 @@ void profiler::process_samples(thread_state* state) {
     if(r.is_sample()) {
       // Find and match the line that contains this sample
       std::pair<line*, bool> sampled_line = match_line(r);
+#ifndef __APPLE__
+      // On macOS, samples are counted by the direct callback from the sampling thread.
+      // On Linux, we count them here when processing the perf_event records.
       if(sampled_line.first) {
         sampled_line.first->add_sample();
       }
+#endif
 
       if(_experiment_active) {
         // Add a delay if the sample is in the selected line
