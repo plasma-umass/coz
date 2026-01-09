@@ -62,7 +62,7 @@ coz run --- ./toy/toy
    - `progress_point.h`: Throughput and latency point tracking
    - **Platform-specific sampling**:
      - `perf.cpp/h`: Linux implementation using perf_event_open syscall
-     - `perf_macos.cpp/h`: macOS implementation using kperf private framework
+     - `perf_macos.cpp/h`: macOS implementation using Mach thread suspension
    - `inspect.cpp/h`: DWARF debug info parsing using libelfin (supports DWARF 2-5). Source filtering obeys `COZ_SOURCE_SCOPE` (defaults to `%`) and the optional `COZ_FILTER_SYSTEM=1` env to drop `/usr/include`, `/usr/lib`, etc. Keep those flags in mind before hard-coding additional filters.
    - `real.cpp/h`: Wrapper functions to capture real pthread/libc functions
    - `libcoz.cpp`: Library initialization and exported symbols
@@ -287,11 +287,10 @@ The compiled JavaScript files are in `js/` and committed to the repo.
 - Build dependencies: build-essential, cmake, pkg-config (libelfin fetched automatically)
 
 ### macOS
-- macOS 10.10+ (kperf framework availability)
-- Requires elevated privileges or SIP adjustments for kperf access
+- macOS 10.10+ (Mach thread APIs)
 - Build dependencies: cmake, pkg-config (libelfin fetched automatically)
-- **Important**: Uses private kperf API which may change without notice
-- Cannot be used in App Store applications due to private API usage
+- Uses Mach thread suspension for sampling (no elevated privileges required)
+- dSYM bundles auto-detected or generated via `dsymutil`
 
 ## Dependencies
 
@@ -353,10 +352,15 @@ The authors demonstrated significant speedups on real applications:
 - Needs appropriate perf_event_paranoid settings
 
 **macOS**:
-- Uses private kperf API (may break in future OS versions)
-- Requires elevated privileges or SIP configuration
-- Cannot be distributed via Mac App Store
-- Sampling implementation differs from Linux (less detailed)
+- Uses Mach thread suspension for sampling (not kperf)
+- Does not require elevated privileges for basic operation
+- Sampling implementation differs from Linux (thread suspension vs perf_event)
+
+**macOS Implementation Notes** (see `TODO-mac-port.md` for details):
+- `mach_absolute_time()` returns Mach time units, NOT nanoseconds - must convert using `mach_timebase_info()`
+- Mach-O section names limited to 16 chars: `__debug_str_offsets` → `__debug_str_offs`
+- Sample counting uses direct callback from sampling thread (not signal-based) for reliability
+- dSYM bundles are auto-detected or generated via `dsymutil`
 
 ### General
 - Requires DWARF debug information (supports DWARF 3, 4, and 5)

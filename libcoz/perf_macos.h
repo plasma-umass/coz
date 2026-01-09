@@ -189,5 +189,8 @@ void macos_sampling_stop();
 void macos_sampling_register_event(perf_event* event);
 void macos_sampling_unregister_event(perf_event* event);
 
+// Set callback for direct sample processing (called from sampling thread)
+void macos_set_sample_callback(void(*callback)(uint64_t ip));
+
 #endif // __APPLE__
 #endif // CAUSAL_RUNTIME_PERF_MACOS_H

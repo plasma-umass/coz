@@ -324,18 +324,21 @@ bool get_section_type(const char* sectname, dwarf::section_type* out) {
 
   const char* suffix = sectname + 8;
   if(std::strcmp(suffix, "abbrev") == 0) *out = dwarf::section_type::abbrev;
+  else if(std::strcmp(suffix, "addr") == 0) *out = dwarf::section_type::addr;  // DWARF 5
   else if(std::strcmp(suffix, "aranges") == 0) *out = dwarf::section_type::aranges;
   else if(std::strcmp(suffix, "frame") == 0) *out = dwarf::section_type::frame;
   else if(std::strcmp(suffix, "info") == 0) *out = dwarf::section_type::info;
   else if(std::strcmp(suffix, "line") == 0) *out = dwarf::section_type::line;
   else if(std::strcmp(suffix, "loc") == 0) *out = dwarf::section_type::loc;
+  else if(std::strcmp(suffix, "loclists") == 0) *out = dwarf::section_type::loclists;  // DWARF 5
   else if(std::strcmp(suffix, "macinfo") == 0) *out = dwarf::section_type::macinfo;
   else if(std::strcmp(suffix, "pubnames") == 0) *out = dwarf::section_type::pubnames;
   else if(std::strcmp(suffix, "pubtypes") == 0) *out = dwarf::section_type::pubtypes;
   else if(std::strcmp(suffix, "ranges") == 0) *out = dwarf::section_type::ranges;
+  else if(std::strcmp(suffix, "rnglists") == 0) *out = dwarf::section_type::rnglists;  // DWARF 5
   else if(std::strcmp(suffix, "str") == 0) *out = dwarf::section_type::str;
-  // Note: str_offsets section is used in DWARF 5 but not all libelfin versions support it
-  // Skip it for now - the essential sections for line info are present
+  // DWARF 5: Mach-O truncates section names to 16 chars, so __debug_str_offsets becomes __debug_str_offs
+  else if(std::strcmp(suffix, "str_offsets") == 0 || std::strcmp(suffix, "str_offs") == 0) *out = dwarf::section_type::str_offsets;
   else if(std::strcmp(suffix, "types") == 0) *out = dwarf::section_type::types;
   else if(assign_line_str(out,
                           suffix,

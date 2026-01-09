@@ -29,7 +29,15 @@
  */
 static size_t get_time() {
 #if defined(__APPLE__)
-  return mach_absolute_time();
+  // mach_absolute_time() returns Mach time units, not nanoseconds
+  // We need to convert using the timebase info
+  static mach_timebase_info_data_t timebase_info = {0, 0};
+  if (timebase_info.denom == 0) {
+    mach_timebase_info(&timebase_info);
+  }
+  uint64_t mach_time = mach_absolute_time();
+  // Convert to nanoseconds: ns = mach_time * numer / denom
+  return (mach_time * timebase_info.numer) / timebase_info.denom;
 #else
   struct timespec ts;
   if(clock_gettime(CLOCK_REALTIME, &ts)) {

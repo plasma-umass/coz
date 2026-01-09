@@ -447,11 +447,18 @@ static void collect_subprogram_ranges(const dwarf::die& d,
 
       if(file_in_scope && decl_line > 0) {
         dwarf::value ranges_val = find_attribute(d, dwarf::DW_AT::ranges);
+        bool ranges_parsed = false;
         if(ranges_val.valid()) {
-          for(auto r : ranges_val.as_rangelist()) {
-            ranges.push_back(subprogram_range{r.low, r.high, decl_file, decl_line, true});
+          try {
+            for(auto r : ranges_val.as_rangelist()) {
+              ranges.push_back(subprogram_range{r.low, r.high, decl_file, decl_line, true});
+            }
+            ranges_parsed = true;
+          } catch(const dwarf::value_type_mismatch&) {
+            // DWARF 5 rnglistx not fully supported yet, fall back to low_pc/high_pc
           }
-        } else {
+        }
+        if(!ranges_parsed) {
           dwarf::value low_pc_val = find_attribute(d, dwarf::DW_AT::low_pc);
           dwarf::value high_pc_val = find_attribute(d, dwarf::DW_AT::high_pc);
           if(low_pc_val.valid() && high_pc_val.valid()) {
@@ -525,6 +532,8 @@ void memory_map::build(const unordered_set<string>& binary_scope,
         }
       } catch(const system_error& e) {
         WARNING << "Processing file \"" << f.first << "\" failed: " << e.what();
+      } catch(const exception& e) {
+        WARNING << "Processing file \"" << f.first << "\" threw: " << e.what();
       }
     }
   }
@@ -607,15 +616,22 @@ void memory_map::process_inlines(const dwarf::die& d,
 
       if(attribution_valid) {
         dwarf::value ranges_val = find_attribute(d, dwarf::DW_AT::ranges);
+        bool ranges_parsed = false;
         if(ranges_val.valid()) {
-          for(auto r : ranges_val.as_rangelist()) {
-            enqueue_range(pending,
-                          attribution_file,
-                          attribution_line,
-                          interval(r.low, r.high) + load_address,
-                          /*preferred=*/true);
+          try {
+            for(auto r : ranges_val.as_rangelist()) {
+              enqueue_range(pending,
+                            attribution_file,
+                            attribution_line,
+                            interval(r.low, r.high) + load_address,
+                            /*preferred=*/true);
+            }
+            ranges_parsed = true;
+          } catch(const dwarf::value_type_mismatch&) {
+            // DWARF 5 rnglistx not fully supported yet, fall back to low_pc/high_pc
           }
-        } else {
+        }
+        if(!ranges_parsed) {
           dwarf::value low_pc_val = find_attribute(d, dwarf::DW_AT::low_pc);
           dwarf::value high_pc_val = find_attribute(d, dwarf::DW_AT::high_pc);
 
@@ -728,7 +744,7 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
       try {
         table = unit.get_line_table();
       } catch (const dwarf::format_error& e) {
-        // DWARF 5 format errors are common on macOS - skip this CU
+        // Skip CUs with format errors
         continue;
       } catch (const std::exception& e) {
         continue;
