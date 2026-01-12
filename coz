@@ -125,6 +125,221 @@ def open_browser(url):
   import webbrowser
   webbrowser.open_new_tab(url)
 
+def parse_profile(profile_path):
+  """Parse .coz profile and return aggregated data and metadata."""
+  # Data structure: {selected_line: {progress_point: {speedup: {'delta': n, 'duration': n}}}}
+  data = {}
+  experiment_count = 0
+  runtime = 0
+  samples = {}
+
+  with open(profile_path, 'r') as f:
+    experiment = None
+    for line in f:
+      line = line.strip()
+      if not line:
+        continue
+      parts = line.split('\t')
+      record_type = parts[0]
+      fields = {}
+      for part in parts[1:]:
+        if '=' in part:
+          k, v = part.split('=', 1)
+          fields[k] = v
+
+      if record_type == 'experiment':
+        experiment = {
+          'selected': fields.get('selected', ''),
+          'speedup': float(fields.get('speedup', 0)),
+          'duration': int(fields.get('duration', 0))
+        }
+        experiment_count += 1
+      elif record_type in ('throughput-point', 'progress-point'):
+        if experiment:
+          selected = experiment['selected']
+          speedup = experiment['speedup']
+          duration = experiment['duration']
+          pp_name = fields.get('name', '')
+          delta = int(fields.get('delta', 0))
+
+          if selected not in data:
+            data[selected] = {}
+          if pp_name not in data[selected]:
+            data[selected][pp_name] = {}
+          if speedup not in data[selected][pp_name]:
+            data[selected][pp_name][speedup] = {'delta': 0, 'duration': 0}
+
+          data[selected][pp_name][speedup]['delta'] += delta
+          data[selected][pp_name][speedup]['duration'] += duration
+      elif record_type == 'runtime':
+        runtime = int(fields.get('time', 0))
+      elif record_type == 'samples':
+        loc = fields.get('location', '')
+        count = int(fields.get('count', 0))
+        samples[loc] = samples.get(loc, 0) + count
+
+  return data, experiment_count, runtime, samples
+
+def calculate_speedups(data, min_points=1):
+  """Calculate program speedup for each source line."""
+  results = []
+  for selected, progress_points in data.items():
+    for pp_name, speedups in progress_points.items():
+      if 0.0 not in speedups:
+        continue  # Need baseline
+      baseline_entry = speedups[0.0]
+      if baseline_entry['delta'] == 0:
+        continue
+      baseline = baseline_entry['duration'] / baseline_entry['delta']
+
+      measurements = []
+      for speedup, agg in sorted(speedups.items()):
+        if agg['delta'] == 0:
+          continue
+        data_point = agg['duration'] / agg['delta']
+        progress_speedup = (baseline - data_point) / baseline
+        measurements.append((speedup, progress_speedup))
+
+      if len(measurements) >= min_points:
+        # Calculate max speedup
+        max_speedup = max(m[1] for m in measurements) if measurements else 0
+        results.append({
+          'line': selected,
+          'progress_point': pp_name,
+          'measurements': measurements,
+          'max_speedup': max_speedup,
+          'num_points': len(measurements)
+        })
+
+  # Sort by max speedup (highest first)
+  results.sort(key=lambda x: x['max_speedup'], reverse=True)
+  return results
+
+def print_text_summary(profile_path, results, experiment_count, runtime, samples):
+  """Print summary table of profiling results."""
+  print(f"Profile: {profile_path}")
+  runtime_sec = runtime / 1e9 if runtime > 0 else 0
+  print(f"Experiments: {experiment_count} | Runtime: {runtime_sec:.1f}s")
+  print()
+
+  if not results:
+    print("No profiling results found.")
+    print("Make sure you specified a progress point and ran your program long enough.")
+    return
+
+  # Find max line width for formatting
+  max_line_len = max(len(r['line']) for r in results)
+  max_line_len = max(max_line_len, 11)  # "Source Line" header
+
+  # Print header
+  header = f"{'Source Line':<{max_line_len}} | Max Speedup | Points"
+  print(header)
+  print('-' * max_line_len + '-+-------------+-------')
+
+  # Print each result
+  for r in results:
+    speedup_pct = r['max_speedup'] * 100
+    sign = '+' if speedup_pct >= 0 else ''
+    print(f"{r['line']:<{max_line_len}} | {sign}{speedup_pct:>9.1f}% | {r['num_points']:>5}")
+
+def print_scatter_plot(result):
+  """Print an ASCII scatter plot for a single result."""
+  line = result['line']
+  pp = result['progress_point']
+  measurements = result['measurements']
+
+  print()
+  print(f"=== {line} -> {pp} ===")
+  print()
+
+  if not measurements:
+    print("  No data points")
+    return
+
+  # Filter out extreme outliers (keep values in reasonable range -100% to +200%)
+  filtered = [(x, y) for x, y in measurements if -1.0 <= y <= 2.0]
+  if not filtered:
+    filtered = measurements  # Fall back to all data if all are outliers
+
+  # Find ranges
+  min_speedup = min(m[1] for m in filtered)
+  max_speedup = max(m[1] for m in filtered)
+
+  # Expand range slightly for display
+  if max_speedup == min_speedup:
+    max_speedup = min_speedup + 0.1
+
+  # Plot dimensions
+  width = 60
+  height = 15
+
+  # Y-axis range: from min(0, min_speedup) to max_speedup
+  y_min = min(0, min_speedup)
+  y_max = max(max_speedup, 0.01)
+  y_range = y_max - y_min
+
+  # Create plot grid
+  grid = [[' ' for _ in range(width)] for _ in range(height)]
+
+  # Plot points (including outliers, clamped to grid)
+  for line_speedup, prog_speedup in measurements:
+    x = int(line_speedup * (width - 1))
+    x = max(0, min(width - 1, x))
+    # Clamp y to the visible range
+    clamped_speedup = max(y_min, min(y_max, prog_speedup))
+    y = int((clamped_speedup - y_min) / y_range * (height - 1))
+    y = max(0, min(height - 1, y))
+    y = height - 1 - y  # Flip Y axis
+    grid[y][x] = '*'
+
+  # Find zero line position
+  zero_y = int((0 - y_min) / y_range * (height - 1))
+  zero_y = height - 1 - zero_y
+  zero_y = max(0, min(height - 1, zero_y))
+
+  # Print plot
+  print("Program")
+  print("Speedup")
+  for i, row in enumerate(grid):
+    # Y-axis label
+    y_val = y_max - (i / (height - 1)) * y_range
+    label = f"{y_val*100:>6.0f}% |"
+    line_str = ''.join(row)
+    # Add zero line marker
+    if i == zero_y:
+      line_str = line_str.replace(' ', '-')
+    print(f"{label}{line_str}")
+
+  # X-axis
+  print("        +" + "-" * width)
+  print("        0%   20%   40%   60%   80%  100%")
+  print("              Line Speedup")
+
+def _coz_plot_text(args):
+  """Handle text-based profile output."""
+  profile_path = abspath(args.input) if args.input else None
+  if profile_path is None:
+    default_profile = abspath(curdir + path_sep + 'profile.coz')
+    if os.path.exists(default_profile):
+      profile_path = default_profile
+
+  if not profile_path or not os.path.exists(profile_path):
+    sys.stderr.write('error: no profile found. Specify with -i or run from directory with profile.coz\n')
+    sys.exit(1)
+
+  data, experiment_count, runtime, samples = parse_profile(profile_path)
+  results = calculate_speedups(data)
+
+  print_text_summary(profile_path, results, experiment_count, runtime, samples)
+
+  if args.verbose and results:
+    print()
+    print("=" * 70)
+    print("DETAILED SCATTER PLOTS")
+    print("=" * 70)
+    for r in results:
+      print_scatter_plot(r)
+
 def _find_viewer_directory():
   """Find the viewer directory relative to this script's location."""
   coz_prefix = dirname(realpath(sys.argv[0]))
@@ -146,6 +361,11 @@ def _find_viewer_directory():
   return None
 
 def _coz_plot(args):
+  # Handle text-based output mode
+  if args.text:
+    _coz_plot_text(args)
+    return
+
   import http.server
   import socketserver
   import threading
@@ -292,6 +512,14 @@ _plot_parser.add_argument('--port', '-p',
                           metavar='<port>',
                           type=int, default=8080,
                           help='Port for the local web server (default=8080)')
+
+_plot_parser.add_argument('--text', '-t',
+                          action='store_true', default=False,
+                          help='Output text-based graphs instead of web viewer')
+
+_plot_parser.add_argument('--verbose', '-v',
+                          action='store_true', default=False,
+                          help='Show detailed scatter plots for each source line (with --text)')
 
 # Use defaults to recover handler function and parser object from parser output
 _plot_parser.set_defaults(func=_coz_plot, parser=_plot_parser)
