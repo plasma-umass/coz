@@ -245,9 +245,11 @@ unordered_map<string, uintptr_t> get_loaded_files() {
   uint32_t count = _dyld_image_count();
   for(uint32_t i = 0; i < count; i++) {
     const char* name = _dyld_get_image_name(i);
-    if(name && name[0] == '/') {
+    if(name && name[0] != '\0') {
       intptr_t slide = _dyld_get_image_vmaddr_slide(i);
-      result[name] = static_cast<uintptr_t>(slide);
+      // Convert relative paths to absolute paths for dSYM lookup
+      string path = (name[0] == '/') ? string(name) : canonicalize_path(name);
+      result[path] = static_cast<uintptr_t>(slide);
     }
   }
 
