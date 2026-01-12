@@ -260,6 +260,27 @@ Run `coz plot` to view profiles. This launches a local web server and automatica
 
 The viewer source is in `viewer/` (TypeScript/JavaScript single-page application).
 
+**Text-mode output:**
+
+For terminal-based analysis (useful for CI/CD pipelines, remote sessions, or code agents), use the `--text` flag:
+
+```bash
+# Print a summary of profiling results to stdout
+coz plot --text
+
+# Print detailed results including all data points
+coz plot --text --verbose
+
+# Analyze a specific profile file
+coz plot --text -i /path/to/profile.coz
+```
+
+Text mode outputs:
+- Source file and line number for each profiled location
+- Linear regression slope (predicted speedup per % optimization)
+- Number of data points collected
+- With `--verbose`: individual speedup percentages and their measured effects
+
 **Viewer features:**
 - Automatic profile loading from current directory
 - Drag-and-drop support for loading additional profiles
