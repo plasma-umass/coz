@@ -374,6 +374,11 @@ void profiler::begin_sampling(thread_state* state) {
   state->sampler.start();
 #else
   // macOS version using timer-based sampling
+  // NOTE: We intentionally do NOT call set_ready_signal() here.
+  // The macOS sampling thread would signal per-sample via pthread_kill(),
+  // which overwhelms the main thread with signals. Instead, we rely solely
+  // on the process_timer (ITIMER_PROF) which fires every 10ms to batch
+  // sample processing.
   state->sampler = perf_event(SamplePeriod);
   state->process_timer = timer(SampleSignal);
   state->process_timer.start_interval(SamplePeriod * SampleBatchSize);
@@ -434,6 +439,13 @@ std::pair<line*,bool> profiler::match_line(perf_event::record& sample) {
 }
 
 void profiler::add_delays(thread_state* state) {
+#ifdef __APPLE__
+  // On macOS, samples from all threads are processed by one thread, so delays
+  // are distributed to the correct thread via pending_delay. Consume them here.
+  size_t pending = state->pending_delay.exchange(0, std::memory_order_acquire);
+  state->local_delay += pending;
+#endif
+
   // Add delays if there is an experiment running
   if(_experiment_active.load()) {
     // Take a snapshot of the global and local delays
@@ -469,6 +481,30 @@ void profiler::process_samples(thread_state* state) {
         sampled_line.first->add_sample();
       }
 
+#ifdef __APPLE__
+      // On macOS, samples from ALL threads are aggregated into one event and
+      // processed by one thread. To get correct causal profiling behavior, we
+      // distribute delays to the thread that produced the sample (not this thread).
+      if(_experiment_active) {
+        if(sampled_line.second) {
+          // Get the thread ID from the sample and look up its thread state
+          uint64_t sample_tid = r.get_tid();
+          thread_state* target_state = _thread_states.find((pid_t)sample_tid);
+
+          if (target_state != nullptr && target_state != state) {
+            // Cross-thread: add delay to target thread's pending_delay.
+            // That thread will consume it in add_delays() via its timer.
+            target_state->pending_delay.fetch_add(_delay_size, std::memory_order_relaxed);
+          } else {
+            // Same thread or unknown thread: add delay directly
+            state->local_delay += _delay_size;
+          }
+        }
+      } else if(sampled_line.first != nullptr && _next_line.load() == nullptr) {
+        _next_line.store(sampled_line.first);
+      }
+#else
+      // Linux: standard per-thread processing
       if(_experiment_active) {
         // Add a delay if the sample is in the selected line
         if(sampled_line.second)
@@ -477,6 +513,7 @@ void profiler::process_samples(thread_state* state) {
       } else if(sampled_line.first != nullptr && _next_line.load() == nullptr) {
         _next_line.store(sampled_line.first);
       }
+#endif
     }
   }
 

@@ -88,6 +88,10 @@ private:
 // macOS timer using setitimer with ITIMER_PROF
 #include <sys/time.h>
 #include <signal.h>
+#include <cstdio>
+
+// Debug logging for Mac timer investigation
+#define COZ_TIMER_DEBUG 0
 
 class timer {
 public:
@@ -95,6 +99,9 @@ public:
   timer(int sig) : _initialized(true), _sig(sig) {
     // Store the signal for later use
     // On macOS, SIGPROF is delivered when ITIMER_PROF fires
+#if COZ_TIMER_DEBUG
+    fprintf(stderr, "[COZ_DEBUG_TIMER] timer created with signal %d\n", sig);
+#endif
   }
 
   // Allow move construction and assignment
@@ -132,6 +139,11 @@ public:
     it.it_value.tv_usec = time_us % 1000000;
     it.it_interval.tv_sec = time_us / 1000000;
     it.it_interval.tv_usec = time_us % 1000000;
+
+#if COZ_TIMER_DEBUG
+    fprintf(stderr, "[COZ_DEBUG_TIMER] start_interval: time_ns=%zu, time_us=%zu, interval=%ld.%06d sec\n",
+            time_ns, time_us, (long)it.it_interval.tv_sec, (int)it.it_interval.tv_usec);
+#endif
 
     REQUIRE(setitimer(ITIMER_PROF, &it, nullptr) == 0) << "Failed to start interval timer";
   }

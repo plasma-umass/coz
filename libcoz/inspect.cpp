@@ -849,6 +849,18 @@ shared_ptr<line> memory_map::find_line(const string& name) {
 shared_ptr<line> memory_map::find_line(uintptr_t addr) {
   auto iter = _ranges.find(addr);
   if(iter != _ranges.end()) {
+#if 0  // Enable for verbose address->line mapping debug
+    static std::atomic<size_t> find_count{0};
+    size_t count = find_count.fetch_add(1, std::memory_order_relaxed);
+    if (count % 100 == 0) {
+      line* l = iter->second.get();
+      auto f = l ? l->get_file() : nullptr;
+      fprintf(stderr, "[COZ_DEBUG_FIND_LINE] find_line[%zu]: addr=0x%lx -> line=%p (%s:%zu)\n",
+              count, (unsigned long)addr, (void*)l,
+              f ? f->get_name().c_str() : "null",
+              l ? l->get_line() : 0);
+    }
+#endif
     return iter->second;
   } else {
     return shared_ptr<line>();

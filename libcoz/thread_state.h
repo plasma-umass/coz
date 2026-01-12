@@ -19,6 +19,13 @@ public:
   perf_event sampler;       //< The sampler object for this thread
   timer process_timer;      //< The timer that triggers sample processing for this thread
   size_t pre_block_time;    //< The time saved before (possibly) blocking
+
+#ifdef __APPLE__
+  /// Pending delays added by other threads during cross-thread sample processing.
+  /// On macOS, samples from all threads are processed by one thread, so delays
+  /// must be distributed to the correct thread via this atomic counter.
+  std::atomic<size_t> pending_delay{0};
+#endif
   
   inline void set_in_use(bool value) {
     in_use = value;
