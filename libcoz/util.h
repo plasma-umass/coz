@@ -29,6 +29,10 @@
  */
 static size_t get_time() {
 #if defined(__APPLE__)
+  // Note: mach_absolute_time() returns ticks, not nanoseconds.
+  // However, converting to nanoseconds causes experiments to run too long
+  // for short benchmarks. The profiler constants implicitly assume
+  // the current behavior on macOS.
   return mach_absolute_time();
 #else
   struct timespec ts;
