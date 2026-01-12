@@ -324,6 +324,7 @@ bool get_section_type(const char* sectname, dwarf::section_type* out) {
 
   const char* suffix = sectname + 8;
   if(std::strcmp(suffix, "abbrev") == 0) *out = dwarf::section_type::abbrev;
+  else if(std::strcmp(suffix, "addr") == 0) *out = dwarf::section_type::addr;
   else if(std::strcmp(suffix, "aranges") == 0) *out = dwarf::section_type::aranges;
   else if(std::strcmp(suffix, "frame") == 0) *out = dwarf::section_type::frame;
   else if(std::strcmp(suffix, "info") == 0) *out = dwarf::section_type::info;
