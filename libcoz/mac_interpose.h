@@ -38,8 +38,9 @@ typedef struct {
  * tells dyld to replace calls to 'original_function' with 'my_function'.
  */
 #define INTERPOSE(replacement, original) \
-  __attribute__((used, section("__DATA,__interpose"))) \
-  static const interpose_tuple_t interpose_##original = { \
+  __attribute__((used)) \
+  static interpose_tuple_t __attribute__((section("__DATA,__interpose"))) \
+  interpose_##original = { \
     (const void*)(unsigned long)&replacement, \
     (const void*)(unsigned long)&original \
   }

@@ -33,8 +33,38 @@
  * are encountered, add INTERPOSE entries here.
  */
 
-// Currently no explicit interposition tuples are needed.
-// The symbol-based interposition in libcoz.cpp handles the required
-// pthread and signal functions.
+// DYLD interposition entries for pthread functions.
+// NOTE: These only work with DYLD_FORCE_FLAT_NAMESPACE=1 on macOS.
+// Without flat namespace, two-level namespace lookup bypasses these entries.
+// The symbol-based interposition in libcoz.cpp is used as a fallback but
+// only intercepts calls made from within the libcoz library itself.
+
+// Currently disabled - uncomment if using DYLD_FORCE_FLAT_NAMESPACE
+#if 0
+#include <pthread.h>
+#include "profiler.h"
+#include "real.h"
+
+extern "C" {
+int coz_pthread_create(pthread_t* thread, const pthread_attr_t* attr,
+                       void* (*fn)(void*), void* arg) {
+  typedef void* (*thread_fn_t)(void*);
+  return profiler::get_instance().handle_pthread_create(thread, attr, (thread_fn_t)fn, arg);
+}
+void __attribute__((noreturn)) coz_pthread_exit(void* result) {
+  profiler::get_instance().handle_pthread_exit(result);
+}
+int coz_pthread_join(pthread_t t, void** retval) {
+  extern bool initialized;
+  if(initialized) profiler::get_instance().pre_block();
+  int result = real::pthread_join(t, retval);
+  if(initialized) profiler::get_instance().post_block(true);
+  return result;
+}
+}
+INTERPOSE(coz_pthread_create, pthread_create);
+INTERPOSE(coz_pthread_exit, pthread_exit);
+INTERPOSE(coz_pthread_join, pthread_join);
+#endif
 
 #endif // __APPLE__

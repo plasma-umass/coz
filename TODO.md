@@ -74,3 +74,28 @@ The causal profiling algorithm works by inserting **virtual delays** to simulate
 - macOS uses `ITIMER_PROF` which is per-process, not per-thread
 - Sample counts may be lower than Linux due to different sampling mechanisms
 - Some noise in predictions is expected due to the statistical nature of causal profiling
+
+### Outstanding Issue: Thread Interposition
+
+**Status: Under Investigation**
+
+On macOS without `DYLD_FORCE_FLAT_NAMESPACE=1`, pthread interposition does not work for
+application code. This affects the causal profiling algorithm:
+
+1. **Problem**: macOS two-level namespace causes binaries to link directly to libpthread,
+   bypassing the interposed `pthread_create` in libcoz.
+2. **Effect**: Worker threads created by std::thread or pthread_create aren't registered
+   with the profiler and don't respond to the delay mechanism.
+3. **Result**: Speedup predictions may be inaccurate or show unexpected patterns
+   (e.g., curve peaking then returning to 0%).
+
+**Workarounds**:
+- Use `DYLD_FORCE_FLAT_NAMESPACE=1` for more accurate results (trades off stability)
+- Results are most accurate for single-threaded programs or programs where the
+  profiled code runs in the main thread
+
+**Technical Details**:
+- DYLD_INTERPOSE tuples are present in libcoz but only work with flat namespace
+- Without flat namespace, only calls from within libcoz itself are intercepted
+- The `_main_sampler_state` mechanism ensures samples are processed correctly,
+  but delay distribution to unregistered threads cannot work

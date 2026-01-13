@@ -229,6 +229,12 @@ private:
   static_map<pid_t, thread_state> _thread_states;   //< Map from thread IDs to thread-local state
   std::atomic<size_t> _num_threads_running;         //< Number of threads that are currently being sampled
 
+#ifdef __APPLE__
+  /// On macOS, all samples are stored to one "main" sampler. Track it here so any
+  /// thread receiving SIGPROF can process the correct sampler.
+  std::atomic<thread_state*> _main_sampler_state{nullptr};
+#endif
+
   std::atomic<bool> _experiment_active; //< Is an experiment running?
   std::atomic<size_t> _global_delay;    //< The global delay time required
   std::atomic<size_t> _delay_size;      //< The current delay size

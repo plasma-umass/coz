@@ -212,7 +212,15 @@ void profiler::profiler_thread(spinlock& l) {
     // Compute experiment parameters
     float speedup = (float)delay_size / (float)SamplePeriod;
     size_t experiment_delay = _global_delay.load() - starting_delay_time;
-    size_t duration = get_time() - start_time - experiment_delay;
+    size_t raw_elapsed = get_time() - start_time;
+#ifdef __APPLE__
+    // On macOS, don't subtract experiment_delay from duration.
+    // The delay mechanism on macOS affects real wall-clock time differently than on Linux.
+    size_t duration = raw_elapsed;
+#else
+    // Clamp to prevent underflow when experiment_delay exceeds raw_elapsed
+    size_t duration = (experiment_delay < raw_elapsed) ? (raw_elapsed - experiment_delay) : 0;
+#endif
     size_t selected_samples = selected->get_samples() - starting_samples;
 
     // Log the experiment parameters
@@ -311,7 +319,8 @@ void profiler::shutdown() {
 }
 
 thread_state* profiler::add_thread() {
-  thread_state* inserted = _thread_states.insert(gettid());
+  pid_t tid = gettid();
+  thread_state* inserted = _thread_states.insert(tid);
   if (inserted != nullptr) {
     _num_threads_running += 1;
   }
@@ -383,6 +392,11 @@ void profiler::begin_sampling(thread_state* state) {
   state->process_timer = timer(SampleSignal);
   state->process_timer.start_interval(SamplePeriod * SampleBatchSize);
   state->sampler.start();
+
+  // Track the first thread's sampler as the "main" sampler.
+  // On macOS, all samples from all threads go to the first registered sampler.
+  thread_state* expected = nullptr;
+  _main_sampler_state.compare_exchange_strong(expected, state);
 #endif
 }
 
@@ -483,22 +497,13 @@ void profiler::process_samples(thread_state* state) {
 
 #ifdef __APPLE__
       // On macOS, samples from ALL threads are aggregated into one event and
-      // processed by one thread. To get correct causal profiling behavior, we
-      // distribute delays to the thread that produced the sample (not this thread).
+      // processed by one thread. Add delays to the processing thread's local_delay.
+      // When this thread runs add_delays(), it will push _global_delay forward.
+      // Note: Without pthread interposition on macOS, worker threads may not
+      // respond to _global_delay changes, making results less accurate than Linux.
       if(_experiment_active) {
         if(sampled_line.second) {
-          // Get the thread ID from the sample and look up its thread state
-          uint64_t sample_tid = r.get_tid();
-          thread_state* target_state = _thread_states.find((pid_t)sample_tid);
-
-          if (target_state != nullptr && target_state != state) {
-            // Cross-thread: add delay to target thread's pending_delay.
-            // That thread will consume it in add_delays() via its timer.
-            target_state->pending_delay.fetch_add(_delay_size, std::memory_order_relaxed);
-          } else {
-            // Same thread or unknown thread: add delay directly
-            state->local_delay += _delay_size;
-          }
+          state->local_delay += _delay_size;
         }
       } else if(sampled_line.first != nullptr && _next_line.load() == nullptr) {
         _next_line.store(sampled_line.first);
@@ -536,6 +541,15 @@ void profiler::samples_ready(int signum, siginfo_t* info, void* p) {
   // This signal handler just triggers sample processing.
 
   thread_state* state = get_instance().get_thread_state();
+
+#ifdef __APPLE__
+  // On macOS, process samples from the main sampler regardless of which thread
+  // receives the SIGPROF signal. The main sampler contains samples from all threads.
+  thread_state* main_state = get_instance()._main_sampler_state.load(std::memory_order_acquire);
+  if (main_state && !main_state->check_in_use()) {
+    profiler::get_instance().process_samples(main_state);
+  }
+#else
   if (!state) {
     return;
   }
@@ -544,6 +558,7 @@ void profiler::samples_ready(int signum, siginfo_t* info, void* p) {
   }
   // Process all available samples
   profiler::get_instance().process_samples(state);
+#endif
 }
 
 void profiler::on_error(int signum, siginfo_t* info, void* p) {
