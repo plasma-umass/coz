@@ -725,14 +725,19 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
       uintptr_t prev_address = 0;
       set<string> included_files;
       dwarf::line_table table;
+#ifdef __APPLE__
+      // On macOS, catch DWARF parsing errors and skip problematic CUs
       try {
         table = unit.get_line_table();
       } catch (const dwarf::format_error& e) {
-        // DWARF 5 format errors are common on macOS - skip this CU
         continue;
       } catch (const std::exception& e) {
         continue;
       }
+#else
+      // On Linux, let DWARF parsing exceptions propagate for proper error reporting
+      table = unit.get_line_table();
+#endif
       if(!table.valid()) {
         continue;
       }

@@ -324,6 +324,7 @@ bool get_section_type(const char* sectname, dwarf::section_type* out) {
 
   const char* suffix = sectname + 8;
   if(std::strcmp(suffix, "abbrev") == 0) *out = dwarf::section_type::abbrev;
+  else if(std::strcmp(suffix, "addr") == 0) *out = dwarf::section_type::addr;
   else if(std::strcmp(suffix, "aranges") == 0) *out = dwarf::section_type::aranges;
   else if(std::strcmp(suffix, "frame") == 0) *out = dwarf::section_type::frame;
   else if(std::strcmp(suffix, "info") == 0) *out = dwarf::section_type::info;
@@ -334,8 +335,10 @@ bool get_section_type(const char* sectname, dwarf::section_type* out) {
   else if(std::strcmp(suffix, "pubtypes") == 0) *out = dwarf::section_type::pubtypes;
   else if(std::strcmp(suffix, "ranges") == 0) *out = dwarf::section_type::ranges;
   else if(std::strcmp(suffix, "str") == 0) *out = dwarf::section_type::str;
-  // Handle both full name and Mach-O truncated name (16 char limit)
-  else if(std::strcmp(suffix, "str_offsets") == 0 || std::strcmp(suffix, "str_offs") == 0) *out = dwarf::section_type::str_offsets;
+  // DWARF 5 str_offsets section - handle both full name and Mach-O truncated name (16-char limit)
+  else if(std::strcmp(suffix, "str_offsets") == 0 ||
+          std::strcmp(suffix, "str_offs") == 0)
+      *out = dwarf::section_type::str_offsets;
   else if(std::strcmp(suffix, "types") == 0) *out = dwarf::section_type::types;
   else if(assign_line_str(out,
                           suffix,
