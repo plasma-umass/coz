@@ -206,6 +206,7 @@ private:
   void end_sampling();                        //< Stop sampling in the current thread
   void add_delays(thread_state* state);       //< Add any required delays
   void process_samples(thread_state* state);  //< Process all available samples and insert delays
+  void process_all_samples();                 //< Process samples from all threads (for macOS profiler thread)
   std::pair<line*,bool> match_line(perf_event::record&);       //< Map a sample to its source line and matches with selected_line
   void log_samples(std::ofstream&, size_t);   //< Log runtime and sample counts for all identified regions
 

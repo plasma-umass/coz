@@ -204,9 +204,26 @@ void profiler::profiler_thread(spinlock& l) {
     if(_enable_end_to_end) {
       while(_running) {
         wait(SamplePeriod * SampleBatchSize);
+#ifdef __APPLE__
+        // On macOS, process samples from profiler thread since signal-based
+        // processing doesn't work when threads are blocked (e.g., in join)
+        process_all_samples();
+#endif
       }
     } else {
+#ifdef __APPLE__
+      // On macOS, break the wait into chunks and process samples periodically
+      size_t remaining = experiment_length;
+      size_t chunk = SamplePeriod * SampleBatchSize;
+      while(remaining > 0 && _running) {
+        size_t wait_time = (remaining > chunk) ? chunk : remaining;
+        wait(wait_time);
+        process_all_samples();
+        remaining -= wait_time;
+      }
+#else
       wait(experiment_length);
+#endif
     }
 
     // Compute experiment parameters
@@ -481,6 +498,26 @@ void profiler::process_samples(thread_state* state) {
   }
 
   add_delays(state);
+}
+
+/**
+ * Process samples from all thread states.
+ * This is called from the profiler thread on macOS where signal-based
+ * sample processing may not work reliably when threads are blocked.
+ */
+void profiler::process_all_samples() {
+  _thread_states.for_each([this](pid_t tid, thread_state* state) {
+    // Process samples for this thread state
+    // Note: We don't call add_delays here since that's thread-specific
+    for(perf_event::record r : state->sampler) {
+      if(r.is_sample()) {
+        std::pair<line*, bool> sampled_line = match_line(r);
+        if(sampled_line.first) {
+          sampled_line.first->add_sample();
+        }
+      }
+    }
+  });
 }
 
 /**
