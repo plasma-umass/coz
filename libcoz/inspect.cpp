@@ -382,10 +382,10 @@ void memory_map::build(const unordered_set<string>& binary_scope,
     if(in_scope(f.first, binary_scope)) {
       try {
         if(process_file(f.first, f.second, source_scope, allow_system_sources)) {
-          INFO << "Including lines from executable " << f.first;
+          VERBOSE << "Including lines from executable " << f.first;
           in_scope_count++;
         } else {
-          INFO << "Unable to locate debug information for " << f.first;
+          VERBOSE << "Unable to locate debug information for " << f.first;
         }
       } catch(const system_error& e) {
         WARNING << "Processing file \"" << f.first << "\" failed: " << e.what();
@@ -642,7 +642,7 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
                       pending);
 
       for(const string& filename : included_files) {
-        INFO << "Included source file " << filename;
+        VERBOSE << "Included source file " << filename;
       }
 
     } catch(dwarf::format_error e) {

@@ -115,11 +115,11 @@ static string readlink_str(const char* path) {
  */
 void init_coz(void) {
   if (init_in_progress) {
-    INFO << "init_coz in progress, do not recurse";
+    VERBOSE << "init_coz in progress, do not recurse";
     return;
   }
   init_in_progress = true;
-  INFO << "bootstrapping coz";
+  VERBOSE << "bootstrapping coz";
   initialized = false;
 
   // Remove Coz from LD_PRELOAD. Just clearing LD_PRELOAD for now FIXME!
@@ -167,7 +167,7 @@ void init_coz(void) {
     string main_name = readlink_str("/proc/self/exe");
 #endif
     binary_scope.insert(main_name);
-    INFO << "Including MAIN, which is " << main_name;
+    VERBOSE << "Including MAIN, which is " << main_name;
   }
 
   // Build the memory map for all in-scope binaries

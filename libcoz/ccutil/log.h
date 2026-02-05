@@ -1,9 +1,19 @@
 #if !defined(CCUTIL_LOG_H)
 #define CCUTIL_LOG_H
 
+#include <cstdlib>
 #include <iostream>
 
 namespace ccutil {
+  // Check COZ_VERBOSE environment variable (cached for performance)
+  inline bool is_verbose() {
+    static int cached = -1;
+    if (cached < 0) {
+      const char* env = std::getenv("COZ_VERBOSE");
+      cached = (env != nullptr && env[0] == '1') ? 1 : 0;
+    }
+    return cached == 1;
+  }
   static const char* InfoColor = "\033[01;34m";
   static const char* WarningColor = "\033[01;33m";
   static const char* FatalColor = "\033[01;31m";
@@ -78,5 +88,9 @@ namespace ccutil {
 
 #define FATAL LOG(ccutil::FatalColor, true)
 #define REQUIRE(cond) (cond) ? ccutil::logger_base() : FATAL
+
+// VERBOSE: Runtime-controlled info output (enabled by COZ_VERBOSE=1 environment variable)
+// Uses if-else pattern to avoid ternary type slicing (logger&& vs logger_base)
+#define VERBOSE if (!ccutil::is_verbose()) {} else LOG(ccutil::InfoColor, false)
 
 #endif
