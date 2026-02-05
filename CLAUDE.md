@@ -215,6 +215,22 @@ coz run --source-scope '/media/psf/Home/git/coz-portage/benchmarks/**' --- ./ben
 COZ_FILTER_SYSTEM=1 coz run --- ./benchmarks/toy/toy
 ```
 
+**Verbose output:**
+
+Use `--verbose` (or `-v`) to see what libraries and source files coz is processing:
+
+```bash
+coz run --verbose --- ./myapp
+```
+
+This prints:
+- Bootstrap messages
+- MAIN executable path resolution
+- Source files found in DWARF debug info
+- Libraries being profiled
+
+Useful for debugging when coz isn't finding expected source lines or to verify which files are in scope.
+
 ### Adding Progress Points
 
 Include `include/coz.h` and add macros:
