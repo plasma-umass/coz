@@ -122,6 +122,12 @@ def _coz_run(args):
     result = 130
     # Add a newline to mimic output when running without coz
     print()
+  except FileNotFoundError:
+    print(f"Error: Command not found: {args.remaining_args[0]}", file=sys.stderr)
+    result = 127  # Standard "command not found" exit code
+  except PermissionError:
+    print(f"Error: Permission denied: {args.remaining_args[0]}", file=sys.stderr)
+    result = 126  # Standard "permission denied" exit code
   exit(result)
 
 def open_browser(url):
