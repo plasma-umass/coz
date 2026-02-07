@@ -165,7 +165,7 @@ class Profile {
             else if (entry.type === 'experiment') {
                 experiment = entry;
             }
-            else if (entry.type === 'throughput-point' || entry.type === 'progress-point') {
+            else if (entry.type === 'throughput-point' || entry.type === 'progress-point' || entry.type === 'throughput_point') {
                 this.addThroughputMeasurement(experiment, entry);
             }
             else if (entry.type === 'latency-point') {

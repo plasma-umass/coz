@@ -123,7 +123,7 @@ public:
     REQUIRE(state) << "Thread state not found";
 
     // Allocate a struct to pass as an argument to the new thread
-    new_arg = new thread_start_arg(fn, arg, state->local_delay);
+    new_arg = new thread_start_arg(fn, arg, state->local_delay.load());
 
     // Create a wrapped thread and pass in the wrapped argument
     return real::pthread_create(thread, attr, profiler::start_thread, new_arg);
@@ -174,7 +174,7 @@ public:
 
     if(skip_delays) {
       // Skip all delays that were inserted during the blocked period
-      state->local_delay += _global_delay.load() - state->pre_block_time;
+      state->local_delay.fetch_add(_global_delay.load() - state->pre_block_time);
     }
 
     state->set_in_use(false);
@@ -207,6 +207,7 @@ private:
   void add_delays(thread_state* state);       //< Add any required delays
   void process_samples(thread_state* state);  //< Process all available samples and insert delays
   void process_all_samples();                 //< Process samples from all threads (for macOS profiler thread)
+  void apply_pending_delays();                //< Apply pending delays using Mach thread suspension (macOS)
   std::pair<line*,bool> match_line(perf_event::record&);       //< Map a sample to its source line and matches with selected_line
   void log_samples(std::ofstream&, size_t);   //< Log runtime and sample counts for all identified regions
 
@@ -241,6 +242,7 @@ private:
   std::string _output_filename;   //< File for profiler output
   line* _fixed_line;              //< The only line that should be sped up, if set
   int _fixed_delay_size = -1;     //< The only delay size that should be used, if set
+  bool _json_output = true;       //< Output in JSON Lines format (default)
 
   /// Should coz run in end-to-end mode?
   bool _enable_end_to_end;

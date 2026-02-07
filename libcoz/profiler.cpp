@@ -12,6 +12,7 @@
 #else
   // macOS doesn't have gettid(), provide implementation
   #include <pthread.h>
+  #include <mach/mach.h>
   #include "perf_macos.h"
   static inline pid_t gettid() {
     uint64_t tid;
@@ -24,6 +25,7 @@
 #include <poll.h>
 #include <pthread.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <fstream>
@@ -42,6 +44,31 @@
 #include "ccutil/timer.h"
 
 using namespace std;
+
+/// Escape a string for JSON output
+static string json_escape(const string& s) {
+  string result;
+  result.reserve(s.size() + 8);
+  for(char c : s) {
+    switch(c) {
+      case '"':  result += "\\\""; break;
+      case '\\': result += "\\\\"; break;
+      case '\b': result += "\\b"; break;
+      case '\f': result += "\\f"; break;
+      case '\n': result += "\\n"; break;
+      case '\r': result += "\\r"; break;
+      case '\t': result += "\\t"; break;
+      default:   result += c; break;
+    }
+  }
+  return result;
+}
+
+/// Get JSON-safe string representation of a line
+static string line_to_json_string(const line* l) {
+  auto f = l->get_file();
+  return json_escape(f->get_name() + ":" + to_string(l->get_line()));
+}
 
 /**
  * Start the profiler
@@ -67,6 +94,13 @@ void profiler::startup(const string& outfile,
 
   // Save the output file name
   _output_filename = outfile;
+
+  // Check output format (JSON is the default)
+  const char* output_format = getenv("COZ_OUTPUT_FORMAT");
+  if(output_format && strcmp(output_format, "json") != 0) {
+    // Legacy format requested
+    _json_output = false;
+  }
 
   // If a non-empty fixed line was provided, set it
   if(fixed_line) _fixed_line = fixed_line;
@@ -118,8 +152,12 @@ void profiler::profiler_thread(spinlock& l) {
   size_t start_time = get_time();
 
   // Log the start of this execution
-  output << "startup\t"
-         << "time=" << start_time << "\n";
+  if(_json_output) {
+    output << "{\"type\":\"startup\",\"time\":" << start_time << "}\n";
+  } else {
+    output << "startup\t"
+           << "time=" << start_time << "\n";
+  }
 
   // Unblock the main thread
   l.unlock();
@@ -233,29 +271,48 @@ void profiler::profiler_thread(spinlock& l) {
     size_t selected_samples = selected->get_samples() - starting_samples;
 
     // Log the experiment parameters
-    output << "experiment\t"
-           << "selected=" << selected << "\t"
-           << "speedup=" << speedup << "\t"
-           << "duration=" << duration << "\t"
-           << "selected-samples=" << selected_samples << "\n";
+    if(_json_output) {
+      output << "{\"type\":\"experiment\",\"selected\":\"" << line_to_json_string(selected) << "\","
+             << "\"speedup\":" << speedup << ","
+             << "\"duration\":" << duration << ","
+             << "\"selected_samples\":" << selected_samples << "}\n";
+    } else {
+      output << "experiment\t"
+             << "selected=" << selected << "\t"
+             << "speedup=" << speedup << "\t"
+             << "duration=" << duration << "\t"
+             << "selected-samples=" << selected_samples << "\n";
+    }
 
     // Keep a running count of the minimum delta over all progress points
     size_t min_delta = std::numeric_limits<size_t>::max();
-    
+
     // Log throughput point measurements and update the minimum delta
     for(const auto& s : saved_throughput_points) {
       size_t delta = s->get_delta();
       if(delta < min_delta) min_delta = delta;
-      s->log(output);
+      if(_json_output) {
+        output << "{\"type\":\"throughput_point\",\"name\":\"" << json_escape(s->get_name()) << "\","
+               << "\"delta\":" << delta << "}\n";
+      } else {
+        s->log(output);
+      }
     }
-    
+
     // Log latency point measurements and update the minimum delta
     for(const auto& s : saved_latency_points) {
       size_t begin_delta = s->get_begin_delta();
       size_t end_delta = s->get_end_delta();
       if(begin_delta < min_delta) min_delta = begin_delta;
       if(end_delta < min_delta) min_delta = end_delta;
-      s->log(output);
+      if(_json_output) {
+        output << "{\"type\":\"latency_point\",\"name\":\"" << json_escape(s->get_name()) << "\","
+               << "\"arrivals\":" << begin_delta << ","
+               << "\"departures\":" << end_delta << ","
+               << "\"difference\":" << s->get_difference() << "}\n";
+      } else {
+        s->log(output);
+      }
     }
 
     // Lengthen the experiment if the min_delta is too small
@@ -295,17 +352,26 @@ void profiler::profiler_thread(spinlock& l) {
 
 void profiler::log_samples(ofstream& output, size_t start_time) {
   // Log total runtime for phase correction
-  output << "runtime\t"
-         << "time=" << (get_time() - start_time) << "\n";
+  if(_json_output) {
+    output << "{\"type\":\"runtime\",\"time\":" << (get_time() - start_time) << "}\n";
+  } else {
+    output << "runtime\t"
+           << "time=" << (get_time() - start_time) << "\n";
+  }
 
   // Log sample counts for all observed lines
   for(const auto& file_entry : memory_map::get_instance().files()) {
     for(const auto& line_entry : file_entry.second->lines()) {
       shared_ptr<line> l = line_entry.second;
       if(l->get_samples() > 0) {
-        output << "samples\t"
-               << "location=" << l << "\t"
-               << "count=" << l->get_samples() << "\n";
+        if(_json_output) {
+          output << "{\"type\":\"samples\",\"location\":\"" << line_to_json_string(l.get()) << "\","
+                 << "\"count\":" << l->get_samples() << "}\n";
+        } else {
+          output << "samples\t"
+                 << "location=" << l << "\t"
+                 << "count=" << l->get_samples() << "\n";
+        }
       }
     }
   }
@@ -353,7 +419,7 @@ void* profiler::start_thread(void* p) {
   thread_state* state = get_instance().add_thread();
   REQUIRE(state) << "Failed to add thread";
 
-  state->local_delay = arg->_parent_delay_time;
+  state->local_delay.store(arg->_parent_delay_time);
 
   // Make local copies of the function and argument before freeing the arg wrapper
   thread_fn_t real_fn = arg->_fn;
@@ -454,26 +520,27 @@ void profiler::add_delays(thread_state* state) {
   // Add delays if there is an experiment running
   if(_experiment_active.load()) {
     // Take a snapshot of the global and local delays
-    size_t global_delay = _global_delay;
-    size_t delay_size = _delay_size;
+    size_t global_delay = _global_delay.load();
+    size_t local = state->local_delay.load();
 
     // Is this thread ahead or behind on delays?
-    if(state->local_delay > global_delay) {
+    if(local > global_delay) {
       // Thread is ahead: increase the global delay time to make other threads pause
-      _global_delay.fetch_add(state->local_delay - global_delay);
+      _global_delay.fetch_add(local - global_delay);
 
-    } else if(state->local_delay < global_delay) {
+    } else if(local < global_delay) {
       // Thread is behind: Pause this thread to catch up
-      
+
       // Pause and record the exact amount of time this thread paused
       state->sampler.stop();
-      state->local_delay += wait(global_delay - state->local_delay);
+      size_t waited = wait(global_delay - local);
+      state->local_delay.fetch_add(waited);
       state->sampler.start();
     }
 
   } else {
     // Just skip ahead on delays if there isn't an experiment running
-    state->local_delay = _global_delay;
+    state->local_delay.store(_global_delay.load());
   }
 }
 
@@ -489,7 +556,7 @@ void profiler::process_samples(thread_state* state) {
       if(_experiment_active) {
         // Add a delay if the sample is in the selected line
         if(sampled_line.second)
-          state->local_delay += _delay_size;
+          state->local_delay.fetch_add(_delay_size.load());
 
       } else if(sampled_line.first != nullptr && _next_line.load() == nullptr) {
         _next_line.store(sampled_line.first);
@@ -504,20 +571,79 @@ void profiler::process_samples(thread_state* state) {
  * Process samples from all thread states.
  * This is called from the profiler thread on macOS where signal-based
  * sample processing may not work reliably when threads are blocked.
+ *
+ * The approach: when samples hit the selected line, update the sampled thread's
+ * local_delay and push global_delay, then signal all threads to check their delays.
+ * Threads that are behind (local < global) will pause themselves in add_delays().
  */
 void profiler::process_all_samples() {
-  _thread_states.for_each([this](pid_t tid, thread_state* state) {
-    // Process samples for this thread state
-    // Note: We don't call add_delays here since that's thread-specific
+  size_t delay_size = _delay_size.load();
+  bool experiment_active = _experiment_active.load();
+  bool needs_signal = false;
+
+  _thread_states.for_each([this, delay_size, experiment_active, &needs_signal](pid_t tid, thread_state* state) {
     for(perf_event::record r : state->sampler) {
       if(r.is_sample()) {
         std::pair<line*, bool> sampled_line = match_line(r);
         if(sampled_line.first) {
           sampled_line.first->add_sample();
         }
+
+        if(experiment_active && sampled_line.second) {
+          // Find the thread that was sampled and credit it with the delay
+          pid_t sample_tid = r.get_tid();
+          thread_state* sampled_state = _thread_states.find(sample_tid);
+          if(sampled_state) {
+            // Credit this thread so it won't pause
+            size_t new_local = sampled_state->local_delay.fetch_add(delay_size) + delay_size;
+
+            // Push global_delay so other threads will need to catch up
+            size_t global = _global_delay.load();
+            while(new_local > global) {
+              if(_global_delay.compare_exchange_weak(global, new_local)) {
+                break;
+              }
+            }
+            needs_signal = true;
+          }
+        }
       }
     }
   });
+
+#ifdef __APPLE__
+  // Always signal all threads during an active experiment to check their delays.
+  // Unlike Linux (which has per-thread timers), macOS relies on the profiler thread
+  // to signal worker threads periodically. Threads may have accumulated delay debt
+  // from previous sample batches that they haven't acted on yet.
+  if(experiment_active) {
+    _thread_states.for_each([](pid_t tid, thread_state* state) {
+      pthread_t target = state->sampler._target_pthread;
+      if(target != 0) {
+        pthread_kill(target, SampleSignal);
+      }
+    });
+  }
+#endif
+}
+
+/**
+ * Apply pending delays to all threads by signaling them to self-regulate.
+ * This is used on macOS where per-thread timers are not available.
+ * Threads will check their delay debt in the signal handler and pause themselves.
+ */
+void profiler::apply_pending_delays() {
+#ifdef __APPLE__
+  // Signal all threads to wake up and check their delays.
+  // Each thread will call add_delays() in its signal handler,
+  // which will cause it to pause if it's behind on delays.
+  _thread_states.for_each([](pid_t tid, thread_state* state) {
+    pthread_t target = state->sampler._target_pthread;
+    if(target != 0) {
+      pthread_kill(target, SampleSignal);
+    }
+  });
+#endif
 }
 
 /**

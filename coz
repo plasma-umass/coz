@@ -74,6 +74,11 @@ def _coz_run(args):
       coz_runtime_found = True
       coz_runtime = candidate
 
+  # Allow environment variable to override library location
+  if 'COZ_PRELOAD' in env:
+    coz_runtime = env['COZ_PRELOAD']
+    coz_runtime_found = True
+
   if not coz_runtime_found:
     sys.stderr.write('error: unable to locate coz runtime library\n')
     sys.exit(1)
@@ -115,6 +120,12 @@ def _coz_run(args):
   if args.verbose:
     env['COZ_VERBOSE'] = '1'
 
+  # JSON is now the default format
+  if args.legacy_format:
+    env['COZ_OUTPUT_FORMAT'] = 'legacy'
+  else:
+    env['COZ_OUTPUT_FORMAT'] = 'json'
+
   try:
     result = subprocess.call(args.remaining_args, env=env)
   except KeyboardInterrupt:
@@ -134,72 +145,159 @@ def open_browser(url):
   import webbrowser
   webbrowser.open_new_tab(url)
 
-def parse_profile(profile_path):
-  """Parse .coz profile and return aggregated data and metadata."""
+def parse_profile(profile_path, include_raw=False):
+  """Parse .coz or .jsonl profile and return aggregated data and metadata."""
+  import json
+
   # Data structure: {selected_line: {progress_point: {speedup: {'delta': n, 'duration': n}}}}
   data = {}
   experiment_count = 0
   runtime = 0
   samples = {}
+  raw_experiments = [] if include_raw else None
 
   with open(profile_path, 'r') as f:
+    # Detect format from first line
+    first_line = f.readline().strip()
+    f.seek(0)
+
+    is_json = first_line.startswith('{')
+
     experiment = None
     for line in f:
       line = line.strip()
       if not line:
         continue
-      parts = line.split('\t')
-      record_type = parts[0]
-      fields = {}
-      for part in parts[1:]:
-        if '=' in part:
-          k, v = part.split('=', 1)
-          fields[k] = v
 
-      if record_type == 'experiment':
-        experiment = {
-          'selected': fields.get('selected', ''),
-          'speedup': float(fields.get('speedup', 0)),
-          'duration': int(fields.get('duration', 0))
-        }
-        experiment_count += 1
-      elif record_type in ('throughput-point', 'progress-point'):
-        if experiment:
-          selected = experiment['selected']
-          speedup = experiment['speedup']
-          duration = experiment['duration']
-          pp_name = fields.get('name', '')
-          delta = int(fields.get('delta', 0))
+      if is_json:
+        # JSON Lines format
+        try:
+          record = json.loads(line)
+        except json.JSONDecodeError:
+          continue
+        record_type = record.get('type', '')
 
-          if selected not in data:
-            data[selected] = {}
-          if pp_name not in data[selected]:
-            data[selected][pp_name] = {}
-          if speedup not in data[selected][pp_name]:
-            data[selected][pp_name][speedup] = {'delta': 0, 'duration': 0}
+        if record_type == 'experiment':
+          experiment = {
+            'selected': record.get('selected', ''),
+            'speedup': float(record.get('speedup', 0)),
+            'duration': int(record.get('duration', 0)),
+            'selected_samples': int(record.get('selected_samples', 0))
+          }
+          experiment_count += 1
+        elif record_type == 'throughput_point':
+          if experiment:
+            selected = experiment['selected']
+            speedup = experiment['speedup']
+            duration = experiment['duration']
+            pp_name = record.get('name', '')
+            delta = int(record.get('delta', 0))
 
-          data[selected][pp_name][speedup]['delta'] += delta
-          data[selected][pp_name][speedup]['duration'] += duration
-      elif record_type == 'runtime':
-        runtime = int(fields.get('time', 0))
-      elif record_type == 'samples':
-        loc = fields.get('location', '')
-        count = int(fields.get('count', 0))
-        samples[loc] = samples.get(loc, 0) + count
+            if selected not in data:
+              data[selected] = {}
+            if pp_name not in data[selected]:
+              data[selected][pp_name] = {}
+            if speedup not in data[selected][pp_name]:
+              data[selected][pp_name][speedup] = {'delta': 0, 'duration': 0}
 
-  return data, experiment_count, runtime, samples
+            data[selected][pp_name][speedup]['delta'] += delta
+            data[selected][pp_name][speedup]['duration'] += duration
+
+            if include_raw:
+              raw_experiments.append({
+                'selected': selected,
+                'speedup': speedup,
+                'duration': duration,
+                'selected_samples': experiment['selected_samples'],
+                'progress_point': pp_name,
+                'delta': delta,
+                'period': duration / delta if delta > 0 else None
+              })
+        elif record_type == 'runtime':
+          runtime = int(record.get('time', 0))
+        elif record_type == 'samples':
+          loc = record.get('location', '')
+          count = int(record.get('count', 0))
+          samples[loc] = samples.get(loc, 0) + count
+      else:
+        # Legacy tab-separated format
+        parts = line.split('\t')
+        record_type = parts[0]
+        fields = {}
+        for part in parts[1:]:
+          if '=' in part:
+            k, v = part.split('=', 1)
+            fields[k] = v
+
+        if record_type == 'experiment':
+          experiment = {
+            'selected': fields.get('selected', ''),
+            'speedup': float(fields.get('speedup', 0)),
+            'duration': int(fields.get('duration', 0)),
+            'selected_samples': int(fields.get('selected-samples', 0))
+          }
+          experiment_count += 1
+        elif record_type in ('throughput-point', 'progress-point'):
+          if experiment:
+            selected = experiment['selected']
+            speedup = experiment['speedup']
+            duration = experiment['duration']
+            pp_name = fields.get('name', '')
+            delta = int(fields.get('delta', 0))
+
+            if selected not in data:
+              data[selected] = {}
+            if pp_name not in data[selected]:
+              data[selected][pp_name] = {}
+            if speedup not in data[selected][pp_name]:
+              data[selected][pp_name][speedup] = {'delta': 0, 'duration': 0}
+
+            data[selected][pp_name][speedup]['delta'] += delta
+            data[selected][pp_name][speedup]['duration'] += duration
+
+            if include_raw:
+              raw_experiments.append({
+                'selected': selected,
+                'speedup': speedup,
+                'duration': duration,
+                'selected_samples': experiment['selected_samples'],
+                'progress_point': pp_name,
+                'delta': delta,
+                'period': duration / delta if delta > 0 else None
+              })
+        elif record_type == 'runtime':
+          runtime = int(fields.get('time', 0))
+        elif record_type == 'samples':
+          loc = fields.get('location', '')
+          count = int(fields.get('count', 0))
+          samples[loc] = samples.get(loc, 0) + count
+
+  return data, experiment_count, runtime, samples, raw_experiments
 
 def calculate_speedups(data, min_points=1):
   """Calculate program speedup for each source line."""
   results = []
   for selected, progress_points in data.items():
     for pp_name, speedups in progress_points.items():
-      if 0.0 not in speedups:
-        continue  # Need baseline
-      baseline_entry = speedups[0.0]
-      if baseline_entry['delta'] == 0:
-        continue
-      baseline = baseline_entry['duration'] / baseline_entry['delta']
+      # Find baseline: prefer 0% speedup, fall back to lowest speedup with delta > 0
+      baseline = None
+      baseline_speedup = None
+
+      if 0.0 in speedups and speedups[0.0]['delta'] > 0:
+        baseline_entry = speedups[0.0]
+        baseline = baseline_entry['duration'] / baseline_entry['delta']
+        baseline_speedup = 0.0
+      else:
+        # Fall back to lowest speedup with valid data
+        for speedup in sorted(speedups.keys()):
+          if speedups[speedup]['delta'] > 0:
+            baseline_entry = speedups[speedup]
+            baseline = baseline_entry['duration'] / baseline_entry['delta']
+            baseline_speedup = speedup
+            break
+
+      if baseline is None:
+        continue  # No valid baseline found
 
       measurements = []
       for speedup, agg in sorted(speedups.items()):
@@ -217,7 +315,8 @@ def calculate_speedups(data, min_points=1):
           'progress_point': pp_name,
           'measurements': measurements,
           'max_speedup': max_speedup,
-          'num_points': len(measurements)
+          'num_points': len(measurements),
+          'baseline_speedup': baseline_speedup
         })
 
   # Sort by max speedup (highest first)
@@ -324,30 +423,112 @@ def print_scatter_plot(result):
   print("        0%   20%   40%   60%   80%  100%")
   print("              Line Speedup")
 
+def _output_json(output_path, profile_path, data, results, experiment_count,
+                 runtime, samples, raw_experiments):
+  """Output detailed experiment data as JSON for analysis."""
+  import json
+
+  output = {
+    'profile_path': profile_path,
+    'experiment_count': experiment_count,
+    'runtime_ns': runtime,
+    'runtime_sec': runtime / 1e9 if runtime > 0 else 0,
+
+    # Sample counts by location
+    'samples': samples,
+
+    # Aggregated data by selected line -> progress point -> speedup
+    'aggregated': {},
+
+    # Calculated speedup results
+    'results': [],
+
+    # Raw experiment data for detailed analysis
+    'raw_experiments': raw_experiments or []
+  }
+
+  # Convert aggregated data (speedup keys are floats, need string keys for JSON)
+  for selected, pps in data.items():
+    output['aggregated'][selected] = {}
+    for pp, speedups in pps.items():
+      output['aggregated'][selected][pp] = {}
+      for speedup, agg in speedups.items():
+        output['aggregated'][selected][pp][str(speedup)] = {
+          'speedup_pct': speedup * 100,
+          'delta': agg['delta'],
+          'duration_ns': agg['duration'],
+          'period_ns': agg['duration'] / agg['delta'] if agg['delta'] > 0 else None
+        }
+
+  # Convert results
+  for r in results:
+    # Calculate linear regression slope if we have enough points
+    measurements = r['measurements']
+    slope = None
+    if len(measurements) >= 2:
+      n = len(measurements)
+      sum_x = sum(m[0] for m in measurements)
+      sum_y = sum(m[1] for m in measurements)
+      sum_xy = sum(m[0] * m[1] for m in measurements)
+      sum_x2 = sum(m[0] ** 2 for m in measurements)
+      denom = n * sum_x2 - sum_x ** 2
+      if denom != 0:
+        slope = (n * sum_xy - sum_x * sum_y) / denom
+
+    result_entry = {
+      'line': r['line'],
+      'progress_point': r['progress_point'],
+      'max_speedup': r['max_speedup'],
+      'max_speedup_pct': r['max_speedup'] * 100,
+      'num_points': r['num_points'],
+      'slope': slope,
+      'measurements': [
+        {'line_speedup': ls, 'line_speedup_pct': ls * 100,
+         'program_speedup': ps, 'program_speedup_pct': ps * 100}
+        for ls, ps in r['measurements']
+      ]
+    }
+    output['results'].append(result_entry)
+
+  with open(output_path, 'w') as f:
+    json.dump(output, f, indent=2)
+
+  print(f"\nJSON output written to: {output_path}")
+
 def _coz_plot_text(args):
   """Handle text-based profile output."""
   profile_path = abspath(args.input) if args.input else None
   if profile_path is None:
-    default_profile = abspath(curdir + path_sep + 'profile.coz')
-    if os.path.exists(default_profile):
-      profile_path = default_profile
+    # Prefer .jsonl if both exist
+    for ext in ['profile.jsonl', 'profile.coz']:
+      default_profile = abspath(curdir + path_sep + ext)
+      if os.path.exists(default_profile):
+        profile_path = default_profile
+        break
 
   if not profile_path or not os.path.exists(profile_path):
-    sys.stderr.write('error: no profile found. Specify with -i or run from directory with profile.coz\n')
+    sys.stderr.write('error: no profile found. Specify with -i or run from directory with profile.coz or profile.jsonl\n')
     sys.exit(1)
 
-  data, experiment_count, runtime, samples = parse_profile(profile_path)
+  data, experiment_count, runtime, samples, raw_experiments = parse_profile(profile_path, include_raw=True)
   results = calculate_speedups(data)
 
-  print_text_summary(profile_path, results, experiment_count, runtime, samples)
+  # Only print text output if --text is specified or --json is not specified
+  if args.text or not args.json:
+    print_text_summary(profile_path, results, experiment_count, runtime, samples)
 
-  if args.verbose and results:
-    print()
-    print("=" * 70)
-    print("DETAILED SCATTER PLOTS")
-    print("=" * 70)
-    for r in results:
-      print_scatter_plot(r)
+    if args.verbose and results:
+      print()
+      print("=" * 70)
+      print("DETAILED SCATTER PLOTS")
+      print("=" * 70)
+      for r in results:
+        print_scatter_plot(r)
+
+  # Output JSON if requested
+  if args.json:
+    _output_json(args.json, profile_path, data, results, experiment_count,
+                 runtime, samples, raw_experiments)
 
 def _find_viewer_directory():
   """Find the viewer directory relative to this script's location."""
@@ -370,8 +551,8 @@ def _find_viewer_directory():
   return None
 
 def _coz_plot(args):
-  # Handle text-based output mode
-  if args.text:
+  # Handle text-based output mode or JSON-only output
+  if args.text or args.json:
     _coz_plot_text(args)
     return
 
@@ -390,12 +571,15 @@ def _coz_plot(args):
     t1.start()
     return
 
-  # Check for profile.coz in current directory (or use specified input file)
+  # Check for profile.coz or profile.jsonl in current directory (or use specified input file)
   profile_path = abspath(args.input) if args.input else None
   if profile_path is None:
-    default_profile = abspath(curdir + path_sep + 'profile.coz')
-    if os.path.exists(default_profile):
-      profile_path = default_profile
+    # Prefer .jsonl if both exist
+    for ext in ['profile.jsonl', 'profile.coz']:
+      default_profile = abspath(curdir + path_sep + ext)
+      if os.path.exists(default_profile):
+        profile_path = default_profile
+        break
 
   # Find an available port
   port = args.port
@@ -489,8 +673,8 @@ _run_parser.add_argument('--progress', '-p',
 
 _run_parser.add_argument('--output', '-o',
                          metavar='<profile output>',
-                         default=abspath(curdir+path_sep+'profile.coz'),
-                         help='Profiler output (default=`profile.coz`)')
+                         default=abspath(curdir+path_sep+'profile.jsonl'),
+                         help='Profiler output (default=`profile.jsonl`)')
 
 _run_parser.add_argument('--end-to-end',
                          action='store_true', default=False,
@@ -508,6 +692,10 @@ _run_parser.add_argument('--fixed-speedup',
 _run_parser.add_argument('--verbose', '-v',
                          action='store_true', default=False,
                          help='Print verbose output (libraries loaded, debug info found, etc.)')
+
+_run_parser.add_argument('--legacy-format',
+                         action='store_true', default=False,
+                         help='Output profile in legacy tab-separated format (.coz extension)')
 
 # Use defaults to recover handler function and parser object from parser output
 _run_parser.set_defaults(func=_coz_run, parser=_run_parser)
@@ -533,6 +721,11 @@ _plot_parser.add_argument('--text', '-t',
 _plot_parser.add_argument('--verbose', '-v',
                           action='store_true', default=False,
                           help='Show detailed scatter plots for each source line (with --text)')
+
+_plot_parser.add_argument('--json', '-j',
+                          metavar='<output.json>',
+                          default=None,
+                          help='Output detailed experiment data as JSON for analysis')
 
 # Use defaults to recover handler function and parser object from parser output
 _plot_parser.set_defaults(func=_coz_plot, parser=_plot_parser)
