@@ -71,9 +71,10 @@ perf_event::perf_event(struct perf_event_attr& pe, pid_t pid, int cpu) :
 
       fprintf(stderr, "Failed to open perf event: %s\n", strerror(errno));
       if (value >= 0) {
-          fprintf(stderr, "Consider tweaking %s to 2 or less (current value is %d),\n"
-                          "or run coz as a privileged user (with CAP_SYS_ADMIN).\n",
-                          path, value);
+          fprintf(stderr, "Current value of %s is %d.\n"
+                          "To fix, run:  echo 2 | sudo tee %s\n"
+                          "Or run coz as a privileged user (with CAP_SYS_ADMIN).\n",
+                          path, value, path);
       } else {
           fprintf(stderr, "Consider running coz as a privileged user (with CAP_SYS_ADMIN).\n");
       }
