@@ -128,8 +128,8 @@ option(INSTALL_COZ "Enable installation of coz. (Projects embedding coz may want
 if(INSTALL_COZ)
     include(GNUInstallDirs)
     include(CMakePackageConfigHelpers)
-    install(PROGRAMS coz DESTINATION bin)
-    install(FILES LICENSE.md DESTINATION licenses)
+    install(PROGRAMS coz DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(FILES LICENSE.md DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
     # Install the viewer web application
     install(DIRECTORY viewer/
