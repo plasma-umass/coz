@@ -19,6 +19,8 @@
     pthread_threadid_np(NULL, &tid);
     return (pid_t)tid;
   }
+  // Declare original pthread function from mac_interpose.cpp
+  extern "C" int coz_orig_pthread_create(pthread_t*, const pthread_attr_t*, void*(*)(void*), void*);
 #endif
 #include <execinfo.h>
 #include <limits.h>
@@ -44,6 +46,84 @@
 #include "ccutil/timer.h"
 
 using namespace std;
+
+// Diagnostic counters for delay application (macOS debugging)
+#ifdef __APPLE__
+static std::atomic<size_t> g_delays_applied{0};
+static std::atomic<size_t> g_delays_skipped{0};
+static std::atomic<size_t> g_delay_checks{0};
+static std::atomic<size_t> g_mach_suspensions{0};
+
+/// Check if a thread is safe to suspend for delays.
+/// Returns true unless thread is in a waiting/blocked state (which could indicate
+/// it's holding a lock or waiting for I/O).
+static bool is_thread_suspendable(mach_port_t thread_port) {
+  thread_basic_info_data_t info;
+  mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
+  kern_return_t kr = thread_info(thread_port, THREAD_BASIC_INFO,
+                                  (thread_info_t)&info, &count);
+  if (kr != KERN_SUCCESS) {
+    return false;
+  }
+  // TH_STATE_RUNNING = 1 (currently executing)
+  // TH_STATE_STOPPED = 2 (stopped, not runnable)
+  // TH_STATE_WAITING = 3 (waiting/blocked)
+  // TH_STATE_UNINTERRUPTIBLE = 4 (waiting uninterruptibly)
+  // TH_STATE_HALTED = 5 (halted at clean point)
+  // Don't suspend threads that are already waiting/blocked - they may be holding locks
+  // or in system calls. Only suspend running threads.
+  return info.run_state == TH_STATE_RUNNING || info.run_state == TH_STATE_STOPPED;
+}
+
+// Track suspension attempts for debugging
+static std::atomic<size_t> g_suspension_attempts{0};
+static std::atomic<size_t> g_suspension_state_blocked{0};
+static std::atomic<size_t> g_suspension_failed{0};
+
+/// Apply delay to a thread using Mach thread suspension.
+/// This directly suspends the thread for the specified duration, then resumes it.
+/// More reliable than signal-based delays for threads in tight compute loops.
+/// Returns the actual delay applied in nanoseconds.
+static size_t apply_delay_via_suspension(mach_port_t thread_port, size_t delay_ns) {
+  if (thread_port == MACH_PORT_NULL || delay_ns == 0) {
+    return 0;
+  }
+
+  g_suspension_attempts.fetch_add(1, std::memory_order_relaxed);
+
+  // Try to suspend the thread directly.
+  // If it's in a blocked state, it will already be "suspended" from a timing perspective,
+  // so we can just add the delay to its local counter without actually suspending.
+  kern_return_t kr = thread_suspend(thread_port);
+  if (kr != KERN_SUCCESS) {
+    // Thread couldn't be suspended - check if it's already blocked/waiting
+    thread_basic_info_data_t info;
+    mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
+    kern_return_t info_kr = thread_info(thread_port, THREAD_BASIC_INFO,
+                                        (thread_info_t)&info, &count);
+    if (info_kr == KERN_SUCCESS &&
+        (info.run_state == TH_STATE_WAITING || info.run_state == TH_STATE_UNINTERRUPTIBLE)) {
+      // Thread is already blocked - it will naturally "catch up" when it unblocks
+      g_suspension_state_blocked.fetch_add(1, std::memory_order_relaxed);
+      return delay_ns;  // Credit the delay anyway since thread is effectively paused
+    }
+    g_suspension_failed.fetch_add(1, std::memory_order_relaxed);
+    return 0;
+  }
+
+  // Wait for the delay duration
+  struct timespec ts;
+  ts.tv_sec = delay_ns / 1000000000;
+  ts.tv_nsec = delay_ns % 1000000000;
+  nanosleep(&ts, nullptr);
+
+  // Resume the thread
+  thread_resume(thread_port);
+
+  g_mach_suspensions.fetch_add(1, std::memory_order_relaxed);
+  return delay_ns;
+}
+#endif
 
 /// Escape a string for JSON output
 static string json_escape(const string& s) {
@@ -117,23 +197,36 @@ void profiler::startup(const string& outfile,
   l.lock();
 
   // Create the profiler thread
-  INFO << "Starting profiler thread";
+  VERBOSE << "Creating profiler thread...";
+#ifdef __APPLE__
+  // On macOS, use the original pthread_create from mac_interpose.cpp to avoid
+  // recursion through the interposed function
+  int rc = coz_orig_pthread_create(&_profiler_thread, nullptr, profiler::start_profiler_thread, (void*)&l);
+#else
   int rc = real::pthread_create(&_profiler_thread, nullptr, profiler::start_profiler_thread, (void*)&l);
+#endif
+  VERBOSE << "pthread_create returned " << rc;
   REQUIRE(rc == 0) << "Failed to start profiler thread";
 
   // Double-lock l. This blocks until the profiler thread unlocks l
+  VERBOSE << "Waiting for profiler thread to start...";
   l.lock();
+  VERBOSE << "Profiler thread started, adding main thread state...";
 
   // Begin sampling in the main thread
   thread_state* state = add_thread();
   REQUIRE(state) << "Failed to add thread";
+  VERBOSE << "Starting sampling on main thread...";
   begin_sampling(state);
+  VERBOSE << "Profiler startup complete, returning to main program";
 }
 
 /**
  * Body of the main profiler thread
  */
 void profiler::profiler_thread(spinlock& l) {
+  VERBOSE << "Profiler thread running!";
+
   // Open the output file
   ofstream output;
   output.open(_output_filename, ios_base::app);
@@ -160,7 +253,9 @@ void profiler::profiler_thread(spinlock& l) {
   }
 
   // Unblock the main thread
+  VERBOSE << "Profiler thread unlocking spinlock...";
   l.unlock();
+  VERBOSE << "Profiler thread waiting for progress points...";
 
   // Wait until there is at least one progress point
   _throughput_points_lock.lock();
@@ -189,6 +284,10 @@ void profiler::profiler_thread(spinlock& l) {
       selected = _next_line.load();
       while(_running && selected == nullptr) {
         wait(SamplePeriod * SampleBatchSize);
+#ifdef __APPLE__
+        // On macOS, must process samples here to set _next_line
+        process_all_samples();
+#endif
         selected = _next_line.load();
       }
 
@@ -322,6 +421,23 @@ void profiler::profiler_thread(spinlock& l) {
       experiment_length /= 2;
     }
 
+#ifdef __APPLE__
+    // Log delay application statistics (macOS debugging)
+    size_t checks = g_delay_checks.exchange(0, std::memory_order_relaxed);
+    size_t applied = g_delays_applied.exchange(0, std::memory_order_relaxed);
+    size_t skipped = g_delays_skipped.exchange(0, std::memory_order_relaxed);
+    size_t suspensions = g_mach_suspensions.exchange(0, std::memory_order_relaxed);
+    size_t attempts = g_suspension_attempts.exchange(0, std::memory_order_relaxed);
+    size_t state_blocked = g_suspension_state_blocked.exchange(0, std::memory_order_relaxed);
+    size_t failed = g_suspension_failed.exchange(0, std::memory_order_relaxed);
+    VERBOSE << "Delay stats: checks=" << checks
+            << ", applied=" << applied << ", skipped=" << skipped
+            << ", susp_attempts=" << attempts << ", susp_state_blocked=" << state_blocked
+            << ", susp_failed=" << failed << ", susp_success=" << suspensions
+            << ", speedup=" << (speedup * 100) << "%"
+            << ", min_delta=" << min_delta;
+#endif
+
     output.flush();
 
     // Clear the next line, so threads will select one
@@ -394,9 +510,11 @@ void profiler::shutdown() {
 }
 
 thread_state* profiler::add_thread() {
-  thread_state* inserted = _thread_states.insert(gettid());
+  pid_t tid = gettid();
+  thread_state* inserted = _thread_states.insert(tid);
   if (inserted != nullptr) {
     _num_threads_running += 1;
+    VERBOSE << "Registered thread tid=" << tid;
   }
   return inserted;
 }
@@ -523,10 +641,17 @@ void profiler::add_delays(thread_state* state) {
     size_t global_delay = _global_delay.load();
     size_t local = state->local_delay.load();
 
+#ifdef __APPLE__
+    g_delay_checks.fetch_add(1, std::memory_order_relaxed);
+#endif
+
     // Is this thread ahead or behind on delays?
     if(local > global_delay) {
       // Thread is ahead: increase the global delay time to make other threads pause
       _global_delay.fetch_add(local - global_delay);
+#ifdef __APPLE__
+      g_delays_skipped.fetch_add(1, std::memory_order_relaxed);
+#endif
 
     } else if(local < global_delay) {
       // Thread is behind: Pause this thread to catch up
@@ -536,6 +661,10 @@ void profiler::add_delays(thread_state* state) {
       size_t waited = wait(global_delay - local);
       state->local_delay.fetch_add(waited);
       state->sampler.start();
+#ifdef __APPLE__
+      g_delays_applied.fetch_add(1, std::memory_order_relaxed);
+      VERBOSE << "Thread applied delay: waited=" << waited << "ns, global=" << global_delay << ", local=" << local;
+#endif
     }
 
   } else {
@@ -580,19 +709,32 @@ void profiler::process_all_samples() {
   size_t delay_size = _delay_size.load();
   bool experiment_active = _experiment_active.load();
   bool needs_signal = false;
+  size_t samples_processed = 0;
+  size_t selected_line_hits = 0;
 
-  _thread_states.for_each([this, delay_size, experiment_active, &needs_signal](pid_t tid, thread_state* state) {
+  // Track which thread IDs were sampled on the selected line
+  // These threads should NOT be delayed (they're the ones being "sped up")
+  std::vector<uint64_t> sampled_tids;
+
+  _thread_states.for_each([this, delay_size, experiment_active, &needs_signal, &samples_processed, &selected_line_hits, &sampled_tids](pid_t tid, thread_state* state) {
     for(perf_event::record r : state->sampler) {
       if(r.is_sample()) {
+        samples_processed++;
         std::pair<line*, bool> sampled_line = match_line(r);
         if(sampled_line.first) {
           sampled_line.first->add_sample();
         }
 
         if(experiment_active && sampled_line.second) {
+          selected_line_hits++;
+          // Track the sampled thread so we don't delay it
+          uint64_t sample_tid = r.get_tid();
+          sampled_tids.push_back(sample_tid);
+
           // Find the thread that was sampled and credit it with the delay
-          pid_t sample_tid = r.get_tid();
-          thread_state* sampled_state = _thread_states.find(sample_tid);
+          // Note: On macOS, pthread_create interposition may not work, so thread lookup
+          // often fails. We still apply delays via Mach thread suspension below.
+          thread_state* sampled_state = _thread_states.find(static_cast<pid_t>(sample_tid));
           if(sampled_state) {
             // Credit this thread so it won't pause
             size_t new_local = sampled_state->local_delay.fetch_add(delay_size) + delay_size;
@@ -606,23 +748,111 @@ void profiler::process_all_samples() {
             }
             needs_signal = true;
           }
+        } else if(!experiment_active && sampled_line.first != nullptr && _next_line.load() == nullptr) {
+          // When not in an experiment, select this line for the next experiment
+          _next_line.store(sampled_line.first);
         }
       }
     }
   });
 
+  // Log sample processing stats when verbose
+  if(samples_processed > 0) {
+    VERBOSE << "process_all_samples: processed=" << samples_processed
+            << ", selected_hits=" << selected_line_hits
+            << ", delay_size=" << delay_size;
+  }
+
 #ifdef __APPLE__
-  // Always signal all threads during an active experiment to check their delays.
-  // Unlike Linux (which has per-thread timers), macOS relies on the profiler thread
-  // to signal worker threads periodically. Threads may have accumulated delay debt
-  // from previous sample batches that they haven't acted on yet.
-  if(experiment_active) {
-    _thread_states.for_each([](pid_t tid, thread_state* state) {
-      pthread_t target = state->sampler._target_pthread;
-      if(target != 0) {
-        pthread_kill(target, SampleSignal);
+  // Apply delays directly using Mach thread suspension.
+  // When samples hit the selected line, delay all OTHER threads (not the sampled one).
+  //
+  // Key: Suspend all target threads SIMULTANEOUSLY, then sleep once, then resume all.
+  // This is more efficient and more accurately simulates virtual speedup.
+  if(experiment_active && delay_size > 0 && selected_line_hits > 0) {
+    // Get all threads in the process
+    thread_act_array_t threads;
+    mach_msg_type_number_t thread_count;
+    kern_return_t kr = task_threads(mach_task_self(), &threads, &thread_count);
+
+    if(kr == KERN_SUCCESS) {
+      // Get current thread to skip it
+      mach_port_t self_thread = mach_thread_self();
+
+      // First pass: suspend all target threads
+      std::vector<mach_port_t> suspended_threads;
+      for(mach_msg_type_number_t i = 0; i < thread_count; i++) {
+        mach_port_t thread = threads[i];
+
+        // Skip the profiler thread (current thread)
+        if(thread == self_thread) {
+          continue;
+        }
+
+        // Get thread ID to check if this is a sampled thread
+        thread_identifier_info_data_t info;
+        mach_msg_type_number_t info_count = THREAD_IDENTIFIER_INFO_COUNT;
+        kern_return_t info_kr = thread_info(thread, THREAD_IDENTIFIER_INFO,
+                                            (thread_info_t)&info, &info_count);
+        if(info_kr == KERN_SUCCESS) {
+          // Skip threads that were sampled on the selected line (don't slow them down)
+          bool is_sampled = false;
+          for(uint64_t sampled_tid : sampled_tids) {
+            if(info.thread_id == sampled_tid) {
+              is_sampled = true;
+              break;
+            }
+          }
+          if(is_sampled) {
+            continue;
+          }
+        }
+
+        // Try to suspend this thread
+        g_suspension_attempts.fetch_add(1, std::memory_order_relaxed);
+        kern_return_t susp_kr = thread_suspend(thread);
+        if(susp_kr == KERN_SUCCESS) {
+          suspended_threads.push_back(thread);
+          g_mach_suspensions.fetch_add(1, std::memory_order_relaxed);
+        } else {
+          g_suspension_failed.fetch_add(1, std::memory_order_relaxed);
+        }
       }
-    });
+
+      // Sleep once for the delay
+      // The delay simulates virtual speedup: when samples hit the selected line,
+      // pause other threads to make the selected code appear relatively faster.
+      // Use delay_size directly (already scaled by speedup percentage).
+      if(!suspended_threads.empty() && delay_size > 0) {
+        // Apply delay proportional to number of hits
+        // Each hit represents one sample period where selected line was executing
+        size_t total_delay = delay_size * selected_line_hits;
+
+        // Cap at batch interval to avoid over-delaying
+        size_t max_delay = SamplePeriod * SampleBatchSize;  // 10ms per batch
+        if(total_delay > max_delay) {
+          total_delay = max_delay;
+        }
+
+        struct timespec ts;
+        ts.tv_sec = total_delay / 1000000000;
+        ts.tv_nsec = total_delay % 1000000000;
+        nanosleep(&ts, nullptr);
+        g_delays_applied.fetch_add(suspended_threads.size(), std::memory_order_relaxed);
+      }
+
+      // Resume all suspended threads
+      for(mach_port_t thread : suspended_threads) {
+        thread_resume(thread);
+      }
+
+      // Deallocate thread ports
+      for(mach_msg_type_number_t i = 0; i < thread_count; i++) {
+        mach_port_deallocate(mach_task_self(), threads[i]);
+      }
+      vm_deallocate(mach_task_self(), (vm_address_t)threads, thread_count * sizeof(thread_act_t));
+      mach_port_deallocate(mach_task_self(), self_thread);
+    }
   }
 #endif
 }

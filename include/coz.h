@@ -40,29 +40,57 @@ typedef struct {
 // The type of the _coz_get_counter function
 typedef coz_counter_t* (*coz_get_counter_t)(int, const char*);
 
+// The type of the _coz_add_delays function
+typedef void (*coz_add_delays_t)(void);
+
 // Locate and invoke _coz_get_counter
 static coz_counter_t* _call_coz_get_counter(int type, const char* name) {
   static unsigned char _initialized = 0;
   static coz_get_counter_t fn; // The pointer to _coz_get_counter
-  
+
   if(!_initialized) {
     if(dlsym) {
       // Locate the _coz_get_counter method
       void* p = dlsym(RTLD_DEFAULT, "_coz_get_counter");
-  
+
       // Use memcpy to avoid pedantic GCC complaint about storing function pointer in void*
       memcpy(&fn, &p, sizeof(p));
     }
-    
+
     _initialized = 1;
   }
-  
+
   // Call the function, or return null if profiler is not found
   if(fn) return fn(type, name);
   else return 0;
 }
 
-// Macro to initialize and increment a counter
+// Locate and invoke _coz_add_delays
+// This ensures worker threads check their delay debt at progress points,
+// which is critical on macOS where per-thread timers are not available.
+static void _call_coz_add_delays(void) {
+  static unsigned char _initialized = 0;
+  static coz_add_delays_t fn; // The pointer to _coz_add_delays
+
+  if(!_initialized) {
+    if(dlsym) {
+      // Locate the _coz_add_delays method
+      void* p = dlsym(RTLD_DEFAULT, "_coz_add_delays");
+
+      // Use memcpy to avoid pedantic GCC complaint about storing function pointer in void*
+      memcpy(&fn, &p, sizeof(p));
+    }
+
+    _initialized = 1;
+  }
+
+  // Call the function if profiler is found
+  if(fn) fn();
+}
+
+// Macro to initialize and increment a counter, then check for pending delays.
+// The delay check is critical on macOS where per-thread timers are not available,
+// ensuring worker threads apply delays at progress points.
 #define COZ_INCREMENT_COUNTER(type, name) \
   if(1) { \
     static unsigned char _initialized = 0; \
@@ -74,6 +102,7 @@ static coz_counter_t* _call_coz_get_counter(int type, const char* name) {
     } \
     if(_counter) { \
       __atomic_add_fetch(&_counter->count, 1, __ATOMIC_RELAXED); \
+      _call_coz_add_delays(); \
     } \
   }
 
