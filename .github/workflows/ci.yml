@@ -108,34 +108,25 @@ jobs:
 
         python3 << 'VALIDATION_SCRIPT'
         import sys
-        import re
+        import json
 
-        # Parse profile.coz
-        # Format: experiment\tselected=path:line\tspeedup=X.XX\tduration=N\tselected-samples=N
-        # Followed by: throughput-point\tname=path:line\tdelta=N
+        # Parse profile.coz (JSON Lines format)
+        # Each line is a JSON object with a "type" field:
+        #   {"type":"experiment","selected":"path:line","speedup":0.30,"duration":N,"selected_samples":N}
+        #   {"type":"throughput_point","name":"path:line","delta":N}
         experiments = []
         current_exp = None
 
         with open('profile.coz', 'r') as f:
             for line in f:
                 line = line.strip()
-                if line.startswith('experiment'):
-                    # Parse key=value pairs
-                    parts = line.split('\t')
-                    exp = {}
-                    for part in parts[1:]:
-                        if '=' in part:
-                            key, val = part.split('=', 1)
-                            exp[key] = val
-                    current_exp = exp
-                elif line.startswith('throughput-point') and current_exp:
-                    # Parse throughput point and attach to current experiment
-                    parts = line.split('\t')
-                    for part in parts[1:]:
-                        if '=' in part:
-                            key, val = part.split('=', 1)
-                            if key == 'delta':
-                                current_exp['delta'] = float(val)
+                if not line:
+                    continue
+                obj = json.loads(line)
+                if obj.get('type') == 'experiment':
+                    current_exp = obj
+                elif obj.get('type') == 'throughput_point' and current_exp:
+                    current_exp['delta'] = float(obj['delta'])
                     experiments.append(current_exp)
                     current_exp = None
 
