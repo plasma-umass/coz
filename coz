@@ -7,6 +7,7 @@
 
 import argparse
 import copy
+import glob
 import os
 import subprocess
 import sys
@@ -63,6 +64,11 @@ def _coz_run(args):
     os.path.join(coz_prefix, 'libcoz', 'libcoz.so'),
     os.path.join(coz_prefix, 'build', 'libcoz', 'libcoz.so'),
   ]
+
+  # Also search multiarch library paths (e.g., lib/aarch64-linux-gnu/libcoz.so)
+  library_locations.extend(
+    glob.glob(os.path.join(coz_prefix, '..', 'lib', '*', 'libcoz.so'))
+  )
 
   # Find the first library location that exists
   coz_runtime_found = False
@@ -274,23 +280,28 @@ def parse_profile(profile_path, include_raw=False):
 
   return data, experiment_count, runtime, samples, raw_experiments
 
-def calculate_speedups(data, min_points=1):
-  """Calculate program speedup for each source line."""
+def calculate_speedups(data, min_points=1, min_delta=5):
+  """Calculate program speedup for each source line.
+
+  Args:
+    min_delta: Minimum number of progress point visits for a data point
+               to be considered reliable (matches ExperimentTargetDelta).
+  """
   results = []
   for selected, progress_points in data.items():
     for pp_name, speedups in progress_points.items():
-      # Find baseline: prefer 0% speedup, fall back to lowest speedup with delta > 0
+      # Find baseline: prefer 0% speedup, fall back to lowest speedup with sufficient delta
       baseline = None
       baseline_speedup = None
 
-      if 0.0 in speedups and speedups[0.0]['delta'] > 0:
+      if 0.0 in speedups and speedups[0.0]['delta'] >= min_delta:
         baseline_entry = speedups[0.0]
         baseline = baseline_entry['duration'] / baseline_entry['delta']
         baseline_speedup = 0.0
       else:
         # Fall back to lowest speedup with valid data
         for speedup in sorted(speedups.keys()):
-          if speedups[speedup]['delta'] > 0:
+          if speedups[speedup]['delta'] >= min_delta:
             baseline_entry = speedups[speedup]
             baseline = baseline_entry['duration'] / baseline_entry['delta']
             baseline_speedup = speedup
@@ -301,7 +312,7 @@ def calculate_speedups(data, min_points=1):
 
       measurements = []
       for speedup, agg in sorted(speedups.items()):
-        if agg['delta'] == 0:
+        if agg['delta'] < min_delta:
           continue
         data_point = agg['duration'] / agg['delta']
         progress_speedup = (baseline - data_point) / baseline
