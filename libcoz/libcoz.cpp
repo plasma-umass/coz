@@ -337,8 +337,23 @@ static bool is_coz_signal(int signum) {
   return signum == SampleSignal || signum == SIGSEGV || signum == SIGABRT;
 }
 
+#ifdef __APPLE__
+/// Additional helpers called from mac_interpose.cpp
+extern "C" void coz_shutdown() {
+  profiler::get_instance().shutdown();
+}
+
+extern "C" bool coz_is_coz_signal(int signum) {
+  return is_coz_signal(signum);
+}
+
+extern "C" void coz_remove_coz_signals(sigset_t* set) {
+  remove_coz_signals(set);
+}
+#endif
+
 extern "C" {
-// On macOS, pthread wrappers are defined in mac_interpose.cpp using DYLD interposition
+// On macOS, all wrappers are in mac_interpose.cpp using DYLD interposition
 #ifndef __APPLE__
   /// Pass pthread_create calls to coz so child threads can inherit the parent's delay count
   int pthread_create(pthread_t* thread,
@@ -474,6 +489,7 @@ extern "C" {
   }
 #endif // !__APPLE__
 
+#ifndef __APPLE__
   /// Run shutdown before exiting
   void __attribute__((noreturn)) exit(int status) {
     profiler::get_instance().shutdown();
@@ -496,11 +512,7 @@ extern "C" {
   }
 
   /// Don't allow programs to set signal handlers for coz's required signals
-#ifdef __APPLE__
-  void (*signal(int signum, void (*handler)(int)))(int) {
-#else
   sighandler_t signal(int signum, sighandler_t handler) {
-#endif
     if(is_coz_signal(signum)) {
       return NULL;
     } else {
@@ -562,12 +574,10 @@ extern "C" {
     return real::pthread_kill(thread, sig);
   }
 
-#ifndef __APPLE__
   int pthread_sigqueue(pthread_t thread, int sig, const union sigval val) {
     if(initialized) profiler::get_instance().catch_up();
     return real::pthread_sigqueue(thread, sig, val);
   }
-#endif
 
   /**
    * Ensure a thread cannot wait for coz's signals.
@@ -578,7 +588,6 @@ extern "C" {
     sigset_t myset = *set;
     remove_coz_signals(&myset);
 
-#ifndef __APPLE__
     siginfo_t info;
 
     if(initialized) profiler::get_instance().pre_block();
@@ -596,19 +605,8 @@ extern "C" {
       *sig = result;
       return 0;
     }
-#else
-    // macOS implementation using sigwait
-    if(initialized) profiler::get_instance().pre_block();
-
-    int result = real::sigwait(&myset, sig);
-
-    if(initialized) profiler::get_instance().post_block(result == 0);
-
-    return result;
-#endif
   }
 
-#ifndef __APPLE__
   /**
    * Ensure a thread cannot wait for coz's signals.
    * If the waking signal is delivered from the same process, skip any added global delays.
@@ -652,7 +650,6 @@ extern "C" {
 
     return result;
   }
-#endif
 
   /**
    * Set the process signal mask, suspend, then wake and restore the signal mask.
@@ -666,4 +663,5 @@ extern "C" {
     real::sigprocmask(SIG_SETMASK, &oldset, nullptr);
     return rc;
   }
+#endif // !__APPLE__
 }

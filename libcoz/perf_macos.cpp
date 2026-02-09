@@ -29,9 +29,10 @@
 #include "ccutil/log.h"
 #include "ccutil/wrapped_array.h"
 
-// Use the original pthread_create to avoid coz interposition on internal threads
+// Use the originals from mac_interpose.cpp to avoid coz DYLD interposition
 extern "C" int coz_orig_pthread_create(pthread_t*, const pthread_attr_t*,
                                         void*(*)(void*), void*);
+extern "C" int coz_orig_pthread_sigmask(int, const sigset_t*, sigset_t*);
 
 using ccutil::wrapped_array;
 
@@ -199,11 +200,13 @@ static void* sampling_thread_func(void* arg) {
   // Get our own Mach thread port
   g_sampling_thread_port = mach_thread_self();
 
-  // Block SIGPROF in sampling thread to avoid self-interference
+  // Block SIGPROF in sampling thread to avoid self-interference.
+  // Use the original pthread_sigmask to bypass our DYLD interposition
+  // which strips coz's signals from SIG_BLOCK masks.
   sigset_t mask;
   sigemptyset(&mask);
   sigaddset(&mask, SIGPROF);
-  pthread_sigmask(SIG_BLOCK, &mask, nullptr);
+  coz_orig_pthread_sigmask(SIG_BLOCK, &mask, nullptr);
 
   // Calculate sleep interval
   struct timespec sleep_time;
@@ -368,6 +371,10 @@ void perf_event::start() {
 // Stop sampling
 void perf_event::stop() {
   if (!_active.load(std::memory_order_relaxed)) return;
+
+  // Zero _target_pthread before unregistering so that apply_pending_delays()
+  // won't call pthread_kill() on a stale handle after the thread exits.
+  _target_pthread = 0;
 
   _active.store(false, std::memory_order_release);
   macos_sampling_unregister_event(this);

@@ -19,8 +19,13 @@
     pthread_threadid_np(NULL, &tid);
     return (pid_t)tid;
   }
-  // Declare original pthread function from mac_interpose.cpp
+  // Declare original functions from mac_interpose.cpp.
+  // On macOS, dlsym returns DYLD-interposed versions, so we must use
+  // __asm-bound originals for internal thread/signal management.
   extern "C" int coz_orig_pthread_create(pthread_t*, const pthread_attr_t*, void*(*)(void*), void*);
+  extern "C" int coz_orig_pthread_join(pthread_t, void**);
+  extern "C" int coz_orig_sigaction(int, const struct sigaction*, struct sigaction*);
+  extern "C" int coz_orig_sigprocmask(int, const sigset_t*, sigset_t*);
 #endif
 #include <execinfo.h>
 #include <limits.h>
@@ -92,20 +97,33 @@ void profiler::startup(const string& outfile,
                        line* fixed_line,
                        int fixed_speedup,
                        bool end_to_end) {
-  // Set up the sampling signal handler
+  // Set up the sampling signal handler.
+  // On macOS, use the __asm-bound original sigaction to bypass our own
+  // DYLD interposition which blocks setting handlers for coz's signals.
   struct sigaction sa;
   memset(&sa, 0, sizeof(sa));
   sa.sa_sigaction = profiler::samples_ready;
   sa.sa_flags = SA_SIGINFO;
+#ifdef __APPLE__
+  coz_orig_sigaction(SampleSignal, &sa, nullptr);
+#else
   real::sigaction(SampleSignal, &sa, nullptr);
+#endif
 
   // Set up handlers for errors
   memset(&sa, 0, sizeof(sa));
   sa.sa_sigaction = on_error;
   sa.sa_flags = SA_SIGINFO;
-  
+
+#ifdef __APPLE__
+  coz_orig_sigaction(SIGSEGV, &sa, nullptr);
+  coz_orig_sigaction(SIGABRT, &sa, nullptr);
+  coz_orig_sigaction(SIGBUS, &sa, nullptr);
+#else
   real::sigaction(SIGSEGV, &sa, nullptr);
   real::sigaction(SIGABRT, &sa, nullptr);
+  real::sigaction(SIGBUS, &sa, nullptr);
+#endif
 
   // Save the output file name
   _output_filename = outfile;
@@ -486,14 +504,25 @@ void profiler::log_samples(ofstream& output, size_t start_time) {
  */
 void profiler::shutdown() {
   if(_shutdown_run.test_and_set() == false) {
-    // Stop sampling in the main thread
-    end_sampling();
+#ifdef __APPLE__
+    // Stop the macOS sampling thread first so no more samples are produced
+    // and no more pthread_kill() calls happen from apply_pending_delays()
+    macos_sampling_stop();
+#endif
 
     // "Signal" the profiler thread to stop
     _running.store(false);
 
     // Join with the profiler thread
+#ifdef __APPLE__
+    // Use __asm-bound original to bypass DYLD interposition
+    coz_orig_pthread_join(_profiler_thread, nullptr);
+#else
     real::pthread_join(_profiler_thread, nullptr);
+#endif
+
+    // Clean up main thread state last
+    end_sampling();
   }
 }
 
@@ -787,10 +816,16 @@ void profiler::process_all_samples() {
  */
 void profiler::apply_pending_delays() {
 #ifdef __APPLE__
+  // Don't signal threads during shutdown — they may have already exited
+  if(!_running.load()) return;
+
   // Signal all threads to wake up and check their delays.
   // Each thread will call add_delays() in its signal handler,
   // which will cause it to pause if it's behind on delays.
   _thread_states.for_each([](pid_t tid, thread_state* state) {
+    // Check _active first — stop() zeroes _target_pthread and then sets _active=false,
+    // so if _active is false the thread is shutting down and we must not signal it.
+    if(!state->sampler._active.load(std::memory_order_acquire)) return;
     pthread_t target = state->sampler._target_pthread;
     if(target != 0) {
       pthread_kill(target, SampleSignal);
@@ -805,8 +840,8 @@ void profiler::apply_pending_delays() {
 void* profiler::start_profiler_thread(void* arg) {
   spinlock* l = (spinlock*)arg;
   profiler::get_instance().profiler_thread(*l);
-  real::pthread_exit(nullptr);
-  // Unreachable return silences compiler warning
+  // Return instead of calling pthread_exit. On macOS, real::pthread_exit goes
+  // through DYLD interposition and would trigger handle_pthread_exit recursion.
   return nullptr;
 }
 
@@ -839,6 +874,8 @@ void profiler::on_error(int signum, siginfo_t* info, void* p) {
     fprintf(stderr, "Segmentation fault at %p\n", info->si_addr);
   } else if(signum == SIGABRT) {
     fprintf(stderr, "Aborted!\n");
+  } else if(signum == SIGBUS) {
+    fprintf(stderr, "Bus error at %p\n", info->si_addr);
   } else {
     fprintf(stderr, "Signal %d at %p\n", signum, info->si_addr);
   }
@@ -851,5 +888,5 @@ void profiler::on_error(int signum, siginfo_t* info, void* p) {
     fprintf(stderr, "  %d: %s\n", i, syms[i]);
   }
 
-  real::_exit(2);
+  _exit(2);
 }
