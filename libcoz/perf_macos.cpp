@@ -29,6 +29,10 @@
 #include "ccutil/log.h"
 #include "ccutil/wrapped_array.h"
 
+// Use the original pthread_create to avoid coz interposition on internal threads
+extern "C" int coz_orig_pthread_create(pthread_t*, const pthread_attr_t*,
+                                        void*(*)(void*), void*);
+
 using ccutil::wrapped_array;
 
 // Get thread ID from Mach port
@@ -80,6 +84,26 @@ static pthread_t g_sampling_thread;
 static std::atomic<bool> g_sampling_active{false};
 static mach_port_t g_sampling_thread_port = MACH_PORT_NULL;
 static uint64_t g_sample_period_ns = 1000000; // 1ms default
+
+// Ports of coz-internal threads that the sampling thread must never suspend.
+static spinlock& get_internal_lock() {
+  static spinlock lock;
+  return lock;
+}
+static std::vector<mach_port_t>& get_internal_ports() {
+  static std::vector<mach_port_t> ports;
+  return ports;
+}
+
+static bool is_internal_thread(mach_port_t port) {
+  if (port == g_sampling_thread_port) return true;
+  spinlock& lock = get_internal_lock();
+  std::vector<mach_port_t>& ports = get_internal_ports();
+  lock.lock();
+  bool found = std::find(ports.begin(), ports.end(), port) != ports.end();
+  lock.unlock();
+  return found;
+}
 
 
 // Store a sample for a given event and signal the target thread
@@ -141,8 +165,8 @@ static void sample_all_threads() {
   for (mach_msg_type_number_t i = 0; i < thread_count; i++) {
     mach_port_t thread = threads[i];
 
-    // Skip the sampling thread
-    if (thread == g_sampling_thread_port) continue;
+    // Skip all coz-internal threads (sampling thread, profiler thread)
+    if (is_internal_thread(thread)) continue;
 
     // Suspend the target thread
     kr = thread_suspend(thread);
@@ -206,7 +230,7 @@ void macos_sampling_start() {
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
-  int rc = pthread_create(&g_sampling_thread, &attr, sampling_thread_func, nullptr);
+  int rc = coz_orig_pthread_create(&g_sampling_thread, &attr, sampling_thread_func, nullptr);
   if (rc != 0) {
     g_sampling_active.store(false, std::memory_order_release);
   }
@@ -432,6 +456,18 @@ perf_event::iterator perf_event::begin() {
 
 perf_event::iterator perf_event::end() {
   return iterator(*this, true);
+}
+
+mach_port_t macos_get_sampling_thread_port() {
+  return g_sampling_thread_port;
+}
+
+void macos_register_internal_thread(mach_port_t port) {
+  spinlock& lock = get_internal_lock();
+  std::vector<mach_port_t>& ports = get_internal_ports();
+  lock.lock();
+  ports.push_back(port);
+  lock.unlock();
 }
 
 #endif // __APPLE__

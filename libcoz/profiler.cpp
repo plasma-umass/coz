@@ -52,77 +52,12 @@ using namespace std;
 static std::atomic<size_t> g_delays_applied{0};
 static std::atomic<size_t> g_delays_skipped{0};
 static std::atomic<size_t> g_delay_checks{0};
-static std::atomic<size_t> g_mach_suspensions{0};
-
-/// Check if a thread is safe to suspend for delays.
-/// Returns true unless thread is in a waiting/blocked state (which could indicate
-/// it's holding a lock or waiting for I/O).
-static bool is_thread_suspendable(mach_port_t thread_port) {
-  thread_basic_info_data_t info;
-  mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
-  kern_return_t kr = thread_info(thread_port, THREAD_BASIC_INFO,
-                                  (thread_info_t)&info, &count);
-  if (kr != KERN_SUCCESS) {
-    return false;
-  }
-  // TH_STATE_RUNNING = 1 (currently executing)
-  // TH_STATE_STOPPED = 2 (stopped, not runnable)
-  // TH_STATE_WAITING = 3 (waiting/blocked)
-  // TH_STATE_UNINTERRUPTIBLE = 4 (waiting uninterruptibly)
-  // TH_STATE_HALTED = 5 (halted at clean point)
-  // Don't suspend threads that are already waiting/blocked - they may be holding locks
-  // or in system calls. Only suspend running threads.
-  return info.run_state == TH_STATE_RUNNING || info.run_state == TH_STATE_STOPPED;
-}
-
-// Track suspension attempts for debugging
-static std::atomic<size_t> g_suspension_attempts{0};
-static std::atomic<size_t> g_suspension_state_blocked{0};
-static std::atomic<size_t> g_suspension_failed{0};
-
-/// Apply delay to a thread using Mach thread suspension.
-/// This directly suspends the thread for the specified duration, then resumes it.
-/// More reliable than signal-based delays for threads in tight compute loops.
-/// Returns the actual delay applied in nanoseconds.
-static size_t apply_delay_via_suspension(mach_port_t thread_port, size_t delay_ns) {
-  if (thread_port == MACH_PORT_NULL || delay_ns == 0) {
-    return 0;
-  }
-
-  g_suspension_attempts.fetch_add(1, std::memory_order_relaxed);
-
-  // Try to suspend the thread directly.
-  // If it's in a blocked state, it will already be "suspended" from a timing perspective,
-  // so we can just add the delay to its local counter without actually suspending.
-  kern_return_t kr = thread_suspend(thread_port);
-  if (kr != KERN_SUCCESS) {
-    // Thread couldn't be suspended - check if it's already blocked/waiting
-    thread_basic_info_data_t info;
-    mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
-    kern_return_t info_kr = thread_info(thread_port, THREAD_BASIC_INFO,
-                                        (thread_info_t)&info, &count);
-    if (info_kr == KERN_SUCCESS &&
-        (info.run_state == TH_STATE_WAITING || info.run_state == TH_STATE_UNINTERRUPTIBLE)) {
-      // Thread is already blocked - it will naturally "catch up" when it unblocks
-      g_suspension_state_blocked.fetch_add(1, std::memory_order_relaxed);
-      return delay_ns;  // Credit the delay anyway since thread is effectively paused
-    }
-    g_suspension_failed.fetch_add(1, std::memory_order_relaxed);
-    return 0;
-  }
-
-  // Wait for the delay duration
-  struct timespec ts;
-  ts.tv_sec = delay_ns / 1000000000;
-  ts.tv_nsec = delay_ns % 1000000000;
-  nanosleep(&ts, nullptr);
-
-  // Resume the thread
-  thread_resume(thread_port);
-
-  g_mach_suspensions.fetch_add(1, std::memory_order_relaxed);
-  return delay_ns;
-}
+// Track nanosleep overshoot separately from the delay counters.
+// On macOS, nanosleep has ~1ms granularity, so the actual sleep time
+// exceeds the requested amount. This overshoot adds to wall clock time
+// but is not reflected in global_delay (to prevent feedback loops).
+// We subtract it from duration to correct for this bias.
+static std::atomic<size_t> g_experiment_overshoot{0};
 #endif
 
 /// Escape a string for JSON output
@@ -227,6 +162,11 @@ void profiler::startup(const string& outfile,
 void profiler::profiler_thread(spinlock& l) {
   VERBOSE << "Profiler thread running!";
 
+#ifdef __APPLE__
+  // Register the profiler thread so the sampling thread never suspends it
+  macos_register_internal_thread(mach_thread_self());
+#endif
+
   // Open the output file
   ofstream output;
   output.open(_output_filename, ios_base::app);
@@ -287,6 +227,7 @@ void profiler::profiler_thread(spinlock& l) {
 #ifdef __APPLE__
         // On macOS, must process samples here to set _next_line
         process_all_samples();
+        apply_pending_delays();
 #endif
         selected = _next_line.load();
       }
@@ -313,11 +254,6 @@ void profiler::profiler_thread(spinlock& l) {
 
     _delay_size.store(delay_size);
 
-    // Save the starting time and sample count
-    size_t start_time = get_time();
-    size_t starting_samples = selected->get_samples();
-    size_t starting_delay_time = _global_delay.load();
-
     // Save throughput point values at the start of the experiment
     vector<unique_ptr<throughput_point::saved>> saved_throughput_points;
     _throughput_points_lock.lock();
@@ -325,7 +261,7 @@ void profiler::profiler_thread(spinlock& l) {
       saved_throughput_points.emplace_back(p.second->save());
     }
     _throughput_points_lock.unlock();
-    
+
     // Save latency point values at the start of the experiment
     vector<unique_ptr<latency_point::saved>> saved_latency_points;
     _latency_points_lock.lock();
@@ -333,6 +269,32 @@ void profiler::profiler_thread(spinlock& l) {
       saved_latency_points.emplace_back(p.second->save());
     }
     _latency_points_lock.unlock();
+
+    // Sync all non-blocked threads' local_delay to global_delay before starting.
+    // This prevents stale residual from a previous experiment from causing threads
+    // to skip delays (local > global branch in add_delays).
+    // Skip blocked threads — their pre_block/post_block mechanism handles accounting.
+    {
+      size_t current_global = _global_delay.load();
+      _thread_states.for_each([current_global](pid_t tid, thread_state* state) {
+        if(!state->is_blocked.load()) {
+          state->local_delay.store(current_global);
+        }
+      });
+    }
+
+#ifdef __APPLE__
+    // Reset overshoot counter for this experiment
+    g_experiment_overshoot.store(0, std::memory_order_relaxed);
+#endif
+
+    // Snapshot timing AFTER setup (saving progress points, syncing delays) to
+    // exclude variable setup overhead from the elapsed time measurement.
+    // Previously this was before setup, causing 0% baseline experiments to have
+    // inflated durations when setup was slow.
+    size_t start_time = get_time();
+    size_t starting_samples = selected->get_samples();
+    size_t starting_delay_time = _global_delay.load();
 
     // Tell threads to start the experiment
     _experiment_active.store(true);
@@ -345,18 +307,24 @@ void profiler::profiler_thread(spinlock& l) {
         // On macOS, process samples from profiler thread since signal-based
         // processing doesn't work when threads are blocked (e.g., in join)
         process_all_samples();
+        apply_pending_delays();
 #endif
       }
     } else {
 #ifdef __APPLE__
-      // On macOS, break the wait into chunks and process samples periodically
-      size_t remaining = experiment_length;
-      size_t chunk = SamplePeriod * SampleBatchSize;
-      while(remaining > 0 && _running) {
-        size_t wait_time = (remaining > chunk) ? chunk : remaining;
-        wait(wait_time);
-        process_all_samples();
-        remaining -= wait_time;
+      // On macOS, break the wait into chunks and process samples periodically.
+      // Use wall clock time to bound the experiment duration, since overhead
+      // from process_all_samples() and apply_pending_delays() can accumulate
+      // significantly (e.g., thread suspension in the sampling thread, lock
+      // contention) causing experiments to run 3-4x longer than intended.
+      {
+        size_t experiment_deadline = get_time() + experiment_length;
+        size_t chunk = SamplePeriod * SampleBatchSize;
+        while(_running && get_time() < experiment_deadline) {
+          wait(chunk);
+          process_all_samples();
+          apply_pending_delays();
+        }
       }
 #else
       wait(experiment_length);
@@ -365,58 +333,83 @@ void profiler::profiler_thread(spinlock& l) {
 
     // Compute experiment parameters
     float speedup = (float)delay_size / (float)SamplePeriod;
-    size_t experiment_delay = _global_delay.load() - starting_delay_time;
-    size_t duration = get_time() - start_time - experiment_delay;
+    size_t end_global_delay = _global_delay.load();
+    size_t end_time = get_time();
+    size_t experiment_delay = end_global_delay - starting_delay_time;
+    size_t elapsed = end_time - start_time;
+#ifdef __APPLE__
+    // On macOS, nanosleep has ~1ms granularity. The overshoot (actual sleep
+    // time minus requested time) adds to wall clock time but isn't tracked
+    // in global_delay (to prevent feedback loops). Subtract it from duration
+    // to correct for this systematic bias.
+    size_t overshoot = g_experiment_overshoot.load(std::memory_order_relaxed);
+    size_t duration = elapsed - experiment_delay - overshoot;
+#else
+    size_t duration = elapsed - experiment_delay;
+#endif
     size_t selected_samples = selected->get_samples() - starting_samples;
-
-    // Log the experiment parameters
-    if(_json_output) {
-      output << "{\"type\":\"experiment\",\"selected\":\"" << line_to_json_string(selected) << "\","
-             << "\"speedup\":" << speedup << ","
-             << "\"duration\":" << duration << ","
-             << "\"selected_samples\":" << selected_samples << "}\n";
-    } else {
-      output << "experiment\t"
-             << "selected=" << selected << "\t"
-             << "speedup=" << speedup << "\t"
-             << "duration=" << duration << "\t"
-             << "selected-samples=" << selected_samples << "\n";
-    }
 
     // Keep a running count of the minimum delta over all progress points
     size_t min_delta = std::numeric_limits<size_t>::max();
 
-    // Log throughput point measurements and update the minimum delta
+    // Compute min_delta first to decide whether to emit this experiment
     for(const auto& s : saved_throughput_points) {
       size_t delta = s->get_delta();
       if(delta < min_delta) min_delta = delta;
-      if(_json_output) {
-        output << "{\"type\":\"throughput_point\",\"name\":\"" << json_escape(s->get_name()) << "\","
-               << "\"delta\":" << delta << "}\n";
-      } else {
-        s->log(output);
-      }
     }
-
-    // Log latency point measurements and update the minimum delta
     for(const auto& s : saved_latency_points) {
       size_t begin_delta = s->get_begin_delta();
       size_t end_delta = s->get_end_delta();
       if(begin_delta < min_delta) min_delta = begin_delta;
       if(end_delta < min_delta) min_delta = end_delta;
+    }
+
+    // Only emit experiment data when we have enough progress point visits.
+    // Low-delta experiments (e.g., from warmup, end-of-benchmark, or boundary
+    // effects) have unreliable throughput measurements that corrupt the baseline.
+    if(min_delta >= ExperimentTargetDelta) {
       if(_json_output) {
-        output << "{\"type\":\"latency_point\",\"name\":\"" << json_escape(s->get_name()) << "\","
-               << "\"arrivals\":" << begin_delta << ","
-               << "\"departures\":" << end_delta << ","
-               << "\"difference\":" << s->get_difference() << "}\n";
+        output << "{\"type\":\"experiment\",\"selected\":\"" << line_to_json_string(selected) << "\","
+               << "\"speedup\":" << speedup << ","
+               << "\"duration\":" << duration << ","
+               << "\"selected_samples\":" << selected_samples << "}\n";
       } else {
-        s->log(output);
+        output << "experiment\t"
+               << "selected=" << selected << "\t"
+               << "speedup=" << speedup << "\t"
+               << "duration=" << duration << "\t"
+               << "selected-samples=" << selected_samples << "\n";
+      }
+
+      for(const auto& s : saved_throughput_points) {
+        size_t delta = s->get_delta();
+        if(_json_output) {
+          output << "{\"type\":\"throughput_point\",\"name\":\"" << json_escape(s->get_name()) << "\","
+                 << "\"delta\":" << delta << "}\n";
+        } else {
+          s->log(output);
+        }
+      }
+
+      for(const auto& s : saved_latency_points) {
+        if(_json_output) {
+          output << "{\"type\":\"latency_point\",\"name\":\"" << json_escape(s->get_name()) << "\","
+                 << "\"arrivals\":" << s->get_begin_delta() << ","
+                 << "\"departures\":" << s->get_end_delta() << ","
+                 << "\"difference\":" << s->get_difference() << "}\n";
+        } else {
+          s->log(output);
+        }
       }
     }
 
     // Lengthen the experiment if the min_delta is too small
     if(min_delta < ExperimentTargetDelta) {
       experiment_length *= 2;
+      // Cap to prevent experiments from consuming too much of the benchmark's runtime.
+      // With very long experiments, we get fewer data points and higher noise.
+      size_t max_length = (size_t)ExperimentMinTime * 16;  // 8 seconds
+      if(experiment_length > max_length) experiment_length = max_length;
     } else if(min_delta > ExperimentTargetDelta*2 && experiment_length >= ExperimentMinTime*2) {
       experiment_length /= 2;
     }
@@ -426,14 +419,9 @@ void profiler::profiler_thread(spinlock& l) {
     size_t checks = g_delay_checks.exchange(0, std::memory_order_relaxed);
     size_t applied = g_delays_applied.exchange(0, std::memory_order_relaxed);
     size_t skipped = g_delays_skipped.exchange(0, std::memory_order_relaxed);
-    size_t suspensions = g_mach_suspensions.exchange(0, std::memory_order_relaxed);
-    size_t attempts = g_suspension_attempts.exchange(0, std::memory_order_relaxed);
-    size_t state_blocked = g_suspension_state_blocked.exchange(0, std::memory_order_relaxed);
-    size_t failed = g_suspension_failed.exchange(0, std::memory_order_relaxed);
     VERBOSE << "Delay stats: checks=" << checks
             << ", applied=" << applied << ", skipped=" << skipped
-            << ", susp_attempts=" << attempts << ", susp_state_blocked=" << state_blocked
-            << ", susp_failed=" << failed << ", susp_success=" << suspensions
+            << ", overshoot=" << overshoot / 1000000 << "ms"
             << ", speedup=" << (speedup * 100) << "%"
             << ", min_delta=" << min_delta;
 #endif
@@ -637,6 +625,11 @@ std::pair<line*,bool> profiler::match_line(perf_event::record& sample) {
 void profiler::add_delays(thread_state* state) {
   // Add delays if there is an experiment running
   if(_experiment_active.load()) {
+    // Don't execute delays on threads that are blocked (e.g., in pthread_join).
+    // On macOS, wall-clock timers fire even on blocked threads, but these threads
+    // should not pause — post_block() will handle delay accounting on wake-up.
+    if(state->is_blocked.load()) return;
+
     // Take a snapshot of the global and local delays
     size_t global_delay = _global_delay.load();
     size_t local = state->local_delay.load();
@@ -647,24 +640,38 @@ void profiler::add_delays(thread_state* state) {
 
     // Is this thread ahead or behind on delays?
     if(local > global_delay) {
+#ifdef __APPLE__
+      // On macOS, process_all_samples() pushes _global_delay when crediting
+      // the sampled thread. Don't push it again here — overshoot from nanosleep
+      // would amplify _global_delay beyond elapsed time, causing underflow in
+      // the duration calculation.
+      g_delays_skipped.fetch_add(1, std::memory_order_relaxed);
+#else
       // Thread is ahead: increase the global delay time to make other threads pause
       _global_delay.fetch_add(local - global_delay);
-#ifdef __APPLE__
-      g_delays_skipped.fetch_add(1, std::memory_order_relaxed);
 #endif
 
     } else if(local < global_delay) {
       // Thread is behind: Pause this thread to catch up
 
       // Pause and record the exact amount of time this thread paused
+      size_t needed = global_delay - local;
       state->sampler.stop();
-      size_t waited = wait(global_delay - local);
-      state->local_delay.fetch_add(waited);
-      state->sampler.start();
+      size_t waited = wait(needed);
 #ifdef __APPLE__
+      // Cap the increment to prevent nanosleep overshoot from inflating delays.
+      // macOS nanosleep has ~1ms granularity, and overshoot would propagate
+      // through the local > global branch, amplifying _global_delay.
+      state->local_delay.fetch_add(needed);
+      // Track overshoot separately for duration correction
+      if(waited > needed) {
+        g_experiment_overshoot.fetch_add(waited - needed, std::memory_order_relaxed);
+      }
       g_delays_applied.fetch_add(1, std::memory_order_relaxed);
-      VERBOSE << "Thread applied delay: waited=" << waited << "ns, global=" << global_delay << ", local=" << local;
+#else
+      state->local_delay.fetch_add(waited);
 #endif
+      state->sampler.start();
     }
 
   } else {
@@ -732,17 +739,19 @@ void profiler::process_all_samples() {
           sampled_tids.push_back(sample_tid);
 
           // Find the thread that was sampled and credit it with the delay
-          // Note: On macOS, pthread_create interposition may not work, so thread lookup
-          // often fails. We still apply delays via Mach thread suspension below.
           thread_state* sampled_state = _thread_states.find(static_cast<pid_t>(sample_tid));
           if(sampled_state) {
-            // Credit this thread so it won't pause
-            size_t new_local = sampled_state->local_delay.fetch_add(delay_size) + delay_size;
+            // Push global_delay by exactly delay_size so other threads will catch up.
+            // Using fetch_add (not CAS-to-new_local) prevents stale local_delay
+            // residue from prior experiments inflating _global_delay.
+            size_t new_global = _global_delay.fetch_add(delay_size) + delay_size;
 
-            // Push global_delay so other threads will need to catch up
-            size_t global = _global_delay.load();
-            while(new_local > global) {
-              if(_global_delay.compare_exchange_weak(global, new_local)) {
+            // Ensure the sampled thread's local_delay is at least new_global so it
+            // won't be incorrectly delayed in add_delays() — this thread is being
+            // "sped up" and should never pause.
+            size_t local = sampled_state->local_delay.load();
+            while(local < new_global) {
+              if(sampled_state->local_delay.compare_exchange_weak(local, new_global)) {
                 break;
               }
             }
@@ -756,105 +765,19 @@ void profiler::process_all_samples() {
     }
   });
 
-  // Log sample processing stats when verbose
-  if(samples_processed > 0) {
+  // Log sample processing stats periodically when verbose (not every 10ms call)
+  static size_t pas_log_counter = 0;
+  if(samples_processed > 0 && ++pas_log_counter % 100 == 1) {
     VERBOSE << "process_all_samples: processed=" << samples_processed
             << ", selected_hits=" << selected_line_hits
             << ", delay_size=" << delay_size;
   }
 
-#ifdef __APPLE__
-  // Apply delays directly using Mach thread suspension.
-  // When samples hit the selected line, delay all OTHER threads (not the sampled one).
-  //
-  // Key: Suspend all target threads SIMULTANEOUSLY, then sleep once, then resume all.
-  // This is more efficient and more accurately simulates virtual speedup.
-  if(experiment_active && delay_size > 0 && selected_line_hits > 0) {
-    // Get all threads in the process
-    thread_act_array_t threads;
-    mach_msg_type_number_t thread_count;
-    kern_return_t kr = task_threads(mach_task_self(), &threads, &thread_count);
-
-    if(kr == KERN_SUCCESS) {
-      // Get current thread to skip it
-      mach_port_t self_thread = mach_thread_self();
-
-      // First pass: suspend all target threads
-      std::vector<mach_port_t> suspended_threads;
-      for(mach_msg_type_number_t i = 0; i < thread_count; i++) {
-        mach_port_t thread = threads[i];
-
-        // Skip the profiler thread (current thread)
-        if(thread == self_thread) {
-          continue;
-        }
-
-        // Get thread ID to check if this is a sampled thread
-        thread_identifier_info_data_t info;
-        mach_msg_type_number_t info_count = THREAD_IDENTIFIER_INFO_COUNT;
-        kern_return_t info_kr = thread_info(thread, THREAD_IDENTIFIER_INFO,
-                                            (thread_info_t)&info, &info_count);
-        if(info_kr == KERN_SUCCESS) {
-          // Skip threads that were sampled on the selected line (don't slow them down)
-          bool is_sampled = false;
-          for(uint64_t sampled_tid : sampled_tids) {
-            if(info.thread_id == sampled_tid) {
-              is_sampled = true;
-              break;
-            }
-          }
-          if(is_sampled) {
-            continue;
-          }
-        }
-
-        // Try to suspend this thread
-        g_suspension_attempts.fetch_add(1, std::memory_order_relaxed);
-        kern_return_t susp_kr = thread_suspend(thread);
-        if(susp_kr == KERN_SUCCESS) {
-          suspended_threads.push_back(thread);
-          g_mach_suspensions.fetch_add(1, std::memory_order_relaxed);
-        } else {
-          g_suspension_failed.fetch_add(1, std::memory_order_relaxed);
-        }
-      }
-
-      // Sleep once for the delay
-      // The delay simulates virtual speedup: when samples hit the selected line,
-      // pause other threads to make the selected code appear relatively faster.
-      // Use delay_size directly (already scaled by speedup percentage).
-      if(!suspended_threads.empty() && delay_size > 0) {
-        // Apply delay proportional to number of hits
-        // Each hit represents one sample period where selected line was executing
-        size_t total_delay = delay_size * selected_line_hits;
-
-        // Cap at batch interval to avoid over-delaying
-        size_t max_delay = SamplePeriod * SampleBatchSize;  // 10ms per batch
-        if(total_delay > max_delay) {
-          total_delay = max_delay;
-        }
-
-        struct timespec ts;
-        ts.tv_sec = total_delay / 1000000000;
-        ts.tv_nsec = total_delay % 1000000000;
-        nanosleep(&ts, nullptr);
-        g_delays_applied.fetch_add(suspended_threads.size(), std::memory_order_relaxed);
-      }
-
-      // Resume all suspended threads
-      for(mach_port_t thread : suspended_threads) {
-        thread_resume(thread);
-      }
-
-      // Deallocate thread ports
-      for(mach_msg_type_number_t i = 0; i < thread_count; i++) {
-        mach_port_deallocate(mach_task_self(), threads[i]);
-      }
-      vm_deallocate(mach_task_self(), (vm_address_t)threads, thread_count * sizeof(thread_act_t));
-      mach_port_deallocate(mach_task_self(), self_thread);
-    }
-  }
-#endif
+  // Delays are applied via the counter-based mechanism: process_all_samples()
+  // credits the sampled thread's local_delay and pushes global_delay; other
+  // threads pause themselves in add_delays() when they see local < global.
+  // This matches the Linux implementation and ensures delay time is properly
+  // tracked in global_delay for the duration correction.
 }
 
 /**
@@ -888,9 +811,6 @@ void* profiler::start_profiler_thread(void* arg) {
 }
 
 void profiler::samples_ready(int signum, siginfo_t* info, void* p) {
-  // On macOS, samples are captured by the sampling thread via thread suspension.
-  // This signal handler just triggers sample processing.
-
   thread_state* state = get_instance().get_thread_state();
   if (!state) {
     return;
@@ -898,8 +818,20 @@ void profiler::samples_ready(int signum, siginfo_t* info, void* p) {
   if (state->check_in_use()) {
     return;
   }
-  // Process all available samples
+
+#ifdef __APPLE__
+  // On macOS, samples are processed centrally by process_all_samples() on the
+  // profiler thread. The signal handler only needs to apply pending delays.
+  // Processing samples here would double-credit delays because all samples
+  // are stored in the main thread's sampler regardless of which thread was sampled.
+  state->set_in_use(true);
+  get_instance().add_delays(state);
+  state->set_in_use(false);
+#else
+  // On Linux, each thread has its own perf_event with samples.
+  // Process this thread's samples and apply delays.
   profiler::get_instance().process_samples(state);
+#endif
 }
 
 void profiler::on_error(int signum, siginfo_t* info, void* p) {

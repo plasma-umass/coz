@@ -19,6 +19,7 @@ public:
   perf_event sampler;       //< The sampler object for this thread
   timer process_timer;      //< The timer that triggers sample processing for this thread
   size_t pre_block_time;    //< The time saved before (possibly) blocking
+  std::atomic<bool> is_blocked{false};  //< True between pre_block() and post_block(); skip delays
   
   inline void set_in_use(bool value) {
     in_use = value;

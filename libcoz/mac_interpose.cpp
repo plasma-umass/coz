@@ -53,8 +53,7 @@ int coz_pthread_create(pthread_t* thread,
   extern int coz_handle_pthread_create(pthread_t*, const pthread_attr_t*, thread_fn_t, void*);
   return coz_handle_pthread_create(thread, attr, (thread_fn_t)fn, arg);
 }
-// Temporarily disabled - causes issues with profiler thread creation
-// DYLD_INTERPOSE(coz_pthread_create, pthread_create);
+DYLD_INTERPOSE(coz_pthread_create, pthread_create);
 
 // ============================================================================
 // pthread_exit wrapper
