@@ -35,50 +35,49 @@ jobs:
         cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
         make -j$(nproc)
 
-    - name: Build toy benchmark
+    - name: Build benchmarks
       run: |
         cd build
         cmake .. -DBUILD_BENCHMARKS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
-        make -j$(nproc) toy
+        make -j$(nproc) toy lock_test
 
     - name: Verify build artifacts
       run: |
         test -f build/libcoz/libcoz.so
         test -x build/benchmarks/toy/toy
+        test -x build/benchmarks/lock_test/lock_test
         echo "Build artifacts verified"
 
     - name: Run toy benchmark with coz
       run: |
         cd build
         # Run coz with the toy benchmark for a short duration
-        timeout 30 ../coz run -o profile.coz --- ./benchmarks/toy/toy || true
+        timeout 30 ../coz run -o profile.jsonl --- ./benchmarks/toy/toy || true
 
-        # Check that profile was created
-        if [ ! -f profile.coz ]; then
-          echo "ERROR: profile.coz was not created"
+        if [ ! -f profile.jsonl ]; then
+          echo "ERROR: profile.jsonl was not created"
           exit 1
         fi
 
         echo "Profile created successfully"
 
-    - name: Validate profile output
+    - name: Validate toy profile output
       run: |
         cd build
 
-        # Check profile has content
-        if [ ! -s profile.coz ]; then
-          echo "ERROR: profile.coz is empty"
+        if [ ! -s profile.jsonl ]; then
+          echo "ERROR: profile.jsonl is empty"
           exit 1
         fi
 
         echo "=== Profile Contents ==="
-        cat profile.coz
+        cat profile.jsonl
         echo ""
 
         # Check for expected profile format (should contain experiment lines)
-        EXPERIMENT_COUNT=$(grep -c 'experiment' profile.coz || echo 0)
+        EXPERIMENT_COUNT=$(grep -c 'experiment' profile.jsonl || echo 0)
         echo "=== Profile Summary ==="
-        echo "  Total lines: $(wc -l < profile.coz)"
+        echo "  Total lines: $(wc -l < profile.jsonl)"
         echo "  Experiments: $EXPERIMENT_COUNT"
 
         if [ "$EXPERIMENT_COUNT" -eq 0 ]; then
@@ -87,8 +86,7 @@ jobs:
         fi
 
         # Validate profile references toy.cpp line 18 (the loop in function a())
-        # This is the critical line that should show optimization potential
-        if grep -q "toy.cpp:18" profile.coz; then
+        if grep -q "toy.cpp:18" profile.jsonl; then
           echo "  Found experiments for toy.cpp:18 (loop in function a())"
         else
           echo "ERROR: toy.cpp:18 not found in profile - expected loop in a() to be profiled"
@@ -98,26 +96,18 @@ jobs:
         echo ""
         echo "Profile validation PASSED"
 
-    - name: Validate optimization potential
+    - name: Validate toy optimization potential
       run: |
         cd build
-
-        # Validate that toy.cpp:18 shows expected optimization behavior:
-        # - Linear speedup potential up to ~50% (because a() takes 2x as long as b())
-        # - Diminishing returns beyond 50% (speeding up a() more doesn't help since b() becomes bottleneck)
 
         python3 << 'VALIDATION_SCRIPT'
         import sys
         import json
 
-        # Parse profile.coz (JSON Lines format)
-        # Each line is a JSON object with a "type" field:
-        #   {"type":"experiment","selected":"path:line","speedup":0.30,"duration":N,"selected_samples":N}
-        #   {"type":"throughput_point","name":"path:line","delta":N}
         experiments = []
         current_exp = None
 
-        with open('profile.coz', 'r') as f:
+        with open('profile.jsonl', 'r') as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -142,7 +132,7 @@ jobs:
         # Group by speedup percentage and calculate average delta
         speedup_deltas = {}
         for e in line18_exps:
-            s = int(float(e['speedup']) * 100)  # Convert decimal (0.40) to percentage (40)
+            s = int(float(e['speedup']) * 100)
             if s not in speedup_deltas:
                 speedup_deltas[s] = []
             speedup_deltas[s].append(e['delta'])
@@ -153,7 +143,6 @@ jobs:
             avg_delta = sum(deltas) / len(deltas)
             print(f"  {speedup}%: avg_delta={avg_delta:.2f} (n={len(deltas)})")
 
-        # Validation: Check that we have data for multiple speedup levels
         if len(speedup_deltas) < 3:
             print(f"WARNING: Only {len(speedup_deltas)} speedup levels - need more data for accurate validation")
         else:
@@ -163,19 +152,13 @@ jobs:
         print("\nProfile validation COMPLETE")
         VALIDATION_SCRIPT
 
-    - name: Build lock_test benchmark
-      run: |
-        cd build
-        make -j$(nproc) lock_test
-
     - name: Run lock_test benchmark with coz
       run: |
         cd build
-        # Run coz with the lock_test benchmark for a short duration
-        timeout 60 ../coz run -o lock_test_profile.coz --- ./benchmarks/lock_test/lock_test || true
+        timeout 60 ../coz run -o lock_test_profile.jsonl --- ./benchmarks/lock_test/lock_test || true
 
-        if [ ! -f lock_test_profile.coz ]; then
-          echo "ERROR: lock_test_profile.coz was not created"
+        if [ ! -f lock_test_profile.jsonl ]; then
+          echo "ERROR: lock_test_profile.jsonl was not created"
           exit 1
         fi
 
@@ -185,13 +168,13 @@ jobs:
       run: |
         cd build
 
-        if [ ! -s lock_test_profile.coz ]; then
-          echo "ERROR: lock_test_profile.coz is empty"
+        if [ ! -s lock_test_profile.jsonl ]; then
+          echo "ERROR: lock_test_profile.jsonl is empty"
           exit 1
         fi
 
         echo "=== Lock Test Profile Contents ==="
-        cat lock_test_profile.coz
+        cat lock_test_profile.jsonl
         echo ""
 
         python3 << 'VALIDATION_SCRIPT'
@@ -201,7 +184,7 @@ jobs:
         experiments = []
         current_exp = None
 
-        with open('lock_test_profile.coz', 'r') as f:
+        with open('lock_test_profile.jsonl', 'r') as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -226,7 +209,7 @@ jobs:
             sys.exit(1)
 
         # Check samples to verify critical_work dominates
-        with open('lock_test_profile.coz', 'r') as f:
+        with open('lock_test_profile.jsonl', 'r') as f:
             for line in f:
                 obj = json.loads(line.strip())
                 if obj.get('type') == 'samples':
@@ -243,6 +226,6 @@ jobs:
       with:
         name: coz-profiles
         path: |
-          build/profile.coz
-          build/lock_test_profile.coz
+          build/profile.jsonl
+          build/lock_test_profile.jsonl
         retention-days: 7
