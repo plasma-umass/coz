@@ -1,3 +1,6 @@
+// Minimum number of progress point visits for a data point to be reliable.
+// Matches ExperimentTargetDelta in profiler.h.
+const MIN_DELTA = 5;
 /**
  * Returns if this data point is valid.
  * Infinity / -Infinity occurs when dividing by 0.
@@ -5,6 +8,16 @@
  */
 function isValidDataPoint(data) {
     return !isNaN(data) && data !== Infinity && data !== -Infinity;
+}
+/**
+ * Returns true if this experiment data has enough observations to be reliable.
+ */
+function hasEnoughData(data) {
+    if (data.type === 'throughput') {
+        return data.delta >= MIN_DELTA;
+    }
+    // For latency, require minimum arrivals
+    return data.arrivals >= MIN_DELTA;
 }
 /**
  * Get the applicable data point from this particular experiment.
@@ -165,7 +178,7 @@ class Profile {
             else if (entry.type === 'experiment') {
                 experiment = entry;
             }
-            else if (entry.type === 'throughput-point' || entry.type === 'progress-point') {
+            else if (entry.type === 'throughput-point' || entry.type === 'progress-point' || entry.type === 'throughput_point') {
                 this.addThroughputMeasurement(experiment, entry);
             }
             else if (entry.type === 'latency-point') {
@@ -253,7 +266,7 @@ class Profile {
                 // Get the data for this progress point, if any
                 let point_data = this._data[selected][progress_points[i]];
                 // Check to be sure the point was observed and we have baseline (zero speedup) data
-                if (point_data !== undefined && point_data[0] !== undefined) {
+                if (point_data !== undefined && point_data[0] !== undefined && hasEnoughData(point_data[0])) {
                     // Compute the baseline data point
                     let baseline_data_point = getDataPoint(point_data[0]);
                     let maximize = shouldMaximize(point_data[0]);
@@ -264,6 +277,10 @@ class Profile {
                     // Loop over measurements and compute progress speedups in D3-friendly format
                     let measurements = [];
                     for (let speedup in point_data) {
+                        // Skip data points with too few observations
+                        if (!hasEnoughData(point_data[speedup])) {
+                            continue;
+                        }
                         let data_point = getDataPoint(point_data[speedup]);
                         // Skip invalid data.
                         if (!isValidDataPoint(data_point)) {

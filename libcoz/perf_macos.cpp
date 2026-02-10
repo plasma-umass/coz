@@ -29,6 +29,11 @@
 #include "ccutil/log.h"
 #include "ccutil/wrapped_array.h"
 
+// Use the originals from mac_interpose.cpp to avoid coz DYLD interposition
+extern "C" int coz_orig_pthread_create(pthread_t*, const pthread_attr_t*,
+                                        void*(*)(void*), void*);
+extern "C" int coz_orig_pthread_sigmask(int, const sigset_t*, sigset_t*);
+
 using ccutil::wrapped_array;
 
 // Get thread ID from Mach port
@@ -80,6 +85,26 @@ static pthread_t g_sampling_thread;
 static std::atomic<bool> g_sampling_active{false};
 static mach_port_t g_sampling_thread_port = MACH_PORT_NULL;
 static uint64_t g_sample_period_ns = 1000000; // 1ms default
+
+// Ports of coz-internal threads that the sampling thread must never suspend.
+static spinlock& get_internal_lock() {
+  static spinlock lock;
+  return lock;
+}
+static std::vector<mach_port_t>& get_internal_ports() {
+  static std::vector<mach_port_t> ports;
+  return ports;
+}
+
+static bool is_internal_thread(mach_port_t port) {
+  if (port == g_sampling_thread_port) return true;
+  spinlock& lock = get_internal_lock();
+  std::vector<mach_port_t>& ports = get_internal_ports();
+  lock.lock();
+  bool found = std::find(ports.begin(), ports.end(), port) != ports.end();
+  lock.unlock();
+  return found;
+}
 
 
 // Store a sample for a given event and signal the target thread
@@ -141,8 +166,8 @@ static void sample_all_threads() {
   for (mach_msg_type_number_t i = 0; i < thread_count; i++) {
     mach_port_t thread = threads[i];
 
-    // Skip the sampling thread
-    if (thread == g_sampling_thread_port) continue;
+    // Skip all coz-internal threads (sampling thread, profiler thread)
+    if (is_internal_thread(thread)) continue;
 
     // Suspend the target thread
     kr = thread_suspend(thread);
@@ -175,11 +200,13 @@ static void* sampling_thread_func(void* arg) {
   // Get our own Mach thread port
   g_sampling_thread_port = mach_thread_self();
 
-  // Block SIGPROF in sampling thread to avoid self-interference
+  // Block SIGPROF in sampling thread to avoid self-interference.
+  // Use the original pthread_sigmask to bypass our DYLD interposition
+  // which strips coz's signals from SIG_BLOCK masks.
   sigset_t mask;
   sigemptyset(&mask);
   sigaddset(&mask, SIGPROF);
-  pthread_sigmask(SIG_BLOCK, &mask, nullptr);
+  coz_orig_pthread_sigmask(SIG_BLOCK, &mask, nullptr);
 
   // Calculate sleep interval
   struct timespec sleep_time;
@@ -206,7 +233,7 @@ void macos_sampling_start() {
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
-  int rc = pthread_create(&g_sampling_thread, &attr, sampling_thread_func, nullptr);
+  int rc = coz_orig_pthread_create(&g_sampling_thread, &attr, sampling_thread_func, nullptr);
   if (rc != 0) {
     g_sampling_active.store(false, std::memory_order_release);
   }
@@ -345,6 +372,10 @@ void perf_event::start() {
 void perf_event::stop() {
   if (!_active.load(std::memory_order_relaxed)) return;
 
+  // Zero _target_pthread before unregistering so that apply_pending_delays()
+  // won't call pthread_kill() on a stale handle after the thread exits.
+  _target_pthread = 0;
+
   _active.store(false, std::memory_order_release);
   macos_sampling_unregister_event(this);
 }
@@ -432,6 +463,18 @@ perf_event::iterator perf_event::begin() {
 
 perf_event::iterator perf_event::end() {
   return iterator(*this, true);
+}
+
+mach_port_t macos_get_sampling_thread_port() {
+  return g_sampling_thread_port;
+}
+
+void macos_register_internal_thread(mach_port_t port) {
+  spinlock& lock = get_internal_lock();
+  std::vector<mach_port_t>& ports = get_internal_ports();
+  lock.lock();
+  ports.push_back(port);
+  lock.unlock();
 }
 
 #endif // __APPLE__

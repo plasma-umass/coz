@@ -57,22 +57,28 @@ perf_event::perf_event(struct perf_event_attr& pe, pid_t pid, int cpu) :
   // Open the file
   _fd = perf_event_open(&pe, pid, cpu, -1, 0);
   if (_fd == -1) {
-      std::string path = "/proc/sys/kernel/perf_event_paranoid";
+      const char* path = "/proc/sys/kernel/perf_event_paranoid";
+      int value = -1;
 
-      FILE *file = fopen(path.c_str(), "r");
-      REQUIRE(file != NULL) << "Failed to open " << path << ": " << strerror(errno);
+      FILE *file = fopen(path, "r");
+      if (file != NULL) {
+          char value_str[16];
+          if (fgets(value_str, sizeof(value_str), file) != NULL) {
+              value = atoi(value_str);
+          }
+          fclose(file);
+      }
 
-      char value_str[3];
-      int res = fread(value_str, sizeof(value_str), 1, file);
-      REQUIRE(res != -1) << "Failed to read from " << path << ": " << strerror(errno);
-
-      value_str[2] = '\0';
-      int value = atoi(value_str);
-
-      FATAL << "Failed to open perf event. "
-            << "Consider tweaking " << path << " to 2 or less "
-            << "(current value is " << value << "), "
-            << "or run coz as a privileged user (with CAP_SYS_ADMIN).";
+      fprintf(stderr, "Failed to open perf event: %s\n", strerror(errno));
+      if (value >= 0) {
+          fprintf(stderr, "Current value of %s is %d.\n"
+                          "To fix, run:  echo 2 | sudo tee %s\n"
+                          "Or run coz as a privileged user (with CAP_SYS_ADMIN).\n",
+                          path, value, path);
+      } else {
+          fprintf(stderr, "Consider running coz as a privileged user (with CAP_SYS_ADMIN).\n");
+      }
+      _exit(1);
   }
 
   // If sampling, map the perf event file

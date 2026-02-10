@@ -7,17 +7,13 @@
 
 #include "inspect.h"
 
+#include "lief_loader.h"
+
 #ifdef __APPLE__
-  #include "elf_compat.h"
-  #include "macho_support.h"
   #include <mach-o/dyld.h>
-#else
-  #include <elf.h>
 #endif
-#include <fcntl.h>
 #include <stdlib.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 #include <cstdint>
@@ -25,7 +21,6 @@
 #include <fstream>
 #include <map>
 #include <set>
-#include <sstream>
 #include <string>
 #include <system_error>
 #include <unordered_map>
@@ -34,7 +29,6 @@
 
 #include <algorithm>
 #include <dwarf++.hh>
-#include <elf++.hh>
 
 #include "util.h"
 
@@ -43,40 +37,6 @@
 using namespace std;
 
 static dwarf::value find_attribute(const dwarf::die& d, dwarf::DW_AT attr);
-
-/**
- * Locate the build ID encoded in an ELF file and return it as a formatted string
- */
-static string find_build_id(elf::elf& f) {
-  for(auto& section : f.sections()) {
-    if(section.get_hdr().type == elf::sht::note) {
-      uintptr_t base = reinterpret_cast<uintptr_t>(section.data());
-      size_t offset = 0;
-      while(offset < section.size()) {
-        Elf64_Nhdr* hdr = reinterpret_cast<Elf64_Nhdr*>(base + offset);
-
-        if(hdr->n_type == NT_GNU_BUILD_ID) {
-          // Found the build-id note
-          stringstream ss;
-          uintptr_t desc_base = base + offset + sizeof(Elf64_Nhdr) + hdr->n_namesz;
-          uint8_t* build_id = reinterpret_cast<uint8_t*>(desc_base);
-          for(size_t i = 0; i < hdr->n_descsz; i++) {
-            ss.flags(ios::hex);
-            ss.width(2);
-            ss.fill('0');
-            ss << static_cast<size_t>(build_id[i]);
-          }
-          return ss.str();
-
-        } else {
-          // Advance to the next note header
-          offset += sizeof(Elf64_Nhdr) + hdr->n_namesz + hdr->n_descsz;
-        }
-      }
-    }
-  }
-  return "";
-}
 
 static string absolute_path(const string filename) {
   if(filename[0] == '/') return filename;
@@ -140,102 +100,6 @@ static const string get_full_path(const string filename) {
   }
 
   return "";
-}
-
-/**
- * Locate an ELF file that contains debug symbols for the file provided by name.
- * This will work for files specified by relative path, absolute path, or raw name
- * resolved via the PATH variable.
- */
-static elf::elf locate_debug_executable(const string filename) {
-  elf::elf f;
-
-  const string full_path = get_full_path(filename);
-
-  // If a full path wasn't found, return the invalid ELF file
-  if(full_path.length() == 0) {
-    WARNING << "Full path is empty, returning invalid elf";
-    return f;
-  }
-
-  int fd = open(full_path.c_str(), O_RDONLY);
-
-  // If the file couldn't be opened, return the invalid ELF file
-  if(fd < 0) {
-    return f;
-  }
-
-  // Load the opened ELF file
-  f = elf::elf(elf::create_mmap_loader(fd));
-
-  // If this file has a .debug_info section, return it
-  if(f.get_section(".debug_info").valid()) {
-    return f;
-  }
-
-#ifdef __APPLE__
-  // On macOS, check for .dSYM bundle
-  string binary_name = full_path.substr(full_path.find_last_of('/') + 1);
-  string dsym_path = full_path + ".dSYM/Contents/Resources/DWARF/" + binary_name;
-
-  int dsym_fd = open(dsym_path.c_str(), O_RDONLY);
-  if(dsym_fd >= 0) {
-    try {
-      elf::elf dsym_f = elf::elf(elf::create_mmap_loader(dsym_fd));
-      auto debug_info = dsym_f.get_section(".debug_info");
-      if(debug_info.valid()) {
-        return dsym_f;
-      }
-    } catch (const std::exception& e) {
-      (void)e;
-    }
-  }
-#endif
-
-  // If there isn't a .debug_info section, check for the .gnu_debuglink section
-  auto& link_section = f.get_section(".gnu_debuglink");
-
-  // Store the full path to the executable and its directory name
-  string directory = full_path.substr(0, full_path.find_last_of('/'));
-
-  // Build a set of paths to search for a debug version of the file
-  vector<string> search_paths;
-
-  // Check for a build-id section
-  string build_id = find_build_id(f);
-  if(build_id.length() > 0) {
-    string prefix = build_id.substr(0, 2);
-    string suffix = build_id.substr(2);
-
-    auto p = string("/usr/lib/debug/.build-id/") + prefix + "/" + suffix + ".debug";
-    search_paths.push_back(p);
-  }
-
-  // Check for a debug_link section
-  if(link_section.valid()) {
-    string link_name = reinterpret_cast<const char*>(link_section.data());
-
-    search_paths.push_back(directory + "/" + link_name);
-    search_paths.push_back(directory + "/.debug/" + link_name);
-    search_paths.push_back("/usr/lib/debug" + directory + "/" + link_name);
-  }
-
-  // Clear the loaded file so if we have to return it, it won't be valid()
-  f = elf::elf();
-
-  // Try all the usable search paths
-  for(const string& path : search_paths) {
-    fd = open(path.c_str(), O_RDONLY);
-    if(fd >= 0) {
-      f = elf::elf(elf::create_mmap_loader(fd));
-      if(f.get_section(".debug_info").valid()) {
-        break;
-      }
-      f = elf::elf();
-    }
-  }
-
-  return f;
 }
 
 #ifdef __APPLE__
@@ -518,10 +382,10 @@ void memory_map::build(const unordered_set<string>& binary_scope,
     if(in_scope(f.first, binary_scope)) {
       try {
         if(process_file(f.first, f.second, source_scope, allow_system_sources)) {
-          INFO << "Including lines from executable " << f.first;
+          VERBOSE << "Including lines from executable " << f.first;
           in_scope_count++;
         } else {
-          INFO << "Unable to locate debug information for " << f.first;
+          VERBOSE << "Unable to locate debug information for " << f.first;
         }
       } catch(const system_error& e) {
         WARNING << "Processing file \"" << f.first << "\" failed: " << e.what();
@@ -681,38 +545,22 @@ void memory_map::process_inlines(const dwarf::die& d,
 bool memory_map::process_file(const string& name, uintptr_t load_address,
                               const unordered_set<string>& source_scope,
                               bool allow_system_sources) {
-#ifdef __APPLE__
-  // On macOS, use macho_support to load DWARF from Mach-O binaries
-  auto loader = macho_support::load_debug_info(name);
+  // Use unified LIEF-based loader for both ELF and Mach-O
+  auto loader = lief_loader::load(name);
   if(!loader) {
     return false;
   }
   dwarf::dwarf d(loader);
-  // On macOS, load_address is already the ASLR slide from dyld
-#else
-  elf::elf f = locate_debug_executable(name);
-  // If a debug version of the file could not be located, return false
-  if(!f.valid()) {
-    return false;
+
+#ifndef __APPLE__
+  // On Linux, adjust load_address for static executables (ET_EXEC)
+  // Static executables are loaded at fixed addresses (typically 0)
+  // PIE executables and shared libraries (ET_DYN) use the load address from /proc/self/maps
+  if(lief_loader::is_static_executable(name)) {
+    load_address = 0;
   }
-
-  switch(f.get_hdr().type) {
-    case elf::et::exec:
-      // Loaded at base zero
-      load_address = 0;
-      break;
-
-    case elf::et::dyn:
-      // Load address should stay as-is
-      break;
-
-    default:
-      WARNING << "Unsupported ELF file type...";
-  }
-
-  // Read the DWARF information from the chosen file
-  dwarf::dwarf d(dwarf::elf::create_loader(f));
 #endif
+  // On macOS, load_address is already the ASLR slide from dyld
 
   vector<memory_map::queued_range> pending;
 
@@ -794,7 +642,7 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
                       pending);
 
       for(const string& filename : included_files) {
-        INFO << "Included source file " << filename;
+        VERBOSE << "Included source file " << filename;
       }
 
     } catch(dwarf::format_error e) {

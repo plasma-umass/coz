@@ -44,6 +44,51 @@ bool initialized = false;
 static bool init_in_progress = false;
 
 /**
+ * Called by the application at progress points to check and apply delays.
+ * This ensures worker threads check their delay debt at progress points,
+ * which is critical on macOS where per-thread timers are not available.
+ */
+extern "C" void _coz_add_delays() {
+  if(initialized) {
+    profiler::get_instance().catch_up();
+  }
+}
+
+#ifdef __APPLE__
+/**
+ * Helper functions called from mac_interpose.cpp
+ * These are defined as extern "C" to allow linking from the interposition code
+ * which doesn't include profiler.h to avoid static initialization issues.
+ */
+extern "C" bool coz_initialized() {
+  return initialized;
+}
+
+extern "C" int coz_handle_pthread_create(pthread_t* thread,
+                                          const pthread_attr_t* attr,
+                                          thread_fn_t fn,
+                                          void* arg) {
+  return profiler::get_instance().handle_pthread_create(thread, attr, fn, arg);
+}
+
+extern "C" void coz_handle_pthread_exit(void* result) {
+  profiler::get_instance().handle_pthread_exit(result);
+}
+
+extern "C" void coz_pre_block() {
+  profiler::get_instance().pre_block();
+}
+
+extern "C" void coz_post_block(bool skip_delays) {
+  profiler::get_instance().post_block(skip_delays);
+}
+
+extern "C" void coz_catch_up() {
+  profiler::get_instance().catch_up();
+}
+#endif // __APPLE__
+
+/**
  * Called by the application to get/create a progress point
  */
 extern "C" coz_counter_t* _coz_get_counter(progress_point_type t, const char* name) {
@@ -115,11 +160,11 @@ static string readlink_str(const char* path) {
  */
 void init_coz(void) {
   if (init_in_progress) {
-    INFO << "init_coz in progress, do not recurse";
+    VERBOSE << "init_coz in progress, do not recurse";
     return;
   }
   init_in_progress = true;
-  INFO << "bootstrapping coz";
+  VERBOSE << "bootstrapping coz";
   initialized = false;
 
   // Remove Coz from LD_PRELOAD. Just clearing LD_PRELOAD for now FIXME!
@@ -167,7 +212,7 @@ void init_coz(void) {
     string main_name = readlink_str("/proc/self/exe");
 #endif
     binary_scope.insert(main_name);
-    INFO << "Including MAIN, which is " << main_name;
+    VERBOSE << "Including MAIN, which is " << main_name;
   }
 
   // Build the memory map for all in-scope binaries
@@ -206,8 +251,10 @@ void init_coz(void) {
                                    end_to_end);
 
   // Synchronizations can be intercepted once the profiler has been initialized
+  VERBOSE << "init_coz setting initialized=true";
   initialized = true;
   init_in_progress = false;
+  VERBOSE << "init_coz complete, returning...";
 }
 
 /**
@@ -259,7 +306,6 @@ extern "C" int coz_libc_start_main(main_fn_t main_fn, int argc, char** argv,
  */
 __attribute__((constructor))
 static void coz_init_macos() {
-  // Initialize coz early
   init_coz();
 }
 
@@ -291,7 +337,24 @@ static bool is_coz_signal(int signum) {
   return signum == SampleSignal || signum == SIGSEGV || signum == SIGABRT;
 }
 
+#ifdef __APPLE__
+/// Additional helpers called from mac_interpose.cpp
+extern "C" void coz_shutdown() {
+  profiler::get_instance().shutdown();
+}
+
+extern "C" bool coz_is_coz_signal(int signum) {
+  return is_coz_signal(signum);
+}
+
+extern "C" void coz_remove_coz_signals(sigset_t* set) {
+  remove_coz_signals(set);
+}
+#endif
+
 extern "C" {
+// On macOS, all wrappers are in mac_interpose.cpp using DYLD interposition
+#ifndef __APPLE__
   /// Pass pthread_create calls to coz so child threads can inherit the parent's delay count
   int pthread_create(pthread_t* thread,
                      const pthread_attr_t* attr,
@@ -314,7 +377,6 @@ extern "C" {
     return result;
   }
 
-#ifndef __APPLE__
   int pthread_tryjoin_np(pthread_t t, void** retval) {
     if(initialized) profiler::get_instance().pre_block();
     int result = real::pthread_tryjoin_np(t, retval);
@@ -328,7 +390,6 @@ extern "C" {
     if(initialized) profiler::get_instance().post_block(result == 0);
     return result;
   }
-#endif
 
   /// Skip any global delays added while blocked on a mutex
   int pthread_mutex_lock(pthread_mutex_t* mutex) {
@@ -382,7 +443,6 @@ extern "C" {
     return real::pthread_cond_broadcast(cond);
   }
 
-#ifndef __APPLE__
   /// Catch up before, and skip ahead after waking from a barrier
   int pthread_barrier_wait(pthread_barrier_t* barrier) {
     if(initialized) profiler::get_instance().catch_up();
@@ -394,7 +454,6 @@ extern "C" {
 
     return result;
   }
-#endif
 
   int pthread_rwlock_rdlock(pthread_rwlock_t* rwlock) {
     if(initialized) profiler::get_instance().pre_block();
@@ -403,14 +462,12 @@ extern "C" {
     return result;
   }
 
-#ifndef __APPLE__
   int pthread_rwlock_timedrdlock(pthread_rwlock_t* rwlock, const struct timespec* abstime) {
     if(initialized) profiler::get_instance().pre_block();
     int result = real::pthread_rwlock_timedrdlock(rwlock, abstime);
     if(initialized) profiler::get_instance().post_block(result == 0);
     return result;
   }
-#endif
 
   int pthread_rwlock_wrlock(pthread_rwlock_t* rwlock) {
     if(initialized) profiler::get_instance().pre_block();
@@ -419,20 +476,20 @@ extern "C" {
     return result;
   }
 
-#ifndef __APPLE__
   int pthread_rwlock_timedwrlock(pthread_rwlock_t* rwlock, const struct timespec* abstime) {
     if(initialized) profiler::get_instance().pre_block();
     int result = real::pthread_rwlock_timedwrlock(rwlock, abstime);
     if(initialized) profiler::get_instance().post_block(result == 0);
     return result;
   }
-#endif
 
   int pthread_rwlock_unlock(pthread_rwlock_t* rwlock) {
     if(initialized) profiler::get_instance().catch_up();
     return real::pthread_rwlock_unlock(rwlock);
   }
+#endif // !__APPLE__
 
+#ifndef __APPLE__
   /// Run shutdown before exiting
   void __attribute__((noreturn)) exit(int status) {
     profiler::get_instance().shutdown();
@@ -455,11 +512,7 @@ extern "C" {
   }
 
   /// Don't allow programs to set signal handlers for coz's required signals
-#ifdef __APPLE__
-  void (*signal(int signum, void (*handler)(int)))(int) {
-#else
   sighandler_t signal(int signum, sighandler_t handler) {
-#endif
     if(is_coz_signal(signum)) {
       return NULL;
     } else {
@@ -521,12 +574,10 @@ extern "C" {
     return real::pthread_kill(thread, sig);
   }
 
-#ifndef __APPLE__
   int pthread_sigqueue(pthread_t thread, int sig, const union sigval val) {
     if(initialized) profiler::get_instance().catch_up();
     return real::pthread_sigqueue(thread, sig, val);
   }
-#endif
 
   /**
    * Ensure a thread cannot wait for coz's signals.
@@ -537,7 +588,6 @@ extern "C" {
     sigset_t myset = *set;
     remove_coz_signals(&myset);
 
-#ifndef __APPLE__
     siginfo_t info;
 
     if(initialized) profiler::get_instance().pre_block();
@@ -555,19 +605,8 @@ extern "C" {
       *sig = result;
       return 0;
     }
-#else
-    // macOS implementation using sigwait
-    if(initialized) profiler::get_instance().pre_block();
-
-    int result = real::sigwait(&myset, sig);
-
-    if(initialized) profiler::get_instance().post_block(result == 0);
-
-    return result;
-#endif
   }
 
-#ifndef __APPLE__
   /**
    * Ensure a thread cannot wait for coz's signals.
    * If the waking signal is delivered from the same process, skip any added global delays.
@@ -611,7 +650,6 @@ extern "C" {
 
     return result;
   }
-#endif
 
   /**
    * Set the process signal mask, suspend, then wake and restore the signal mask.
@@ -625,4 +663,5 @@ extern "C" {
     real::sigprocmask(SIG_SETMASK, &oldset, nullptr);
     return rc;
   }
+#endif // !__APPLE__
 }

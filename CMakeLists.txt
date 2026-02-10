@@ -11,6 +11,48 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR}/cmake)
 
 find_package(Threads REQUIRED)
 
+# ============== LIEF library for cross-platform binary parsing ==============
+option(USE_SYSTEM_LIEF "Link against LIEF discovered via find_package" OFF)
+
+if(USE_SYSTEM_LIEF)
+    find_package(LIEF REQUIRED)
+else()
+    include(FetchContent)
+
+    set(LIEF_GIT_TAG "0.17.0" CACHE STRING
+        "Git tag/branch/commit for LIEF")
+    set(LIEF_GIT_REPO "https://github.com/lief-project/LIEF.git" CACHE STRING
+        "Git repository URL for LIEF")
+
+    # Disable LIEF features we don't need to speed up build
+    set(LIEF_PYTHON_API OFF CACHE BOOL "" FORCE)
+    set(LIEF_C_API OFF CACHE BOOL "" FORCE)
+    set(LIEF_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(LIEF_TESTS OFF CACHE BOOL "" FORCE)
+    set(LIEF_DOC OFF CACHE BOOL "" FORCE)
+    set(LIEF_LOGGING OFF CACHE BOOL "" FORCE)
+    set(LIEF_ENABLE_JSON OFF CACHE BOOL "" FORCE)
+    # Only enable formats we need
+    set(LIEF_ELF ON CACHE BOOL "" FORCE)
+    set(LIEF_PE OFF CACHE BOOL "" FORCE)
+    set(LIEF_MACHO ON CACHE BOOL "" FORCE)
+    set(LIEF_OAT OFF CACHE BOOL "" FORCE)
+    set(LIEF_DEX OFF CACHE BOOL "" FORCE)
+    set(LIEF_VDEX OFF CACHE BOOL "" FORCE)
+    set(LIEF_ART OFF CACHE BOOL "" FORCE)
+    set(LIEF_COFF OFF CACHE BOOL "" FORCE)
+
+    FetchContent_Declare(
+        LIEF
+        GIT_REPOSITORY ${LIEF_GIT_REPO}
+        GIT_TAG        ${LIEF_GIT_TAG}
+    )
+
+    FetchContent_MakeAvailable(LIEF)
+    message(STATUS "Fetched LIEF ${LIEF_GIT_TAG}")
+endif()
+
+# ============== libelfin for DWARF parsing ==============
 option(USE_SYSTEM_LIBELFIN "Link against libelfin discovered via pkg-config" OFF)
 
 if(USE_SYSTEM_LIBELFIN)
@@ -25,8 +67,8 @@ else()
         # Fetch libelfin from GitHub
         include(FetchContent)
 
-        set(LIBELFIN_GIT_TAG "8779775beea1ee5444ba53d14e354dbcf42a811d" CACHE STRING
-            "Git tag/branch/commit for libelfin (default: includes pre-built to_string.cc)")
+        set(LIBELFIN_GIT_TAG "origin/improved_dwarf5_support" CACHE STRING
+            "Git tag/branch/commit for libelfin (default: DWARF5 support with pre-built to_string.cc)")
         set(LIBELFIN_GIT_REPO "https://github.com/plasma-umass/libelfin.git" CACHE STRING
             "Git repository URL for libelfin")
 
@@ -86,8 +128,8 @@ option(INSTALL_COZ "Enable installation of coz. (Projects embedding coz may want
 if(INSTALL_COZ)
     include(GNUInstallDirs)
     include(CMakePackageConfigHelpers)
-    install(PROGRAMS coz DESTINATION bin)
-    install(FILES LICENSE.md DESTINATION licenses)
+    install(PROGRAMS coz DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(FILES LICENSE.md DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
     # Install the viewer web application
     install(DIRECTORY viewer/

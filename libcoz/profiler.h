@@ -28,6 +28,12 @@
 /// Type of a thread entry function
 typedef void* (*thread_fn_t)(void*);
 
+#ifdef __APPLE__
+// Original pthread_create that bypasses DYLD_INTERPOSE (defined in mac_interpose.cpp)
+extern "C" int coz_orig_pthread_create(pthread_t*, const pthread_attr_t*,
+                                        void*(*)(void*), void*);
+#endif
+
 /// The type of a main function
 typedef int (*main_fn_t)(int, char**, char**);
 
@@ -37,8 +43,8 @@ enum {
   SampleBatchSize = 10,   //< Samples to batch together for one processing run
   SpeedupDivisions = 20,  //< How many different speedups to try (20 = 5% increments)
   ZeroSpeedupWeight = 7,  //< Weight of speedup=0 versus other speedup values (7 = ~25% of experiments run with zero speedup)
-  ExperimentMinTime = SamplePeriod * SampleBatchSize * 50,  //< Minimum experiment length
-  ExperimentCoolOffTime = SamplePeriod * SampleBatchSize,   //< Time to wait after an experiment
+  ExperimentMinTime = SamplePeriod * SampleBatchSize * 50,   //< Minimum experiment length (500ms)
+  ExperimentCoolOffTime = SamplePeriod * SampleBatchSize,    //< Time to wait after an experiment
   ExperimentTargetDelta = 5 //< Target minimum number of visits to a progress point during an experiment
 };
 
@@ -122,11 +128,24 @@ public:
     }
     REQUIRE(state) << "Thread state not found";
 
-    // Allocate a struct to pass as an argument to the new thread
-    new_arg = new thread_start_arg(fn, arg, state->local_delay);
+    // Allocate a struct to pass as an argument to the new thread.
+    // On macOS, cap to _global_delay to prevent children from inheriting
+    // a stale-high local_delay that would cause them to skip delays.
+    size_t parent_delay = state->local_delay.load();
+#ifdef __APPLE__
+    size_t global = _global_delay.load();
+    if(parent_delay > global) parent_delay = global;
+#endif
+    new_arg = new thread_start_arg(fn, arg, parent_delay);
 
     // Create a wrapped thread and pass in the wrapped argument
+#ifdef __APPLE__
+    // On macOS, use the original pthread_create to avoid recursion through
+    // DYLD_INTERPOSE (real::pthread_create resolves to the interposed version)
+    return coz_orig_pthread_create(thread, attr, profiler::start_thread, new_arg);
+#else
     return real::pthread_create(thread, attr, profiler::start_thread, new_arg);
+#endif
   }
 
   /// Force threads to catch up on delays, and stop sampling before the thread exits
@@ -161,6 +180,7 @@ public:
     if(!state)
       return;
 
+    state->is_blocked.store(true);
     state->pre_block_time = _global_delay.load();
   }
 
@@ -174,9 +194,10 @@ public:
 
     if(skip_delays) {
       // Skip all delays that were inserted during the blocked period
-      state->local_delay += _global_delay.load() - state->pre_block_time;
+      state->local_delay.fetch_add(_global_delay.load() - state->pre_block_time);
     }
 
+    state->is_blocked.store(false);
     state->set_in_use(false);
   }
 
@@ -206,6 +227,8 @@ private:
   void end_sampling();                        //< Stop sampling in the current thread
   void add_delays(thread_state* state);       //< Add any required delays
   void process_samples(thread_state* state);  //< Process all available samples and insert delays
+  void process_all_samples();                 //< Process samples from all threads (for macOS profiler thread)
+  void apply_pending_delays();                //< Apply pending delays using Mach thread suspension (macOS)
   std::pair<line*,bool> match_line(perf_event::record&);       //< Map a sample to its source line and matches with selected_line
   void log_samples(std::ofstream&, size_t);   //< Log runtime and sample counts for all identified regions
 
@@ -240,6 +263,7 @@ private:
   std::string _output_filename;   //< File for profiler output
   line* _fixed_line;              //< The only line that should be sped up, if set
   int _fixed_delay_size = -1;     //< The only delay size that should be used, if set
+  bool _json_output = true;       //< Output in JSON Lines format (default)
 
   /// Should coz run in end-to-end mode?
   bool _enable_end_to_end;
