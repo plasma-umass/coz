@@ -99,7 +99,7 @@ void *calc_hist(void *arg) {
    int *red;
    int *green;
    int *blue;
-   int i;
+   long i;
    thread_arg_t *thread_arg = (thread_arg_t *)arg;
    unsigned char *val;
    /*
@@ -151,8 +151,8 @@ int main(int argc, char *argv[]) {
    int green[256];
    int blue[256];
    int num_procs;
-   int num_per_thread;
-   int excess;
+   long num_per_thread;
+   long excess;
 
 
    // Make sure a filename is specified
@@ -193,9 +193,9 @@ int main(int argc, char *argv[]) {
       swap_bytes((char *)(data_pos), sizeof(*data_pos));
    }
    
-   int imgdata_bytes = (int)finfo.st_size - (int)(*(data_pos));
-   int num_pixels = ((int)finfo.st_size - (int)(*(data_pos))) / 3;
-   printf("This file has %d bytes of image data, %d pixels\n", imgdata_bytes,
+   long imgdata_bytes = (long)finfo.st_size - (long)(*(data_pos));
+   long num_pixels = ((long)finfo.st_size - (long)(*(data_pos))) / 3;
+   printf("This file has %ld bytes of image data, %ld pixels\n", imgdata_bytes,
                                                             num_pixels);
 
    printf("Starting pthreads histogram\n");
