@@ -83,9 +83,32 @@
                   <button type="button" id="ai-key-toggle" class="input-toggle-btn" title="Show/hide key"><i class="fa fa-eye"></i></button>
                 </div>
               </div>
-              <div id="ai-bedrock-group" class="form-group-compact" style="display: none;">
-                <label class="ai-label" for="ai-bedrock-region">AWS Region <span id="ai-bedrock-status" class="ai-status"></span></label>
-                <input type="text" id="ai-bedrock-region" class="form-control form-control-modern form-control-sm" placeholder="us-east-1">
+              <div id="ai-bedrock-group" style="display: none;">
+                <div class="form-group-compact">
+                  <label class="ai-label" for="ai-bedrock-region">AWS Region <span id="ai-bedrock-status" class="ai-status"></span></label>
+                  <input type="text" id="ai-bedrock-region" class="form-control form-control-modern form-control-sm" placeholder="us-east-1">
+                </div>
+                <div class="form-group-compact" style="margin-top: 0.4rem;">
+                  <label class="ai-label" for="ai-aws-access-key">Access Key ID <span class="ai-hint">(or use env var)</span></label>
+                  <div class="input-with-toggle">
+                    <input type="password" id="ai-aws-access-key" class="form-control form-control-modern form-control-sm" placeholder="AKIA...">
+                    <button type="button" class="input-toggle-btn aws-key-toggle" title="Show/hide"><i class="fa fa-eye"></i></button>
+                  </div>
+                </div>
+                <div class="form-group-compact" style="margin-top: 0.4rem;">
+                  <label class="ai-label" for="ai-aws-secret-key">Secret Access Key <span class="ai-hint">(or use env var)</span></label>
+                  <div class="input-with-toggle">
+                    <input type="password" id="ai-aws-secret-key" class="form-control form-control-modern form-control-sm" placeholder="Secret key">
+                    <button type="button" class="input-toggle-btn aws-key-toggle" title="Show/hide"><i class="fa fa-eye"></i></button>
+                  </div>
+                </div>
+                <div class="form-group-compact" style="margin-top: 0.4rem;">
+                  <label class="ai-label" for="ai-aws-session-token">Session Token <span class="ai-hint">(optional)</span></label>
+                  <div class="input-with-toggle">
+                    <input type="password" id="ai-aws-session-token" class="form-control form-control-modern form-control-sm" placeholder="Optional session token">
+                    <button type="button" class="input-toggle-btn aws-key-toggle" title="Show/hide"><i class="fa fa-eye"></i></button>
+                  </div>
+                </div>
               </div>
               <div id="ai-ollama-group" class="form-group-compact" style="display: none;">
                 <label class="ai-label" for="ai-ollama-host">Ollama Host</label>

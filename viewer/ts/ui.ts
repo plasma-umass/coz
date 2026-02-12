@@ -378,6 +378,21 @@ $('#ai-key-toggle').on('click', function() {
   }
 });
 
+// AWS credential show/hide toggles
+$(document).on('click', '.aws-key-toggle', function() {
+  let input = $(this).siblings('input')[0] as HTMLInputElement;
+  let icon = $(this).find('i')[0] as HTMLElement;
+  if (input && icon) {
+    if (input.type === 'password') {
+      input.type = 'text';
+      icon.className = 'fa fa-eye-slash';
+    } else {
+      input.type = 'password';
+      icon.className = 'fa fa-eye';
+    }
+  }
+});
+
 d3.select(window).on('resize', function() { update(true); });
 
 

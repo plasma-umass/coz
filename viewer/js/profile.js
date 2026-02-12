@@ -183,7 +183,7 @@ function toggleProviderFields() {
     if (ollamaGroup)
         ollamaGroup.style.display = provider === 'ollama' ? 'flex' : 'none';
     if (bedrockGroup)
-        bedrockGroup.style.display = provider === 'bedrock' ? 'flex' : 'none';
+        bedrockGroup.style.display = provider === 'bedrock' ? 'block' : 'none';
     // Update status indicator for API key providers
     if (statusEl && _llm_config) {
         if (provider === 'anthropic' && _llm_config.anthropic_key_set) {
@@ -215,6 +215,13 @@ function toggleProviderFields() {
             let regionEl = document.getElementById('ai-bedrock-region');
             if (regionEl && !regionEl.value) {
                 regionEl.placeholder = _llm_config.bedrock_region;
+            }
+        }
+        // Show if AWS credentials are configured via env vars
+        if (_llm_config.aws_credentials_set) {
+            let accessKeyEl = document.getElementById('ai-aws-access-key');
+            if (accessKeyEl && !accessKeyEl.value) {
+                accessKeyEl.placeholder = 'Configured via env var';
             }
         }
     }
@@ -269,6 +276,9 @@ function fetchOptimizationStream(name, measurements, callbacks) {
     });
     let bedrockRegionEl = document.getElementById('ai-bedrock-region');
     let bedrockRegion = bedrockRegionEl && bedrockRegionEl.value ? bedrockRegionEl.value : '';
+    let awsAccessKeyEl = document.getElementById('ai-aws-access-key');
+    let awsSecretKeyEl = document.getElementById('ai-aws-secret-key');
+    let awsSessionTokenEl = document.getElementById('ai-aws-session-token');
     let bodyStr = JSON.stringify({
         path: filePath,
         line: line,
@@ -277,7 +287,10 @@ function fetchOptimizationStream(name, measurements, callbacks) {
         api_key: getApiKey(),
         model: getModelName(),
         ollama_host: getOllamaHost(),
-        bedrock_region: bedrockRegion
+        bedrock_region: bedrockRegion,
+        aws_access_key: awsAccessKeyEl ? awsAccessKeyEl.value : '',
+        aws_secret_key: awsSecretKeyEl ? awsSecretKeyEl.value : '',
+        aws_session_token: awsSessionTokenEl ? awsSessionTokenEl.value : ''
     });
     let abortController = new AbortController();
     let fullText = '';

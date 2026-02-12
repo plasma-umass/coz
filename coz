@@ -586,6 +586,7 @@ def _coz_plot(args):
     'ollama_host': os.environ.get('OLLAMA_HOST', 'http://localhost:11434'),
     'bedrock_available': _bedrock_available,
     'bedrock_region': os.environ.get('AWS_REGION', os.environ.get('AWS_DEFAULT_REGION', '')),
+    'aws_credentials_set': bool(os.environ.get('AWS_ACCESS_KEY_ID', '')),
   }
 
   viewer_dir = _find_viewer_directory()
@@ -844,7 +845,12 @@ Based on the causal profiling data, suggest specific optimizations for the targe
               send_chunk({'chunk': chunk})
           elif provider == 'bedrock':
             region = req.get('bedrock_region', '') or os.environ.get('AWS_REGION', '') or os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
-            for chunk in _stream_bedrock(region, model or 'anthropic.claude-opus-4-20250514-v1:0', system_prompt, user_prompt):
+            aws_creds = {
+              'aws_access_key_id': req.get('aws_access_key', '') or None,
+              'aws_secret_access_key': req.get('aws_secret_key', '') or None,
+              'aws_session_token': req.get('aws_session_token', '') or None,
+            }
+            for chunk in _stream_bedrock(region, model or 'anthropic.claude-opus-4-20250514-v1:0', system_prompt, user_prompt, aws_creds):
               send_chunk({'chunk': chunk})
           elif provider == 'ollama':
             for chunk in _stream_ollama(ollama_host, model or 'llama3', system_prompt, user_prompt):
@@ -971,14 +977,22 @@ Based on the causal profiling data, suggest specific optimizations for the targe
         except json_mod.JSONDecodeError:
           pass
 
-  def _stream_bedrock(region, model, system, user):
+  def _stream_bedrock(region, model, system, user, aws_creds=None):
     """Stream text chunks from Amazon Bedrock."""
     import json as json_mod
     try:
       import boto3
     except ImportError:
       raise ValueError('boto3 is required for Amazon Bedrock. Install with: pip install boto3')
-    client = boto3.client('bedrock-runtime', region_name=region)
+    # Build client kwargs — use explicit credentials if provided, otherwise fall back to env/profile
+    client_kwargs = {'region_name': region}
+    if aws_creds:
+      if aws_creds.get('aws_access_key_id') and aws_creds.get('aws_secret_access_key'):
+        client_kwargs['aws_access_key_id'] = aws_creds['aws_access_key_id']
+        client_kwargs['aws_secret_access_key'] = aws_creds['aws_secret_access_key']
+        if aws_creds.get('aws_session_token'):
+          client_kwargs['aws_session_token'] = aws_creds['aws_session_token']
+    client = boto3.client('bedrock-runtime', **client_kwargs)
     body = json_mod.dumps({
       'anthropic_version': 'bedrock-2023-05-31',
       'max_tokens': 4096,
