@@ -61,6 +61,440 @@ interface IgnoredRecord {
 // Matches ExperimentTargetDelta in profiler.h.
 const MIN_DELTA = 5;
 
+// Source snippet cache and server availability flag
+interface SourceSnippet {
+  file: string;
+  target_line: number;
+  lines: {number: number; text: string; is_target: boolean}[];
+}
+
+const _source_cache: {[key: string]: SourceSnippet | null} = {};
+let _source_server_available: boolean | null = null;
+// Track which plot name currently has source panel open (null = none)
+let _source_open_name: string | null = null;
+
+// AI optimization panel state
+let _optimize_open_name: string | null = null;
+const _optimize_cache: {[key: string]: string} = {};
+let _optimize_server_available: boolean | null = null;
+
+interface LLMConfig {
+  anthropic_key_set: boolean;
+  openai_key_set: boolean;
+  ollama_host: string;
+}
+let _llm_config: LLMConfig | null = null;
+
+// Probe whether the source-snippet endpoint exists
+(function probeSourceServer() {
+  let xhr = new XMLHttpRequest();
+  xhr.open('GET', '/source-snippet?path=__probe__&line=1', true);
+  xhr.onload = function() {
+    // 400 (bad params) or 404 (file not found) both mean the endpoint exists
+    _source_server_available = true;
+  };
+  xhr.onerror = function() {
+    _source_server_available = false;
+  };
+  xhr.send();
+})();
+
+// Probe whether the optimize endpoint exists and fetch LLM config
+(function probeLLMConfig() {
+  let xhr = new XMLHttpRequest();
+  xhr.open('GET', '/llm-config', true);
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      _optimize_server_available = true;
+      try {
+        _llm_config = JSON.parse(xhr.responseText);
+        updateProviderUI();
+      } catch (e) {
+        _llm_config = null;
+      }
+    } else {
+      _optimize_server_available = false;
+    }
+  };
+  xhr.onerror = function() {
+    _optimize_server_available = false;
+  };
+  xhr.send();
+})();
+
+function getSelectedProvider(): string {
+  let el = document.getElementById('ai-provider') as HTMLSelectElement;
+  return el ? el.value : 'anthropic';
+}
+
+function getApiKey(): string {
+  let el = document.getElementById('ai-api-key') as HTMLInputElement;
+  return el ? el.value : '';
+}
+
+function getModelName(): string {
+  let el = document.getElementById('ai-model') as HTMLSelectElement;
+  return el ? el.value : '';
+}
+
+interface ModelOption {
+  value: string;
+  label: string;
+}
+
+const _provider_models: {[key: string]: ModelOption[]} = {
+  'anthropic': [
+    {value: 'claude-opus-4-20250514', label: 'Claude Opus 4'},
+    {value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4'},
+    {value: 'claude-haiku-4-20250514', label: 'Claude Haiku 4'},
+  ],
+  'openai': [
+    {value: 'gpt-4o', label: 'GPT-4o'},
+    {value: 'gpt-4o-mini', label: 'GPT-4o Mini'},
+    {value: 'o3-mini', label: 'o3-mini'},
+  ],
+  'bedrock': [
+    {value: 'anthropic.claude-opus-4-20250514-v1:0', label: 'Claude Opus 4'},
+    {value: 'anthropic.claude-sonnet-4-20250514-v1:0', label: 'Claude Sonnet 4'},
+    {value: 'anthropic.claude-haiku-4-20250514-v1:0', label: 'Claude Haiku 4'},
+  ],
+  'ollama': []
+};
+
+// Cache for fetched Ollama models
+let _ollama_models_fetched = false;
+
+function populateModelDropdown(): void {
+  let provider = getSelectedProvider();
+  let modelEl = document.getElementById('ai-model') as HTMLSelectElement;
+  if (!modelEl) return;
+
+  if (provider === 'ollama') {
+    fetchOllamaModels(modelEl);
+    return;
+  }
+
+  _setModelOptions(modelEl, _provider_models[provider] || []);
+}
+
+function _setModelOptions(el: HTMLSelectElement, models: ModelOption[]): void {
+  el.innerHTML = '';
+  for (let i = 0; i < models.length; i++) {
+    let opt = document.createElement('option');
+    opt.value = models[i].value;
+    opt.textContent = models[i].label;
+    el.appendChild(opt);
+  }
+}
+
+function fetchOllamaModels(modelEl: HTMLSelectElement): void {
+  // Show a placeholder while loading
+  let host = getOllamaHost();
+  let cached = _provider_models['ollama'];
+  if (cached.length > 0 && _ollama_models_fetched) {
+    _setModelOptions(modelEl, cached);
+    return;
+  }
+
+  modelEl.innerHTML = '<option value="">Loading models...</option>';
+
+  let xhr = new XMLHttpRequest();
+  xhr.open('GET', '/ollama-models?host=' + encodeURIComponent(host), true);
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      try {
+        let data = JSON.parse(xhr.responseText);
+        let models: ModelOption[] = data.models || [];
+        if (models.length > 0) {
+          _provider_models['ollama'] = models;
+          _ollama_models_fetched = true;
+          // Only update if still on Ollama
+          if (getSelectedProvider() === 'ollama') {
+            _setModelOptions(modelEl, models);
+          }
+        } else {
+          let errMsg = data.error ? 'Ollama unreachable' : 'No models installed';
+          modelEl.innerHTML = '<option value="">' + errMsg + '</option>';
+        }
+      } catch (e) {
+        modelEl.innerHTML = '<option value="">Error loading models</option>';
+      }
+    } else {
+      modelEl.innerHTML = '<option value="">Error loading models</option>';
+    }
+  };
+  xhr.onerror = function() {
+    modelEl.innerHTML = '<option value="">Ollama unavailable</option>';
+  };
+  xhr.send();
+}
+
+function getOllamaHost(): string {
+  let el = document.getElementById('ai-ollama-host') as HTMLInputElement;
+  return el && el.value ? el.value : 'http://localhost:11434';
+}
+
+// Populate initial model dropdown (must be after _provider_models is defined)
+populateModelDropdown();
+
+function updateProviderUI(): void {
+  if (!_llm_config) return;
+  let providerEl = document.getElementById('ai-provider') as HTMLSelectElement;
+  let statusEl = document.getElementById('ai-key-status') as HTMLSpanElement;
+  if (!providerEl) return;
+
+  // Auto-select first configured provider
+  if (_llm_config.anthropic_key_set) {
+    providerEl.value = 'anthropic';
+    if (statusEl) {
+      statusEl.textContent = '(configured)';
+      statusEl.className = 'ai-status configured';
+    }
+  } else if (_llm_config.openai_key_set) {
+    providerEl.value = 'openai';
+    if (statusEl) {
+      statusEl.textContent = '(configured)';
+      statusEl.className = 'ai-status configured';
+    }
+  }
+  toggleProviderFields();
+}
+
+function toggleProviderFields(): void {
+  let provider = getSelectedProvider();
+  let keyGroup = document.getElementById('ai-key-group');
+  let ollamaGroup = document.getElementById('ai-ollama-group');
+  let bedrockGroup = document.getElementById('ai-bedrock-group');
+  let statusEl = document.getElementById('ai-key-status') as HTMLSpanElement;
+
+  let needsKey = (provider === 'anthropic' || provider === 'openai');
+  if (keyGroup) keyGroup.style.display = needsKey ? 'flex' : 'none';
+  if (ollamaGroup) ollamaGroup.style.display = provider === 'ollama' ? 'flex' : 'none';
+  if (bedrockGroup) bedrockGroup.style.display = provider === 'bedrock' ? 'flex' : 'none';
+
+  // Update status indicator for API key providers
+  if (statusEl && _llm_config) {
+    if (provider === 'anthropic' && _llm_config.anthropic_key_set) {
+      statusEl.textContent = '(configured)';
+      statusEl.className = 'ai-status configured';
+    } else if (provider === 'openai' && _llm_config.openai_key_set) {
+      statusEl.textContent = '(configured)';
+      statusEl.className = 'ai-status configured';
+    } else if (needsKey) {
+      statusEl.textContent = '';
+      statusEl.className = 'ai-status';
+    }
+  }
+
+  // Update Bedrock status
+  let bedrockStatusEl = document.getElementById('ai-bedrock-status') as HTMLSpanElement;
+  if (bedrockStatusEl && _llm_config) {
+    if ((_llm_config as any).bedrock_available) {
+      bedrockStatusEl.textContent = '(boto3 available)';
+      bedrockStatusEl.className = 'ai-status configured';
+    } else {
+      bedrockStatusEl.textContent = '(boto3 not found)';
+      bedrockStatusEl.className = 'ai-status';
+    }
+    // Pre-fill region if set
+    if ((_llm_config as any).bedrock_region) {
+      let regionEl = document.getElementById('ai-bedrock-region') as HTMLInputElement;
+      if (regionEl && !regionEl.value) {
+        regionEl.placeholder = (_llm_config as any).bedrock_region;
+      }
+    }
+  }
+
+  // Populate model dropdown for this provider
+  populateModelDropdown();
+}
+
+function formatOptimizationText(text: string): string {
+  // Convert markdown to HTML
+  // Code blocks
+  text = text.replace(/```(\w*)\n([\s\S]*?)```/g, function(_match: string, _lang: string, code: string) {
+    return '<pre class="optimize-code"><code>' + escapeHtml(code.trim()) + '</code></pre>';
+  });
+  // Inline code
+  text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Bold
+  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Italic
+  text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  // Headers
+  text = text.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+  text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  text = text.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  text = text.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // List items
+  text = text.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
+  text = text.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
+  // Wrap consecutive <li> in <ul>
+  text = text.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+  // Paragraphs (double newlines)
+  text = text.replace(/\n\n/g, '</p><p>');
+  // Single newlines (not before/after block elements)
+  text = text.replace(/\n/g, '<br>');
+  return '<p>' + text + '</p>';
+}
+
+// Expected response length for progress estimation (chars)
+const EXPECTED_RESPONSE_LENGTH = 2500;
+
+interface OptimizeCallbacks {
+  onChunk: (fullText: string, newChunk: string) => void;
+  onDone: (fullText: string) => void;
+  onError: (error: string) => void;
+}
+
+function fetchOptimizationStream(name: string, measurements: Measurement[], callbacks: OptimizeCallbacks): {abort: () => void} {
+  let cacheKey = name + '::' + getSelectedProvider();
+  if (cacheKey in _optimize_cache) {
+    callbacks.onDone(_optimize_cache[cacheKey]);
+    return {abort: function() {}};
+  }
+
+  let match = name.match(/^(.+):(\d+)$/);
+  if (!match) {
+    callbacks.onError('Could not parse file:line from plot name');
+    return {abort: function() {}};
+  }
+
+  let filePath = match[1];
+  let line = parseInt(match[2], 10);
+
+  let speedupData = measurements.map(function(m: Measurement) {
+    return {speedup: m.speedup, progress_speedup: m.progress_speedup};
+  });
+
+  let bedrockRegionEl = document.getElementById('ai-bedrock-region') as HTMLInputElement;
+  let bedrockRegion = bedrockRegionEl && bedrockRegionEl.value ? bedrockRegionEl.value : '';
+
+  let bodyStr = JSON.stringify({
+    path: filePath,
+    line: line,
+    speedup_data: speedupData,
+    provider: getSelectedProvider(),
+    api_key: getApiKey(),
+    model: getModelName(),
+    ollama_host: getOllamaHost(),
+    bedrock_region: bedrockRegion
+  });
+
+  let abortController = new AbortController();
+  let fullText = '';
+
+  fetch('/optimize', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: bodyStr,
+    signal: abortController.signal
+  }).then(function(response) {
+    if (!response.ok) {
+      callbacks.onError('Server error: ' + response.status);
+      return;
+    }
+    let reader = response.body!.getReader();
+    let decoder = new TextDecoder();
+    let buffer = '';
+
+    function readChunk(): void {
+      reader.read().then(function(result) {
+        if (result.done) {
+          // Process any remaining buffer
+          if (buffer.trim()) {
+            processLines(buffer);
+          }
+          if (fullText) {
+            _optimize_cache[cacheKey] = fullText;
+            callbacks.onDone(fullText);
+          }
+          return;
+        }
+        buffer += decoder.decode(result.value, {stream: true});
+        processLines(buffer);
+        // Keep only unprocessed remainder
+        let lastNewline = buffer.lastIndexOf('\n');
+        if (lastNewline >= 0) {
+          buffer = buffer.substring(lastNewline + 1);
+        }
+        readChunk();
+      }).catch(function(err: Error) {
+        if (err.name !== 'AbortError') {
+          callbacks.onError(err.message || 'Stream read error');
+        }
+      });
+    }
+
+    function processLines(text: string): void {
+      let lines = text.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trim();
+        if (!line) continue;
+        try {
+          let data = JSON.parse(line);
+          if (data.chunk) {
+            fullText += data.chunk;
+            callbacks.onChunk(fullText, data.chunk);
+          } else if (data.error) {
+            callbacks.onError(data.error);
+          } else if (data.done) {
+            _optimize_cache[cacheKey] = fullText;
+            callbacks.onDone(fullText);
+          }
+        } catch (e) {
+          // Not valid JSON yet, may be partial line
+        }
+      }
+    }
+
+    readChunk();
+  }).catch(function(err: Error) {
+    if (err.name !== 'AbortError') {
+      callbacks.onError(err.message || 'Network error');
+    }
+  });
+
+  return {abort: function() { abortController.abort(); }};
+}
+
+function fetchSourceSnippet(name: string, callback: (snippet: SourceSnippet | null) => void): void {
+  if (name in _source_cache) {
+    callback(_source_cache[name]);
+    return;
+  }
+  // Parse "file:line" from name
+  let match = name.match(/^(.+):(\d+)$/);
+  if (!match) {
+    _source_cache[name] = null;
+    callback(null);
+    return;
+  }
+  let filePath = match[1];
+  let line = match[2];
+  let xhr = new XMLHttpRequest();
+  xhr.open('GET', '/source-snippet?path=' + encodeURIComponent(filePath) + '&line=' + encodeURIComponent(line), true);
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      let data = JSON.parse(xhr.responseText);
+      _source_cache[name] = data;
+      callback(data);
+    } else {
+      _source_cache[name] = null;
+      callback(null);
+    }
+  };
+  xhr.onerror = function() {
+    _source_cache[name] = null;
+    callback(null);
+  };
+  xhr.send();
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 /**
  * Returns if this data point is valid.
  * Infinity / -Infinity occurs when dividing by 0.
@@ -567,6 +1001,193 @@ class Profile {
                   .attr('title', function(d) { return d; })
                   .style('width', div_width+'px');
     plot_title_sel.exit().remove();
+
+    /****** Add source code toggle buttons ******/
+    if (_source_server_available !== false) {
+      let source_btn_sel = plot_div_sel.selectAll('span.source-toggle').data(function(d) { return [d.name]; });
+      source_btn_sel.enter().append('span')
+        .attr('class', 'source-toggle')
+        .html('&#60;/&#62;')
+        .attr('title', 'View source')
+        .on('click', function(name: string) {
+          let wasOpen = (_source_open_name === name);
+          // Close all panels everywhere
+          container.selectAll('.source-panel').remove();
+          container.selectAll('.source-toggle').classed('active', false);
+          container.selectAll('div.plot').classed('source-open', false);
+          _source_open_name = null;
+          if (wasOpen) return;
+          // Open this one
+          let btn = d3.select(this);
+          let plotDiv = d3.select((<Element>this).parentNode);
+          _source_open_name = name;
+          btn.classed('active', true);
+          plotDiv.classed('source-open', true);
+          fetchSourceSnippet(name, function(snippet) {
+            // Guard: only render if this is still the open panel
+            if (_source_open_name !== name) return;
+            if (!snippet) {
+              btn.classed('active', false).classed('unavailable', true);
+              plotDiv.classed('source-open', false);
+              _source_open_name = null;
+              return;
+            }
+            let html = '';
+            for (let i = 0; i < snippet.lines.length; i++) {
+              let ln = snippet.lines[i];
+              let cls = ln.is_target ? 'source-line target' : 'source-line';
+              html += '<div class="' + cls + '">' +
+                '<span class="line-number">' + ln.number + '</span>' +
+                '<span class="line-text">' + escapeHtml(ln.text) + '</span></div>';
+            }
+            plotDiv.append('div').attr('class', 'source-panel').html(html);
+          });
+        });
+      source_btn_sel.exit().remove();
+    }
+
+    /****** Add AI optimization toggle buttons ******/
+    if (_optimize_server_available !== false) {
+      let opt_btn_sel = plot_div_sel.selectAll('span.optimize-toggle').data(function(d) { return [d]; });
+      opt_btn_sel.enter().append('span')
+        .attr('class', 'optimize-toggle')
+        .html('<i class="fa fa-magic"></i>')
+        .attr('title', 'AI optimization suggestions');
+      // Track active abort handle for cancellation
+      let _optimize_abort: {abort: () => void} | null = null;
+
+      opt_btn_sel.on('click', function(d: ExperimentResult) {
+          let name = d.name;
+          let wasOpen = (_optimize_open_name === name);
+
+          // Close all optimize panels and cancel pending request
+          container.selectAll('.optimize-panel').remove();
+          container.selectAll('.optimize-toggle').classed('active', false);
+          container.selectAll('div.plot').classed('optimize-open', false);
+          if (_optimize_abort) { _optimize_abort.abort(); _optimize_abort = null; }
+          _optimize_open_name = null;
+          if (wasOpen) return;
+
+          // Gather measurements from all progress points
+          let allMeasurements: Measurement[] = [];
+          for (let i = 0; i < d.progress_points.length; i++) {
+            if (d.progress_points[i].measurements.length > 0) {
+              allMeasurements = d.progress_points[i].measurements;
+              break;
+            }
+          }
+
+          let btn = d3.select(this);
+          let plotDiv = d3.select((<Element>this).parentNode);
+          _optimize_open_name = name;
+          btn.classed('active', true);
+          plotDiv.classed('optimize-open', true);
+
+          // Show loading state with progress bar and close button
+          let loadingModel = getModelName();
+          let loadingProvider = getSelectedProvider();
+          let loadingLabel = loadingModel || loadingProvider;
+          let loadingNote = loadingProvider === 'ollama'
+            ? '<div class="optimize-loading-note">Large models may take a minute to load</div>' : '';
+          let panel = plotDiv.append('div').attr('class', 'optimize-panel');
+          panel.html(
+            '<div class="optimize-header">' +
+              '<span class="optimize-header-title"><i class="fa fa-magic"></i> Analyzing with ' + escapeHtml(loadingLabel) + '</span>' +
+              '<button class="optimize-close-btn" title="Close"><i class="fa fa-times"></i></button>' +
+            '</div>' +
+            '<div class="optimize-progress-wrap">' +
+              '<div class="optimize-progress"><div class="optimize-progress-bar" style="width:0%"></div></div>' +
+            '</div>' +
+            '<div class="optimize-content optimize-streaming"></div>' +
+            loadingNote
+          );
+
+          // Close button handler (for loading state)
+          function closePanel() {
+            if (_optimize_abort) { _optimize_abort.abort(); _optimize_abort = null; }
+            container.selectAll('.optimize-panel').remove();
+            container.selectAll('.optimize-toggle').classed('active', false);
+            container.selectAll('div.plot').classed('optimize-open', false);
+            _optimize_open_name = null;
+          }
+          panel.select('.optimize-close-btn').on('click', closePanel);
+
+          let rawText = '';
+
+          _optimize_abort = fetchOptimizationStream(name, allMeasurements, {
+            onChunk: function(fullText: string, _newChunk: string) {
+              if (_optimize_open_name !== name) return;
+              rawText = fullText;
+              // Update progress bar (estimate based on chars received)
+              let pct = Math.min(95, Math.round((fullText.length / EXPECTED_RESPONSE_LENGTH) * 100));
+              let bar = panel.select('.optimize-progress-bar');
+              bar.style('width', pct + '%')
+                 .classed('indeterminate', false);
+              // Update content with streaming text
+              panel.select('.optimize-content').html(formatOptimizationText(fullText));
+              // Auto-scroll to bottom
+              let contentEl = panel.select('.optimize-content').node() as HTMLElement;
+              if (contentEl) {
+                let panelEl = panel.node() as HTMLElement;
+                if (panelEl) panelEl.scrollTop = panelEl.scrollHeight;
+              }
+            },
+            onDone: function(fullText: string) {
+              if (_optimize_open_name !== name) return;
+              _optimize_abort = null;
+              rawText = fullText;
+              // Set progress to 100%
+              panel.select('.optimize-progress-bar').style('width', '100%');
+              // Final render
+              panel.select('.optimize-content')
+                .classed('optimize-streaming', false)
+                .html(formatOptimizationText(fullText));
+              // Remove progress bar after brief delay
+              setTimeout(function() {
+                panel.select('.optimize-progress-wrap').remove();
+              }, 500);
+              // Update header to show done state with copy button
+              panel.select('.optimize-header').html(
+                '<span class="optimize-header-title"><i class="fa fa-magic"></i> AI Suggestion</span>' +
+                '<span class="optimize-header-actions">' +
+                  '<button class="optimize-copy-btn" title="Copy to clipboard"><i class="fa fa-copy"></i> Copy</button>' +
+                  '<button class="optimize-close-btn" title="Close"><i class="fa fa-times"></i></button>' +
+                '</span>'
+              );
+              // Re-bind close button
+              panel.select('.optimize-close-btn').on('click', closePanel);
+              // Copy button handler
+              panel.select('.optimize-copy-btn').on('click', function() {
+                if (navigator.clipboard) {
+                  navigator.clipboard.writeText(rawText).then(function() {
+                    let copyBtn = panel.select('.optimize-copy-btn');
+                    copyBtn.html('<i class="fa fa-check"></i> Copied');
+                    setTimeout(function() {
+                      copyBtn.html('<i class="fa fa-copy"></i> Copy');
+                    }, 2000);
+                  });
+                }
+              });
+            },
+            onError: function(error: string) {
+              if (_optimize_open_name !== name) return;
+              _optimize_abort = null;
+              panel.select('.optimize-progress-wrap').remove();
+              panel.select('.optimize-content')
+                .classed('optimize-streaming', false)
+                .attr('class', 'optimize-error')
+                .html('<i class="fa fa-exclamation-triangle"></i> ' + escapeHtml(error));
+              // Update header with close button
+              panel.select('.optimize-header').html(
+                '<span class="optimize-header-title" style="color:var(--danger-color,#ef4444)"><i class="fa fa-exclamation-triangle"></i> Error</span>' +
+                '<button class="optimize-close-btn" title="Close"><i class="fa fa-times"></i></button>'
+              );
+              panel.select('.optimize-close-btn').on('click', closePanel);
+            }
+          });
+        });
+      opt_btn_sel.exit().remove();
+    }
 
     /****** Update scales ******/
     xscale.domain([0, 1]).range([0, plot_width]);

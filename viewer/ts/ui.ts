@@ -349,19 +349,55 @@ d3.select('#minpoints_field').on('input', function() {
 
 d3.select('#sortby_field').on('change', update);
 
+// AI provider toggle
+$('#ai-provider').on('change', function() {
+  toggleProviderFields();
+});
+
+// Re-fetch Ollama models when host changes
+$('#ai-ollama-host').on('change', function() {
+  _ollama_models_fetched = false;
+  _provider_models['ollama'] = [];
+  if (getSelectedProvider() === 'ollama') {
+    populateModelDropdown();
+  }
+});
+
+// API key show/hide toggle
+$('#ai-key-toggle').on('click', function() {
+  let keyInput = document.getElementById('ai-api-key') as HTMLInputElement;
+  let icon = document.querySelector('#ai-key-toggle i') as HTMLElement;
+  if (keyInput && icon) {
+    if (keyInput.type === 'password') {
+      keyInput.type = 'text';
+      icon.className = 'fa fa-eye-slash';
+    } else {
+      keyInput.type = 'password';
+      icon.className = 'fa fa-eye';
+    }
+  }
+});
+
 d3.select(window).on('resize', function() { update(true); });
 
 
 // Theme toggle handler
 const themeToggle = document.getElementById('theme-toggle') as HTMLInputElement;
 if (themeToggle) {
-  // Load saved preference or default to dark mode
+  // Load saved preference, or use time-of-day default
   const savedTheme = localStorage.getItem('coz-theme');
-  if (savedTheme === 'light') {
+  let useDark: boolean;
+  if (savedTheme) {
+    useDark = savedTheme !== 'light';
+  } else {
+    // Default: dark between 7pm and 7am, light otherwise
+    const hour = new Date().getHours();
+    useDark = hour >= 19 || hour < 7;
+  }
+  if (!useDark) {
     document.documentElement.classList.add('light-mode');
     themeToggle.checked = false;
   } else {
-    // Dark mode (default) - checkbox is checked
     themeToggle.checked = true;
   }
 

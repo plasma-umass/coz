@@ -64,6 +64,41 @@
             </div>
           </div>
 
+          <div id="ai-settings" class="sidebar-section">
+            <h4><i class="fa fa-magic"></i> AI Optimization</h4>
+            <div class="ai-settings-form">
+              <div class="form-group-compact">
+                <label class="ai-label" for="ai-provider">Provider</label>
+                <select id="ai-provider" class="form-control form-control-modern form-control-sm">
+                  <option value="anthropic">Anthropic Claude</option>
+                  <option value="openai">OpenAI GPT</option>
+                  <option value="bedrock">Amazon Bedrock</option>
+                  <option value="ollama">Ollama (local)</option>
+                </select>
+              </div>
+              <div id="ai-key-group" class="form-group-compact">
+                <label class="ai-label" for="ai-api-key">API Key <span id="ai-key-status" class="ai-status"></span></label>
+                <div class="input-with-toggle">
+                  <input type="password" id="ai-api-key" class="form-control form-control-modern form-control-sm" placeholder="Paste API key (or use env var)">
+                  <button type="button" id="ai-key-toggle" class="input-toggle-btn" title="Show/hide key"><i class="fa fa-eye"></i></button>
+                </div>
+              </div>
+              <div id="ai-bedrock-group" class="form-group-compact" style="display: none;">
+                <label class="ai-label" for="ai-bedrock-region">AWS Region <span id="ai-bedrock-status" class="ai-status"></span></label>
+                <input type="text" id="ai-bedrock-region" class="form-control form-control-modern form-control-sm" placeholder="us-east-1">
+              </div>
+              <div id="ai-ollama-group" class="form-group-compact" style="display: none;">
+                <label class="ai-label" for="ai-ollama-host">Ollama Host</label>
+                <input type="text" id="ai-ollama-host" class="form-control form-control-modern form-control-sm" placeholder="http://localhost:11434">
+              </div>
+              <div class="form-group-compact">
+                <label class="ai-label" for="ai-model">Model</label>
+                <select id="ai-model" class="form-control form-control-modern form-control-sm">
+                </select>
+              </div>
+            </div>
+          </div>
+
           <div class="sidebar-section theme-section">
             <div class="theme-toggle">
               <span class="theme-label"><i class="fa fa-sun-o"></i></span>

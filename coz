@@ -572,6 +572,22 @@ def _coz_plot(args):
   import threading
   import urllib.parse
 
+  # Capture LLM configuration from environment variables
+  # Check if boto3 is available for Bedrock
+  try:
+    import boto3
+    _bedrock_available = True
+  except ImportError:
+    _bedrock_available = False
+
+  llm_config = {
+    'anthropic_key_set': bool(os.environ.get('ANTHROPIC_API_KEY', '')),
+    'openai_key_set': bool(os.environ.get('OPENAI_API_KEY', '')),
+    'ollama_host': os.environ.get('OLLAMA_HOST', 'http://localhost:11434'),
+    'bedrock_available': _bedrock_available,
+    'bedrock_region': os.environ.get('AWS_REGION', os.environ.get('AWS_DEFAULT_REGION', '')),
+  }
+
   viewer_dir = _find_viewer_directory()
 
   if viewer_dir is None:
@@ -596,10 +612,97 @@ def _coz_plot(args):
   port = args.port
 
   class CozHandler(http.server.SimpleHTTPRequestHandler):
+    protocol_version = 'HTTP/1.1'
+
     def __init__(self, *args, **kwargs):
       super().__init__(*args, directory=viewer_dir, **kwargs)
 
     def do_GET(self):
+      # Serve source code snippets for the viewer
+      if self.path.startswith('/source-snippet?'):
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        if 'path' not in params or 'line' not in params:
+          self.send_error(400, 'Missing path or line parameter')
+          return
+        try:
+          file_path = params['path'][0]
+          target_line = int(params['line'][0])
+        except (ValueError, IndexError):
+          self.send_error(400, 'Invalid parameters')
+          return
+        try:
+          with open(file_path, 'r', errors='replace') as f:
+            all_lines = f.readlines()
+        except FileNotFoundError:
+          self.send_error(404, f'File not found: {file_path}')
+          return
+        except Exception as e:
+          self.send_error(500, str(e))
+          return
+        # Extract 5 lines centered on target (2 above, target, 2 below)
+        start = max(0, target_line - 3)  # target_line is 1-based
+        end = min(len(all_lines), target_line + 2)
+        lines = []
+        for i in range(start, end):
+          lines.append({
+            'number': i + 1,
+            'text': all_lines[i].rstrip('\n\r'),
+            'is_target': (i + 1) == target_line
+          })
+        import json as json_mod
+        result = json_mod.dumps({'file': file_path, 'target_line': target_line, 'lines': lines})
+        content = result.encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(content))
+        self.end_headers()
+        self.wfile.write(content)
+        return
+
+      # Serve available Ollama models
+      if self.path.startswith('/ollama-models'):
+        import json as json_mod
+        import urllib.request
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        host = params.get('host', [llm_config['ollama_host']])[0]
+        url = host.rstrip('/') + '/api/tags'
+        try:
+          req = urllib.request.Request(url, headers={'Accept': 'application/json'})
+          with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json_mod.loads(resp.read())
+          models = []
+          for m in data.get('models', []):
+            name = m.get('name', '')
+            if name:
+              # Strip :latest suffix for cleaner display
+              label = name.replace(':latest', '')
+              models.append({'value': name, 'label': label})
+          result = json_mod.dumps({'models': models})
+        except Exception as e:
+          result = json_mod.dumps({'models': [], 'error': str(e)})
+        content = result.encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(content))
+        self.end_headers()
+        self.wfile.write(content)
+        return
+
+      # Serve LLM configuration
+      if self.path == '/llm-config':
+        import json as json_mod
+        content = json_mod.dumps(llm_config).encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(content))
+        self.end_headers()
+        self.wfile.write(content)
+        return
+
       # Serve profile.coz from current directory when requested
       if self.path == '/current-profile.coz' and profile_path:
         try:
@@ -617,12 +720,292 @@ def _coz_plot(args):
       # Default handler for other files
       super().do_GET()
 
+    def do_POST(self):
+      if self.path == '/optimize':
+        import json as json_mod
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length)
+        try:
+          req = json_mod.loads(body)
+        except json_mod.JSONDecodeError:
+          self.send_error(400, 'Invalid JSON')
+          return
+
+        file_path = req.get('path', '')
+        line_num = req.get('line', 0)
+        speedup_data = req.get('speedup_data', [])
+        provider = req.get('provider', 'anthropic')
+        api_key = req.get('api_key', '')
+        model = req.get('model', '')
+        ollama_host = req.get('ollama_host', 'http://localhost:11434')
+
+        # Read source context (~30 lines centered on target)
+        source_context = ''
+        try:
+          with open(file_path, 'r', errors='replace') as f:
+            all_lines = f.readlines()
+          start = max(0, line_num - 16)
+          end = min(len(all_lines), line_num + 15)
+          for i in range(start, end):
+            marker = ' >>>' if (i + 1) == line_num else '    '
+            source_context += f'{marker} {i+1:4d}: {all_lines[i].rstrip()}\n'
+        except Exception as e:
+          source_context = f'(Could not read source: {e})'
+
+        # Build speedup curve description
+        curve_desc = ''
+        if speedup_data:
+          curve_desc = 'Causal profiling speedup curve data points (line_speedup% -> program_speedup%):\n'
+          for pt in speedup_data:
+            curve_desc += f'  {pt["speedup"]*100:.0f}% -> {pt["progress_speedup"]*100:.1f}%\n'
+          # Compute slope via linear regression
+          n = len(speedup_data)
+          sum_x = sum(p['speedup'] for p in speedup_data)
+          sum_y = sum(p['progress_speedup'] for p in speedup_data)
+          sum_xy = sum(p['speedup'] * p['progress_speedup'] for p in speedup_data)
+          sum_x2 = sum(p['speedup'] ** 2 for p in speedup_data)
+          denom = n * sum_x2 - sum_x ** 2
+          if denom != 0:
+            slope = (n * sum_xy - sum_x * sum_y) / denom
+            max_prog = max(p['progress_speedup'] for p in speedup_data)
+            curve_desc += f'\nLinear regression slope: {slope:.3f}\n'
+            curve_desc += f'Maximum predicted program speedup: {max_prog*100:.1f}%\n'
+            if slope > 0.3:
+              curve_desc += 'Interpretation: STRONG optimization candidate - steep upward slope indicates this code is genuinely on the critical path.\n'
+            elif slope > 0.1:
+              curve_desc += 'Interpretation: MODERATE optimization candidate - meaningful speedup potential.\n'
+            elif slope > -0.05:
+              curve_desc += 'Interpretation: LOW priority - optimizing this code would have minimal impact on overall performance.\n'
+            else:
+              curve_desc += 'Interpretation: NEGATIVE slope - optimizing this code may actually hurt performance (possible contention or synchronization issue).\n'
+
+        system_prompt = """You are an expert C/C++/Rust performance optimization advisor integrated into Coz, a causal profiler.
+
+IMPORTANT CONTEXT - Causal Profiling:
+Unlike traditional profilers that measure where programs spend time (observational), Coz uses controlled experiments with "virtual speedups" to establish CAUSAL relationships between code optimization and program performance. The data you are given represents PROVEN causal effects, not just hotspot data.
+
+How to interpret the speedup curve:
+- Each data point shows: "if this line were optimized by X%, the whole program would speed up by Y%"
+- A steep upward slope means this code is genuinely on the critical path
+- A flat curve means this code is NOT a bottleneck (even if it uses lots of CPU)
+- A negative slope suggests contention - making this code faster could increase lock contention or synchronization overhead
+
+This is native C/C++/Rust code. Focus your optimization suggestions on:
+1. Algorithmic improvements (better data structures, reduced complexity)
+2. Memory access patterns (cache locality, prefetching, avoiding false sharing)
+3. Parallelism opportunities (SIMD, thread-level parallelism, lock-free structures)
+4. Compiler hints and intrinsics (__builtin_expect, restrict, alignment)
+5. System call reduction and I/O batching
+6. Lock contention reduction (if negative slope suggests contention)
+
+Provide specific, actionable code suggestions. Show optimized code when possible."""
+
+        user_prompt = f"""Analyze this code and suggest optimizations based on causal profiling data.
+
+Source file: {file_path}
+Target line: {line_num}
+
+{curve_desc}
+Source context (target line marked with >>>):
+{source_context}
+
+Based on the causal profiling data, suggest specific optimizations for the target line and surrounding code. Include:
+1. What the causal data tells us about this code's importance
+2. Specific optimization strategies
+3. Optimized code (if applicable)
+4. Expected impact based on the speedup curve"""
+
+        # Dispatch to streaming provider
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/x-ndjson')
+        self.send_header('Connection', 'close')
+        self.send_header('Cache-Control', 'no-cache')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.end_headers()
+
+        def send_chunk(data):
+          """Send a newline-delimited JSON line."""
+          line = json_mod.dumps(data) + '\n'
+          self.wfile.write(line.encode('utf-8'))
+          self.wfile.flush()
+
+        try:
+          if provider == 'anthropic':
+            key = api_key or os.environ.get('ANTHROPIC_API_KEY', '')
+            if not key:
+              raise ValueError('No Anthropic API key provided. Set ANTHROPIC_API_KEY env var or enter key in sidebar.')
+            for chunk in _stream_anthropic(key, model or 'claude-opus-4-20250514', system_prompt, user_prompt):
+              send_chunk({'chunk': chunk})
+          elif provider == 'openai':
+            key = api_key or os.environ.get('OPENAI_API_KEY', '')
+            if not key:
+              raise ValueError('No OpenAI API key provided. Set OPENAI_API_KEY env var or enter key in sidebar.')
+            for chunk in _stream_openai(key, model or 'gpt-4o', system_prompt, user_prompt):
+              send_chunk({'chunk': chunk})
+          elif provider == 'bedrock':
+            region = req.get('bedrock_region', '') or os.environ.get('AWS_REGION', '') or os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+            for chunk in _stream_bedrock(region, model or 'anthropic.claude-opus-4-20250514-v1:0', system_prompt, user_prompt):
+              send_chunk({'chunk': chunk})
+          elif provider == 'ollama':
+            for chunk in _stream_ollama(ollama_host, model or 'llama3', system_prompt, user_prompt):
+              send_chunk({'chunk': chunk})
+          else:
+            raise ValueError(f'Unknown provider: {provider}')
+
+          send_chunk({'done': True})
+        except Exception as e:
+          send_chunk({'error': str(e)})
+
+        self.close_connection = True
+        return
+
+      self.send_error(404, 'Not found')
+
     def log_message(self, format, *args):
-      # Suppress default logging
-      pass
+      # Only log 5xx errors (not 404s from normal probing)
+      if args and str(args[0]).startswith('5'):
+        sys.stderr.write(f'[coz-server] {format % args}\n')
+
+  def _stream_anthropic(key, model, system, user):
+    """Stream text chunks from Anthropic API."""
+    import json as json_mod
+    import urllib.request
+    req_body = json_mod.dumps({
+      'model': model,
+      'max_tokens': 4096,
+      'stream': True,
+      'system': system,
+      'messages': [{'role': 'user', 'content': user}]
+    }).encode('utf-8')
+    req = urllib.request.Request(
+      'https://api.anthropic.com/v1/messages',
+      data=req_body,
+      headers={
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01'
+      }
+    )
+    with urllib.request.urlopen(req, timeout=180) as resp:
+      for raw_line in resp:
+        line = raw_line.decode('utf-8').strip()
+        if line.startswith('data: '):
+          data_str = line[6:]
+          if data_str == '[DONE]':
+            break
+          try:
+            event = json_mod.loads(data_str)
+            if event.get('type') == 'content_block_delta':
+              text = event.get('delta', {}).get('text', '')
+              if text:
+                yield text
+          except json_mod.JSONDecodeError:
+            pass
+
+  def _stream_openai(key, model, system, user):
+    """Stream text chunks from OpenAI API."""
+    import json as json_mod
+    import urllib.request
+    req_body = json_mod.dumps({
+      'model': model,
+      'max_tokens': 4096,
+      'stream': True,
+      'messages': [
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': user}
+      ]
+    }).encode('utf-8')
+    req = urllib.request.Request(
+      'https://api.openai.com/v1/chat/completions',
+      data=req_body,
+      headers={
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {key}'
+      }
+    )
+    with urllib.request.urlopen(req, timeout=180) as resp:
+      for raw_line in resp:
+        line = raw_line.decode('utf-8').strip()
+        if line.startswith('data: '):
+          data_str = line[6:]
+          if data_str == '[DONE]':
+            break
+          try:
+            event = json_mod.loads(data_str)
+            text = event.get('choices', [{}])[0].get('delta', {}).get('content', '')
+            if text:
+              yield text
+          except (json_mod.JSONDecodeError, IndexError):
+            pass
+
+  def _stream_ollama(host, model, system, user):
+    """Stream text chunks from Ollama API."""
+    import json as json_mod
+    import urllib.request
+    req_body = json_mod.dumps({
+      'model': model,
+      'stream': True,
+      'messages': [
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': user}
+      ]
+    }).encode('utf-8')
+    url = host.rstrip('/') + '/api/chat'
+    req = urllib.request.Request(
+      url,
+      data=req_body,
+      headers={'Content-Type': 'application/json'}
+    )
+    with urllib.request.urlopen(req, timeout=300) as resp:
+      for raw_line in resp:
+        line = raw_line.decode('utf-8').strip()
+        if not line:
+          continue
+        try:
+          data = json_mod.loads(line)
+          text = data.get('message', {}).get('content', '')
+          if text:
+            yield text
+          if data.get('done', False):
+            break
+        except json_mod.JSONDecodeError:
+          pass
+
+  def _stream_bedrock(region, model, system, user):
+    """Stream text chunks from Amazon Bedrock."""
+    import json as json_mod
+    try:
+      import boto3
+    except ImportError:
+      raise ValueError('boto3 is required for Amazon Bedrock. Install with: pip install boto3')
+    client = boto3.client('bedrock-runtime', region_name=region)
+    body = json_mod.dumps({
+      'anthropic_version': 'bedrock-2023-05-31',
+      'max_tokens': 4096,
+      'system': system,
+      'messages': [{'role': 'user', 'content': user}]
+    })
+    response = client.invoke_model_with_response_stream(
+      modelId=model,
+      contentType='application/json',
+      accept='application/json',
+      body=body
+    )
+    for event in response['body']:
+      chunk = event.get('chunk')
+      if chunk:
+        data = json_mod.loads(chunk['bytes'])
+        if data.get('type') == 'content_block_delta':
+          text = data.get('delta', {}).get('text', '')
+          if text:
+            yield text
+
+  class ThreadedHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
 
   try:
-    with socketserver.TCPServer(("", port), CozHandler) as httpd:
+    with ThreadedHTTPServer(("", port), CozHandler) as httpd:
       # Build URL with query parameter if profile exists
       if profile_path:
         url = f'http://localhost:{port}/?load=current-profile.coz'
