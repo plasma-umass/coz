@@ -1008,14 +1008,10 @@ Based on the causal profiling data, suggest specific optimizations for the targe
               send_chunk({'chunk': chunk})
           elif provider == 'bedrock':
             region = req.get('bedrock_region', '') or os.environ.get('AWS_REGION', '') or os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
-            raw_ak = req.get('aws_access_key', '')
-            raw_sk = req.get('aws_secret_key', '')
-            raw_st = req.get('aws_session_token', '')
-            sys.stderr.write(f'[bedrock-debug] region={region!r} model={model!r} ak_len={len(raw_ak)} sk_len={len(raw_sk)} st_len={len(raw_st)} ak_prefix={raw_ak[:8]!r}\n')
             aws_creds = {
-              'aws_access_key_id': raw_ak or None,
-              'aws_secret_access_key': raw_sk or None,
-              'aws_session_token': raw_st or None,
+              'aws_access_key_id': req.get('aws_access_key', '') or None,
+              'aws_secret_access_key': req.get('aws_secret_key', '') or None,
+              'aws_session_token': req.get('aws_session_token', '') or None,
             }
             for chunk in _stream_bedrock(region, model or 'anthropic.claude-opus-4-20250514-v1:0', system_prompt, user_prompt, aws_creds):
               send_chunk({'chunk': chunk})
