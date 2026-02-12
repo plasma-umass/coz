@@ -247,12 +247,21 @@ static bool is_system_path(const string& normalized) {
   return false;
 }
 
+static bool is_coz_header(const string& path) {
+  // Never profile coz's own instrumentation header
+  const string suffix = "/coz.h";
+  return path.size() >= suffix.size() &&
+         path.compare(path.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
 static bool file_matches_scope(const string& name,
                                const unordered_set<string>& scope,
                                bool allow_system_sources) {
   if(name.empty())
     return false;
   string normalized = canonicalize_path(name);
+  if(is_coz_header(normalized))
+    return false;
   if(!allow_system_sources && is_system_path(normalized))
     return false;
   if(scope.empty())
