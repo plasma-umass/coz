@@ -495,6 +495,42 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function highlightSyntax(text: string): string {
+  // Tokenize the raw text in a single pass, then escape and wrap each token
+  let keywords = /^(if|else|for|while|do|switch|case|break|continue|return|goto|sizeof|typedef|struct|union|enum|class|namespace|template|typename|public|private|protected|virtual|override|const|static|extern|volatile|inline|void|auto|register|unsigned|signed|restrict|nullptr|NULL|true|false|new|delete|throw|try|catch|using)$/;
+  let types = /^(int|char|float|double|long|short|bool|size_t|ssize_t|uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|FILE|pthread_t|pthread_mutex_t|pthread_cond_t)$/;
+  // Single-pass tokenizer regex
+  let tokenRe = /(\/\/.*$)|(#\w+)|("(?:[^"\\]|\\.)*")|('(?:[^'\\]|\\.)*')|(\b\d+\.?\d*[fFlLuU]*\b)|(\b[a-zA-Z_]\w*\b)|(\+\=|-\=|\*\=|\/\=|%\=|&\=|\|\=|\^=|==|!=|<=|>=|<<|>>|->)|([^a-zA-Z0-9_\s"'#\/]+|\s+|.)/g;
+  let result = '';
+  let m: RegExpExecArray | null;
+  while ((m = tokenRe.exec(text)) !== null) {
+    let tok = m[0];
+    let esc = escapeHtml(tok);
+    if (m[1]) { // comment
+      result += '<span class="syn-comment">' + esc + '</span>';
+    } else if (m[2]) { // preprocessor
+      result += '<span class="syn-preprocessor">' + esc + '</span>';
+    } else if (m[3] || m[4]) { // string or char literal
+      result += '<span class="syn-string">' + esc + '</span>';
+    } else if (m[5]) { // number
+      result += '<span class="syn-number">' + esc + '</span>';
+    } else if (m[6]) { // identifier — check if keyword or type
+      if (keywords.test(tok)) {
+        result += '<span class="syn-keyword">' + esc + '</span>';
+      } else if (types.test(tok)) {
+        result += '<span class="syn-type">' + esc + '</span>';
+      } else {
+        result += esc;
+      }
+    } else if (m[7]) { // operator
+      result += '<span class="syn-operator">' + esc + '</span>';
+    } else {
+      result += esc;
+    }
+  }
+  return result;
+}
+
 /**
  * Returns if this data point is valid.
  * Infinity / -Infinity occurs when dividing by 0.
@@ -1038,7 +1074,7 @@ class Profile {
               let cls = ln.is_target ? 'source-line target' : 'source-line';
               html += '<div class="' + cls + '">' +
                 '<span class="line-number">' + ln.number + '</span>' +
-                '<span class="line-text">' + escapeHtml(ln.text) + '</span></div>';
+                '<span class="line-text">' + highlightSyntax(ln.text) + '</span></div>';
             }
             plotDiv.append('div').attr('class', 'source-panel').html(html);
           });

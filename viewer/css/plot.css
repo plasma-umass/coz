@@ -327,7 +327,7 @@ div.plot {
   right: 6px;
   cursor: pointer;
   font-size: 12px;
-  color: var(--text-muted, #64748b);
+  color: #6366f1;
   opacity: 0;
   transition: opacity 0.15s ease, color 0.15s ease;
   z-index: 2;
@@ -340,7 +340,7 @@ div.plot:hover .source-toggle {
 }
 
 .source-toggle:hover {
-  color: var(--text-primary, #e2e8f0);
+  color: #818cf8;
 }
 
 .source-toggle.active {
@@ -399,6 +399,67 @@ div.plot.source-open {
   color: var(--text-primary, #e2e8f0);
 }
 
+/* Syntax highlighting */
+.source-line .syn-keyword {
+  color: #c084fc;
+  font-weight: 600;
+}
+
+.source-line .syn-type {
+  color: #67e8f9;
+}
+
+.source-line .syn-number {
+  color: #fbbf24;
+}
+
+.source-line .syn-string {
+  color: #86efac;
+}
+
+.source-line .syn-comment {
+  color: #64748b;
+  font-style: italic;
+}
+
+.source-line .syn-operator {
+  color: #f472b6;
+}
+
+.source-line .syn-preprocessor {
+  color: #fb923c;
+}
+
+:root.light-mode .source-line .syn-keyword {
+  color: #7c3aed;
+  font-weight: 600;
+}
+
+:root.light-mode .source-line .syn-type {
+  color: #0891b2;
+}
+
+:root.light-mode .source-line .syn-number {
+  color: #b45309;
+}
+
+:root.light-mode .source-line .syn-string {
+  color: #16a34a;
+}
+
+:root.light-mode .source-line .syn-comment {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+:root.light-mode .source-line .syn-operator {
+  color: #db2777;
+}
+
+:root.light-mode .source-line .syn-preprocessor {
+  color: #c2410c;
+}
+
 /* ==========================================================================
    AI Optimization Panel
    ========================================================================== */
@@ -409,7 +470,7 @@ div.plot.source-open {
   right: 28px;
   cursor: pointer;
   font-size: 13px;
-  color: var(--accent-color, #f59e0b);
+  color: #6366f1;
   opacity: 0;
   transition: opacity 0.15s ease, color 0.15s ease;
   z-index: 2;
@@ -422,12 +483,12 @@ div.plot:hover .optimize-toggle {
 }
 
 .optimize-toggle:hover {
-  color: var(--text-primary, #e2e8f0);
+  color: #818cf8;
 }
 
 .optimize-toggle.active {
   opacity: 1;
-  color: #f59e0b;
+  color: #6366f1;
 }
 
 div.plot.optimize-open {
@@ -643,6 +704,22 @@ pre.optimize-code code {
 
 :root.light-mode .d3-tip:after {
   color: rgba(255, 255, 255, 0.98);
+}
+
+:root.light-mode .source-toggle {
+  color: #4f46e5;
+}
+
+:root.light-mode .source-toggle:hover {
+  color: #3730a3;
+}
+
+:root.light-mode .optimize-toggle {
+  color: #4f46e5;
+}
+
+:root.light-mode .optimize-toggle:hover {
+  color: #3730a3;
 }
 
 :root.light-mode .source-panel {
