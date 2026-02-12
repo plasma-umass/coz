@@ -352,6 +352,24 @@ d3.select('#sortby_field').on('change', update);
 // AI provider toggle
 $('#ai-provider').on('change', function() {
   toggleProviderFields();
+  saveLLMSettings();
+});
+
+// Refresh models button
+$('#ai-model-refresh').on('click', function() {
+  let provider = getSelectedProvider();
+  try { localStorage.removeItem('coz-models-' + provider); } catch (e) {}
+  _provider_models[provider] = [];
+  _force_model_refresh = true;
+  if (provider === 'anthropic') _anthropic_models_fetched = false;
+  else if (provider === 'openai') _openai_models_fetched = false;
+  else if (provider === 'bedrock') _bedrock_models_fetched = false;
+  else if (provider === 'ollama') _ollama_models_fetched = false;
+  populateModelDropdown();
+  // Spin the icon briefly
+  let icon = $(this).find('i');
+  icon.addClass('fa-spin');
+  setTimeout(function() { icon.removeClass('fa-spin'); }, 1000);
 });
 
 // Re-fetch Ollama models when host changes
@@ -361,6 +379,35 @@ $('#ai-ollama-host').on('change', function() {
   if (getSelectedProvider() === 'ollama') {
     populateModelDropdown();
   }
+  saveLLMSettings();
+});
+
+// Re-fetch Bedrock models when region or credentials change
+$('#ai-bedrock-region, #ai-aws-access-key, #ai-aws-secret-key, #ai-aws-session-token').on('change', function() {
+  _bedrock_models_fetched = false;
+  if (getSelectedProvider() === 'bedrock') {
+    populateModelDropdown();
+  }
+  saveLLMSettings();
+});
+
+// Save model selection on change
+$('#ai-model').on('change', function() {
+  saveLLMSettings();
+});
+
+// Save API key on blur and re-fetch models for Anthropic/OpenAI
+$('#ai-api-key').on('change', function() {
+  let provider = getSelectedProvider();
+  if (provider === 'anthropic') {
+    _anthropic_models_fetched = false;
+    _provider_models['anthropic'] = [];
+  } else if (provider === 'openai') {
+    _openai_models_fetched = false;
+    _provider_models['openai'] = [];
+  }
+  populateModelDropdown();
+  saveLLMSettings();
 });
 
 // API key show/hide toggle
@@ -428,6 +475,77 @@ if (themeToggle) {
     }
   });
 }
+
+// Sidebar resize handle
+(function setupSidebarResize() {
+  let handle = document.getElementById('sidebar-resize-handle');
+  let sidebar = document.getElementById('sidebar');
+  if (!handle || !sidebar) return;
+
+  let mainContent = document.querySelector('.main-content') as HTMLElement;
+  if (!mainContent) return;
+
+  let isDragging = false;
+
+  function positionHandle() {
+    let sidebarRect = sidebar!.getBoundingClientRect();
+    handle!.style.left = sidebarRect.width + 'px';
+  }
+
+  function applySidebarWidth(width: number) {
+    let clamped = Math.max(150, Math.min(width, window.innerWidth - 200));
+    sidebar!.style.width = clamped + 'px';
+    mainContent.style.marginLeft = clamped + 'px';
+    positionHandle();
+  }
+
+  // Restore saved width
+  let savedWidth = localStorage.getItem('coz-sidebar-width');
+  if (savedWidth) {
+    applySidebarWidth(parseInt(savedWidth, 10));
+  } else {
+    // Position handle at default sidebar width
+    setTimeout(positionHandle, 0);
+  }
+
+  handle.addEventListener('mousedown', function(e: MouseEvent) {
+    e.preventDefault();
+    isDragging = true;
+    handle!.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', function(e: MouseEvent) {
+    if (!isDragging) return;
+    applySidebarWidth(e.clientX);
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (!isDragging) return;
+    isDragging = false;
+    handle!.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    let currentWidth = sidebar!.getBoundingClientRect().width;
+    localStorage.setItem('coz-sidebar-width', String(Math.round(currentWidth)));
+    update(true);
+  });
+
+  // Double-click to reset
+  handle.addEventListener('dblclick', function() {
+    sidebar!.style.width = '';
+    mainContent.style.marginLeft = '';
+    localStorage.removeItem('coz-sidebar-width');
+    setTimeout(function() {
+      positionHandle();
+      update(true);
+    }, 0);
+  });
+
+  // Reposition on window resize
+  window.addEventListener('resize', positionHandle);
+})();
 
 // Sample profiles configuration
 let sample_profiles = ['blackscholes', 'dedup', 'ferret', 'fluidanimate', 'sqlite', 'swaptions'];

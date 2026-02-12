@@ -116,8 +116,13 @@
               </div>
               <div class="form-group-compact">
                 <label class="ai-label" for="ai-model">Model</label>
-                <select id="ai-model" class="form-control form-control-modern form-control-sm">
-                </select>
+                <div style="display:flex; gap:4px; align-items:center;">
+                  <select id="ai-model" class="form-control form-control-modern form-control-sm" style="flex:1;">
+                  </select>
+                  <button id="ai-model-refresh" class="btn btn-xs" title="Refresh model list" style="padding:2px 6px; line-height:1; border:1px solid var(--border-color,#444); background:transparent; color:var(--text-secondary,#999); cursor:pointer;">
+                    <i class="fa fa-refresh"></i>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -143,6 +148,7 @@
           </div>
         </div>
 
+        <div id="sidebar-resize-handle"></div>
         <div class="col-sm-9 col-sm-offset-3 col-md-9 col-md-offset-3 col-lg-10 col-lg-offset-2 main-content">
           <div class="row">
             <div id="warning-area" class="col-md-12"></div>

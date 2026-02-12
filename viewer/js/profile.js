@@ -10,12 +10,62 @@ let _optimize_open_name = null;
 const _optimize_cache = {};
 let _optimize_server_available = null;
 let _llm_config = null;
+function getLLMSettings() {
+    try {
+        let match = document.cookie.match(/(?:^|;\s*)coz-llm=([^;]*)/);
+        if (match)
+            return JSON.parse(decodeURIComponent(match[1]));
+    }
+    catch (e) { }
+    // Migrate from localStorage if present (one-time)
+    try {
+        let raw = localStorage.getItem('coz-llm-settings');
+        if (raw) {
+            let settings = JSON.parse(raw);
+            document.cookie = 'coz-llm=' + encodeURIComponent(raw) + ';max-age=31536000;path=/;SameSite=Lax';
+            localStorage.removeItem('coz-llm-settings');
+            return settings;
+        }
+    }
+    catch (e) { }
+    return {};
+}
+function saveLLMSettings() {
+    let s = getLLMSettings();
+    let provider = getSelectedProvider();
+    s.provider = provider;
+    // Save API key per provider
+    let apiKeyEl = document.getElementById('ai-api-key');
+    if (provider === 'anthropic')
+        s.anthropic_key = apiKeyEl ? apiKeyEl.value : '';
+    else if (provider === 'openai')
+        s.openai_key = apiKeyEl ? apiKeyEl.value : '';
+    // Save model per provider
+    if (!s.models)
+        s.models = {};
+    let model = getModelName();
+    if (model)
+        s.models[provider] = model;
+    // Save Bedrock region only — AWS credentials come from env vars, session tokens are ephemeral
+    let regionEl = document.getElementById('ai-bedrock-region');
+    if (regionEl)
+        s.bedrock_region = regionEl.value;
+    // Clear any stale AWS credentials from saved settings
+    delete s.aws_access_key;
+    delete s.aws_secret_key;
+    delete s.aws_session_token;
+    // Save Ollama host
+    s.ollama_host = getOllamaHost();
+    document.cookie = 'coz-llm=' + encodeURIComponent(JSON.stringify(s)) + ';max-age=31536000;path=/;SameSite=Lax';
+}
+// Saved model selections to restore after async model fetches complete
+let _saved_model_selections = {};
+// ---- End settings persistence ----
 // Probe whether the source-snippet endpoint exists
 (function probeSourceServer() {
     let xhr = new XMLHttpRequest();
     xhr.open('GET', '/source-snippet?path=__probe__&line=1', true);
     xhr.onload = function () {
-        // 400 (bad params) or 404 (file not found) both mean the endpoint exists
         _source_server_available = true;
     };
     xhr.onerror = function () {
@@ -59,15 +109,16 @@ function getModelName() {
     let el = document.getElementById('ai-model');
     return el ? el.value : '';
 }
-const _provider_models = {
+// Hardcoded fallback models (used when dynamic fetch fails or no API key)
+const _fallback_models = {
     'anthropic': [
         { value: 'claude-opus-4-20250514', label: 'Claude Opus 4' },
         { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
         { value: 'claude-haiku-4-20250514', label: 'Claude Haiku 4' },
     ],
     'openai': [
-        { value: 'gpt-4o', label: 'GPT-4o' },
-        { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+        { value: 'gpt-4o', label: 'gpt-4o' },
+        { value: 'gpt-4o-mini', label: 'gpt-4o-mini' },
         { value: 'o3-mini', label: 'o3-mini' },
     ],
     'bedrock': [
@@ -77,18 +128,53 @@ const _provider_models = {
     ],
     'ollama': []
 };
-// Cache for fetched Ollama models
+// Dynamically fetched models (populated after API calls)
+const _provider_models = {
+    'anthropic': [], 'openai': [], 'bedrock': [], 'ollama': []
+};
+// Cache flags — true means we've done a live fetch this session
 let _ollama_models_fetched = false;
+let _bedrock_models_fetched = false;
+let _anthropic_models_fetched = false;
+let _openai_models_fetched = false;
+// localStorage helpers for model cache
+function _getCachedModels(provider) {
+    try {
+        let raw = localStorage.getItem('coz-models-' + provider);
+        if (raw)
+            return JSON.parse(raw);
+    }
+    catch (e) { }
+    return [];
+}
+function _setCachedModels(provider, models) {
+    try {
+        localStorage.setItem('coz-models-' + provider, JSON.stringify(models));
+    }
+    catch (e) { }
+}
 function populateModelDropdown() {
     let provider = getSelectedProvider();
     let modelEl = document.getElementById('ai-model');
     if (!modelEl)
         return;
+    if (provider === 'anthropic') {
+        fetchAnthropicModels(modelEl);
+        return;
+    }
+    if (provider === 'openai') {
+        fetchOpenAIModels(modelEl);
+        return;
+    }
+    if (provider === 'bedrock') {
+        fetchBedrockModels(modelEl);
+        return;
+    }
     if (provider === 'ollama') {
         fetchOllamaModels(modelEl);
         return;
     }
-    _setModelOptions(modelEl, _provider_models[provider] || []);
+    _setModelOptions(modelEl, _fallback_models[provider] || []);
 }
 function _setModelOptions(el, models) {
     el.innerHTML = '';
@@ -98,48 +184,164 @@ function _setModelOptions(el, models) {
         opt.textContent = models[i].label;
         el.appendChild(opt);
     }
+    // Restore saved model selection if available
+    let provider = getSelectedProvider();
+    let savedModel = _saved_model_selections[provider];
+    if (savedModel) {
+        for (let i = 0; i < models.length; i++) {
+            if (models[i].value === savedModel) {
+                el.value = savedModel;
+                break;
+            }
+        }
+    }
 }
-function fetchOllamaModels(modelEl) {
-    // Show a placeholder while loading
-    let host = getOllamaHost();
-    let cached = _provider_models['ollama'];
-    if (cached.length > 0 && _ollama_models_fetched) {
-        _setModelOptions(modelEl, cached);
+function _setFetchedFlag(provider, value) {
+    if (provider === 'ollama')
+        _ollama_models_fetched = value;
+    else if (provider === 'bedrock')
+        _bedrock_models_fetched = value;
+    else if (provider === 'anthropic')
+        _anthropic_models_fetched = value;
+    else if (provider === 'openai')
+        _openai_models_fetched = value;
+}
+function _getFetchedFlag(provider) {
+    if (provider === 'ollama')
+        return _ollama_models_fetched;
+    if (provider === 'bedrock')
+        return _bedrock_models_fetched;
+    if (provider === 'anthropic')
+        return _anthropic_models_fetched;
+    if (provider === 'openai')
+        return _openai_models_fetched;
+    return false;
+}
+let _force_model_refresh = false;
+function _fetchModels(provider, url, modelEl, fallback) {
+    let isForced = _force_model_refresh;
+    _force_model_refresh = false;
+    // If we already fetched live this session and have in-memory models, just use them
+    if (!isForced && _provider_models[provider].length > 0 && _getFetchedFlag(provider)) {
+        _setModelOptions(modelEl, _provider_models[provider]);
         return;
     }
-    modelEl.innerHTML = '<option value="">Loading models...</option>';
+    if (isForced) {
+        // Show loading state on manual refresh
+        modelEl.innerHTML = '<option value="">Refreshing models...</option>';
+    }
+    else {
+        // Show cached models instantly (localStorage or fallback) — no "Loading..." flash
+        let cached = _getCachedModels(provider);
+        if (cached.length > 0) {
+            _provider_models[provider] = cached;
+            _setModelOptions(modelEl, cached);
+        }
+        else if (fallback.length > 0) {
+            _setModelOptions(modelEl, fallback);
+        }
+        else {
+            modelEl.innerHTML = '<option value="">Loading models...</option>';
+        }
+    }
+    // Fetch from server
     let xhr = new XMLHttpRequest();
-    xhr.open('GET', '/ollama-models?host=' + encodeURIComponent(host), true);
+    xhr.open('GET', url, true);
     xhr.onload = function () {
+        if (getSelectedProvider() !== provider)
+            return;
         if (xhr.status === 200) {
             try {
                 let data = JSON.parse(xhr.responseText);
                 let models = data.models || [];
                 if (models.length > 0) {
-                    _provider_models['ollama'] = models;
-                    _ollama_models_fetched = true;
-                    // Only update if still on Ollama
-                    if (getSelectedProvider() === 'ollama') {
-                        _setModelOptions(modelEl, models);
-                    }
+                    _provider_models[provider] = models;
+                    _setFetchedFlag(provider, true);
+                    _setCachedModels(provider, models);
+                    _setModelOptions(modelEl, models);
+                    return;
                 }
-                else {
-                    let errMsg = data.error ? 'Ollama unreachable' : 'No models installed';
-                    modelEl.innerHTML = '<option value="">' + errMsg + '</option>';
+                // API returned 0 models — show error if present
+                let error = data.error || 'No models returned';
+                console.warn('[coz] ' + provider + ' models fetch: ' + error);
+                if (isForced) {
+                    modelEl.innerHTML = '<option value="">Error: ' + error.substring(0, 60) + '</option>';
                 }
             }
             catch (e) {
-                modelEl.innerHTML = '<option value="">Error loading models</option>';
+                console.warn('[coz] ' + provider + ' models parse error:', e);
+                if (isForced) {
+                    modelEl.innerHTML = '<option value="">Error parsing response</option>';
+                }
             }
         }
         else {
-            modelEl.innerHTML = '<option value="">Error loading models</option>';
+            console.warn('[coz] ' + provider + ' models HTTP ' + xhr.status);
+            if (isForced) {
+                modelEl.innerHTML = '<option value="">HTTP error ' + xhr.status + '</option>';
+            }
+        }
+        _setFetchedFlag(provider, true);
+        // On non-forced, fallback was already shown; on forced error, add fallbacks below
+        if (isForced && fallback.length > 0) {
+            for (let i = 0; i < fallback.length; i++) {
+                let opt = document.createElement('option');
+                opt.value = fallback[i].value;
+                opt.textContent = fallback[i].label;
+                modelEl.appendChild(opt);
+            }
         }
     };
     xhr.onerror = function () {
-        modelEl.innerHTML = '<option value="">Ollama unavailable</option>';
+        console.warn('[coz] ' + provider + ' models network error');
+        if (getSelectedProvider() === provider && isForced) {
+            modelEl.innerHTML = '<option value="">Network error</option>';
+            for (let i = 0; i < fallback.length; i++) {
+                let opt = document.createElement('option');
+                opt.value = fallback[i].value;
+                opt.textContent = fallback[i].label;
+                modelEl.appendChild(opt);
+            }
+        }
+        _setFetchedFlag(provider, true);
     };
     xhr.send();
+}
+function fetchAnthropicModels(modelEl) {
+    // Check if there's a key available (form, saved, or env) — if not, skip fetch
+    let key = getApiKey();
+    if (!key && _llm_config)
+        key = _llm_config.anthropic_key || '';
+    if (!key) {
+        _setModelOptions(modelEl, _fallback_models['anthropic']);
+        return;
+    }
+    // Server uses its own env var; only pass key if user typed one not in env
+    let envKey = _llm_config ? _llm_config.anthropic_key || '' : '';
+    let url = (key && key !== envKey) ? '/anthropic-models?api_key=' + encodeURIComponent(key) : '/anthropic-models';
+    _fetchModels('anthropic', url, modelEl, _fallback_models['anthropic']);
+}
+function fetchOpenAIModels(modelEl) {
+    let key = getApiKey();
+    if (!key && _llm_config)
+        key = _llm_config.openai_key || '';
+    if (!key) {
+        _setModelOptions(modelEl, _fallback_models['openai']);
+        return;
+    }
+    let envKey = _llm_config ? _llm_config.openai_key || '' : '';
+    let url = (key && key !== envKey) ? '/openai-models?api_key=' + encodeURIComponent(key) : '/openai-models';
+    _fetchModels('openai', url, modelEl, _fallback_models['openai']);
+}
+function fetchBedrockModels(modelEl) {
+    // Only pass region — server uses its own AWS env credentials
+    let regionEl = document.getElementById('ai-bedrock-region');
+    let region = regionEl && regionEl.value ? regionEl.value : '';
+    _fetchModels('bedrock', '/bedrock-models?region=' + encodeURIComponent(region), modelEl, _fallback_models['bedrock']);
+}
+function fetchOllamaModels(modelEl) {
+    let host = getOllamaHost();
+    _fetchModels('ollama', '/ollama-models?host=' + encodeURIComponent(host), modelEl, _fallback_models['ollama']);
 }
 function getOllamaHost() {
     let el = document.getElementById('ai-ollama-host');
@@ -154,17 +356,54 @@ function updateProviderUI() {
     let statusEl = document.getElementById('ai-key-status');
     if (!providerEl)
         return;
-    // Auto-select first configured provider
-    if (_llm_config.anthropic_key_set) {
+    // Load saved settings from cookie
+    let saved = getLLMSettings();
+    _saved_model_selections = saved.models || {};
+    // Determine provider: saved > auto-detect from env > default
+    if (saved.provider) {
+        providerEl.value = saved.provider;
+    }
+    else if (_llm_config.anthropic_key_set) {
         providerEl.value = 'anthropic';
-        if (statusEl) {
-            statusEl.textContent = '(configured)';
-            statusEl.className = 'ai-status configured';
-        }
     }
     else if (_llm_config.openai_key_set) {
         providerEl.value = 'openai';
-        if (statusEl) {
+    }
+    let provider = providerEl.value;
+    // Pre-fill API key: saved > env var
+    let apiKeyEl = document.getElementById('ai-api-key');
+    if (apiKeyEl) {
+        if (provider === 'anthropic') {
+            apiKeyEl.value = saved.anthropic_key || _llm_config.anthropic_key || '';
+        }
+        else if (provider === 'openai') {
+            apiKeyEl.value = saved.openai_key || _llm_config.openai_key || '';
+        }
+    }
+    // Pre-fill AWS credential fields from env vars only (not saved — session tokens are ephemeral)
+    let awsFields = [
+        ['ai-aws-access-key', 'aws_access_key'],
+        ['ai-aws-secret-key', 'aws_secret_key'],
+        ['ai-aws-session-token', 'aws_session_token'],
+    ];
+    for (let i = 0; i < awsFields.length; i++) {
+        let el = document.getElementById(awsFields[i][0]);
+        if (el)
+            el.value = _llm_config[awsFields[i][1]] || '';
+    }
+    // Pre-fill region: saved > env var
+    let regionEl = document.getElementById('ai-bedrock-region');
+    if (regionEl)
+        regionEl.value = saved.bedrock_region || _llm_config.bedrock_region || '';
+    // Pre-fill Ollama host: saved > env var
+    let ollamaEl = document.getElementById('ai-ollama-host');
+    if (ollamaEl && saved.ollama_host)
+        ollamaEl.value = saved.ollama_host;
+    // Update status
+    if (statusEl) {
+        let hasKey = (provider === 'anthropic' && (apiKeyEl && apiKeyEl.value || _llm_config.anthropic_key_set)) ||
+            (provider === 'openai' && (apiKeyEl && apiKeyEl.value || _llm_config.openai_key_set));
+        if (hasKey) {
             statusEl.textContent = '(configured)';
             statusEl.className = 'ai-status configured';
         }
@@ -184,13 +423,24 @@ function toggleProviderFields() {
         ollamaGroup.style.display = provider === 'ollama' ? 'flex' : 'none';
     if (bedrockGroup)
         bedrockGroup.style.display = provider === 'bedrock' ? 'block' : 'none';
-    // Update status indicator for API key providers
-    if (statusEl && _llm_config) {
-        if (provider === 'anthropic' && _llm_config.anthropic_key_set) {
-            statusEl.textContent = '(configured)';
-            statusEl.className = 'ai-status configured';
+    // Set API key for current provider: saved > env var > clear
+    if (needsKey) {
+        let apiKeyEl = document.getElementById('ai-api-key');
+        if (apiKeyEl) {
+            let saved = getLLMSettings();
+            if (provider === 'anthropic') {
+                apiKeyEl.value = saved.anthropic_key || (_llm_config ? _llm_config.anthropic_key || '' : '');
+            }
+            else if (provider === 'openai') {
+                apiKeyEl.value = saved.openai_key || (_llm_config ? _llm_config.openai_key || '' : '');
+            }
         }
-        else if (provider === 'openai' && _llm_config.openai_key_set) {
+    }
+    // Update status indicator
+    if (statusEl) {
+        let apiKeyEl = document.getElementById('ai-api-key');
+        let hasKey = apiKeyEl && apiKeyEl.value;
+        if (hasKey) {
             statusEl.textContent = '(configured)';
             statusEl.className = 'ai-status configured';
         }
@@ -210,32 +460,26 @@ function toggleProviderFields() {
             bedrockStatusEl.textContent = '(boto3 not found)';
             bedrockStatusEl.className = 'ai-status';
         }
-        // Pre-fill region if set
-        if (_llm_config.bedrock_region) {
-            let regionEl = document.getElementById('ai-bedrock-region');
-            if (regionEl && !regionEl.value) {
-                regionEl.placeholder = _llm_config.bedrock_region;
-            }
-        }
-        // Show if AWS credentials are configured via env vars
-        if (_llm_config.aws_credentials_set) {
-            let accessKeyEl = document.getElementById('ai-aws-access-key');
-            if (accessKeyEl && !accessKeyEl.value) {
-                accessKeyEl.placeholder = 'Configured via env var';
-            }
-        }
     }
     // Populate model dropdown for this provider
     populateModelDropdown();
 }
 function formatOptimizationText(text) {
-    // Convert markdown to HTML
-    // Code blocks
+    // Extract code blocks first (before markdown transforms corrupt them)
+    let codeBlocks = [];
     text = text.replace(/```(\w*)\n([\s\S]*?)```/g, function (_match, _lang, code) {
-        return '<pre class="optimize-code"><code>' + escapeHtml(code.trim()) + '</code></pre>';
+        let trimmed = code.trim();
+        let idx = codeBlocks.length;
+        codeBlocks.push(trimmed);
+        return '\x00CODEBLOCK' + idx + '\x00';
     });
-    // Inline code
-    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Inline code — protect from further transforms
+    let inlineCode = [];
+    text = text.replace(/`([^`]+)`/g, function (_match, code) {
+        let idx = inlineCode.length;
+        inlineCode.push(code);
+        return '\x00INLINE' + idx + '\x00';
+    });
     // Bold
     text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     // Italic
@@ -254,8 +498,44 @@ function formatOptimizationText(text) {
     text = text.replace(/\n\n/g, '</p><p>');
     // Single newlines (not before/after block elements)
     text = text.replace(/\n/g, '<br>');
+    // Restore inline code
+    text = text.replace(/\x00INLINE(\d+)\x00/g, function (_m, idx) {
+        return '<code>' + escapeHtml(inlineCode[parseInt(idx, 10)]) + '</code>';
+    });
+    // Restore code blocks with copy buttons
+    text = text.replace(/\x00CODEBLOCK(\d+)\x00/g, function (_m, idx) {
+        let raw = codeBlocks[parseInt(idx, 10)];
+        let encoded = raw.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        return '<div class="code-block-wrap">' +
+            '<button class="code-copy-btn" data-code="' + encoded + '" title="Copy code"><i class="fa fa-copy"></i></button>' +
+            '<pre class="optimize-code"><code>' + escapeHtml(raw) + '</code></pre>' +
+            '</div>';
+    });
     return '<p>' + text + '</p>';
 }
+// Event delegation for code block copy buttons
+document.addEventListener('click', function (e) {
+    let target = e.target;
+    // Walk up to find the button (in case the <i> icon was clicked)
+    let btn = target.closest('.code-copy-btn');
+    if (!btn)
+        return;
+    let code = btn.getAttribute('data-code');
+    if (!code)
+        return;
+    // Decode HTML entities back to raw text
+    let textarea = document.createElement('textarea');
+    textarea.innerHTML = code;
+    let rawCode = textarea.value;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(rawCode).then(function () {
+            btn.innerHTML = '<i class="fa fa-check"></i>';
+            setTimeout(function () {
+                btn.innerHTML = '<i class="fa fa-copy"></i>';
+            }, 2000);
+        });
+    }
+});
 // Expected response length for progress estimation (chars)
 const EXPECTED_RESPONSE_LENGTH = 2500;
 function fetchOptimizationStream(name, measurements, callbacks) {

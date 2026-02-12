@@ -587,6 +587,12 @@ def _coz_plot(args):
     'bedrock_available': _bedrock_available,
     'bedrock_region': os.environ.get('AWS_REGION', os.environ.get('AWS_DEFAULT_REGION', '')),
     'aws_credentials_set': bool(os.environ.get('AWS_ACCESS_KEY_ID', '')),
+    # Actual key values for pre-populating UI fields
+    'anthropic_key': os.environ.get('ANTHROPIC_API_KEY', ''),
+    'openai_key': os.environ.get('OPENAI_API_KEY', ''),
+    'aws_access_key': os.environ.get('AWS_ACCESS_KEY_ID', ''),
+    'aws_secret_key': os.environ.get('AWS_SECRET_ACCESS_KEY', ''),
+    'aws_session_token': os.environ.get('AWS_SESSION_TOKEN', ''),
   }
 
   viewer_dir = _find_viewer_directory()
@@ -632,6 +638,15 @@ def _coz_plot(args):
           target_line = int(params['line'][0])
         except (ValueError, IndexError):
           self.send_error(400, 'Invalid parameters')
+          return
+        # Probe request — just confirm the endpoint exists
+        if file_path == '__probe__':
+          content = b'{"probe": true}'
+          self.send_response(200)
+          self.send_header('Content-Type', 'application/json')
+          self.send_header('Content-Length', len(content))
+          self.end_headers()
+          self.wfile.write(content)
           return
         try:
           with open(file_path, 'r', errors='replace') as f:
@@ -682,6 +697,154 @@ def _coz_plot(args):
               # Strip :latest suffix for cleaner display
               label = name.replace(':latest', '')
               models.append({'value': name, 'label': label})
+          result = json_mod.dumps({'models': models})
+        except Exception as e:
+          result = json_mod.dumps({'models': [], 'error': str(e)})
+        content = result.encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(content))
+        self.end_headers()
+        self.wfile.write(content)
+        return
+
+      # Serve available Anthropic models
+      if self.path.startswith('/anthropic-models'):
+        import json as json_mod
+        import urllib.request
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        api_key = params.get('api_key', [''])[0] or os.environ.get('ANTHROPIC_API_KEY', '')
+        if not api_key:
+          result = json_mod.dumps({'models': [], 'error': 'No API key'})
+        else:
+          try:
+            req = urllib.request.Request(
+              'https://api.anthropic.com/v1/models?limit=100',
+              headers={
+                'x-api-key': api_key,
+                'anthropic-version': '2023-06-01',
+                'Accept': 'application/json'
+              }
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+              data = json_mod.loads(resp.read())
+            models = []
+            for m in data.get('data', []):
+              model_id = m.get('id', '')
+              display = m.get('display_name', model_id)
+              models.append({'value': model_id, 'label': display})
+            result = json_mod.dumps({'models': models})
+          except Exception as e:
+            result = json_mod.dumps({'models': [], 'error': str(e)})
+        content = result.encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(content))
+        self.end_headers()
+        self.wfile.write(content)
+        return
+
+      # Serve available OpenAI models
+      if self.path.startswith('/openai-models'):
+        import json as json_mod
+        import urllib.request
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        api_key = params.get('api_key', [''])[0] or os.environ.get('OPENAI_API_KEY', '')
+        if not api_key:
+          result = json_mod.dumps({'models': [], 'error': 'No API key'})
+        else:
+          try:
+            req = urllib.request.Request(
+              'https://api.openai.com/v1/models',
+              headers={
+                'Authorization': f'Bearer {api_key}',
+                'Accept': 'application/json'
+              }
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+              data = json_mod.loads(resp.read())
+            # Curated set of models known to work with chat completions
+            known_good = {
+              'gpt-4o', 'gpt-4o-mini',
+              'gpt-4-turbo', 'gpt-4-turbo-preview',
+              'gpt-4', 'gpt-4-0613',
+              'gpt-3.5-turbo', 'gpt-3.5-turbo-0125',
+              'o1', 'o1-mini', 'o1-preview',
+              'o3', 'o3-mini', 'o3-pro',
+              'o4-mini',
+              'chatgpt-4o-latest',
+            }
+            available_ids = {m.get('id', '') for m in data.get('data', [])}
+            models = []
+            for model_id in sorted(known_good):
+              if model_id in available_ids:
+                models.append({'value': model_id, 'label': model_id})
+            result = json_mod.dumps({'models': models})
+          except Exception as e:
+            result = json_mod.dumps({'models': [], 'error': str(e)})
+        content = result.encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(content))
+        self.end_headers()
+        self.wfile.write(content)
+        return
+
+      # Serve available Bedrock models
+      if self.path.startswith('/bedrock-models'):
+        import json as json_mod
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        region = (params.get('region', [''])[0]
+                  or os.environ.get('AWS_REGION', '')
+                  or os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'))
+        try:
+          import boto3
+          import re as _re
+          # Let boto3 handle credentials via its default chain
+          client = boto3.client('bedrock', region_name=region)
+
+          # Build a map of model_id -> inference_profile_id from cross-region profiles
+          profile_map = {}
+          try:
+            profiles_resp = client.list_inference_profiles(typeEquals='SYSTEM_DEFINED')
+            for p in profiles_resp.get('inferenceProfileSummaries', []):
+              profile_id = p.get('inferenceProfileId', '')
+              for m in p.get('models', []):
+                mid = m.get('modelArn', '').split('/')[-1] if 'modelArn' in m else ''
+                if mid:
+                  profile_map[mid] = profile_id
+          except Exception:
+            pass  # Fallback: use raw model IDs
+
+          resp = client.list_foundation_models()
+          models = []
+          for m in resp.get('modelSummaries', []):
+            if 'TEXT' not in m.get('outputModalities', []):
+              continue
+            model_id = m.get('modelId', '')
+            # Skip context-size variants (e.g. model:0:18k, model:0:200k)
+            if _re.search(r':\d+k$', model_id):
+              continue
+            # Skip rerank / embedding models
+            if 'rerank' in model_id.lower() or 'embed' in model_id.lower():
+              continue
+            # Skip multimedia-only variants
+            if model_id.endswith(':mm'):
+              continue
+            provider_name = m.get('providerName', '')
+            model_name = m.get('modelName', '')
+            label = (provider_name + ' ' + model_name).strip()
+            # Use inference profile ID if available (required for newer models)
+            value = profile_map.get(model_id, model_id)
+            models.append({'value': value, 'label': label})
+          # Sort: Anthropic first, then alphabetically by label
+          models.sort(key=lambda x: (0 if 'anthropic' in x['value'] else 1, x['label']))
           result = json_mod.dumps({'models': models})
         except Exception as e:
           result = json_mod.dumps({'models': [], 'error': str(e)})
@@ -845,10 +1008,14 @@ Based on the causal profiling data, suggest specific optimizations for the targe
               send_chunk({'chunk': chunk})
           elif provider == 'bedrock':
             region = req.get('bedrock_region', '') or os.environ.get('AWS_REGION', '') or os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+            raw_ak = req.get('aws_access_key', '')
+            raw_sk = req.get('aws_secret_key', '')
+            raw_st = req.get('aws_session_token', '')
+            sys.stderr.write(f'[bedrock-debug] region={region!r} model={model!r} ak_len={len(raw_ak)} sk_len={len(raw_sk)} st_len={len(raw_st)} ak_prefix={raw_ak[:8]!r}\n')
             aws_creds = {
-              'aws_access_key_id': req.get('aws_access_key', '') or None,
-              'aws_secret_access_key': req.get('aws_secret_key', '') or None,
-              'aws_session_token': req.get('aws_session_token', '') or None,
+              'aws_access_key_id': raw_ak or None,
+              'aws_secret_access_key': raw_sk or None,
+              'aws_session_token': raw_st or None,
             }
             for chunk in _stream_bedrock(region, model or 'anthropic.claude-opus-4-20250514-v1:0', system_prompt, user_prompt, aws_creds):
               send_chunk({'chunk': chunk})
@@ -978,13 +1145,12 @@ Based on the causal profiling data, suggest specific optimizations for the targe
           pass
 
   def _stream_bedrock(region, model, system, user, aws_creds=None):
-    """Stream text chunks from Amazon Bedrock."""
-    import json as json_mod
+    """Stream text chunks from Amazon Bedrock using the Converse Stream API (model-agnostic)."""
     try:
       import boto3
+      from botocore.exceptions import ClientError
     except ImportError:
       raise ValueError('boto3 is required for Amazon Bedrock. Install with: pip install boto3')
-    # Build client kwargs — use explicit credentials if provided, otherwise fall back to env/profile
     client_kwargs = {'region_name': region}
     if aws_creds:
       if aws_creds.get('aws_access_key_id') and aws_creds.get('aws_secret_access_key'):
@@ -993,26 +1159,32 @@ Based on the causal profiling data, suggest specific optimizations for the targe
         if aws_creds.get('aws_session_token'):
           client_kwargs['aws_session_token'] = aws_creds['aws_session_token']
     client = boto3.client('bedrock-runtime', **client_kwargs)
-    body = json_mod.dumps({
-      'anthropic_version': 'bedrock-2023-05-31',
-      'max_tokens': 4096,
-      'system': system,
-      'messages': [{'role': 'user', 'content': user}]
-    })
-    response = client.invoke_model_with_response_stream(
-      modelId=model,
-      contentType='application/json',
-      accept='application/json',
-      body=body
-    )
-    for event in response['body']:
-      chunk = event.get('chunk')
-      if chunk:
-        data = json_mod.loads(chunk['bytes'])
-        if data.get('type') == 'content_block_delta':
-          text = data.get('delta', {}).get('text', '')
+
+    def _do_stream(model_id):
+      resp = client.converse_stream(
+        modelId=model_id,
+        system=[{'text': system}],
+        messages=[{'role': 'user', 'content': [{'text': user}]}],
+        inferenceConfig={'maxTokens': 4096}
+      )
+      for event in resp['stream']:
+        if 'contentBlockDelta' in event:
+          text = event['contentBlockDelta'].get('delta', {}).get('text', '')
           if text:
             yield text
+
+    try:
+      for chunk in _do_stream(model):
+        yield chunk
+    except ClientError as e:
+      # If model requires an inference profile, retry with region prefix
+      if 'inference profile' in str(e).lower() and '.' not in model.split('.')[0]:
+        # Derive region prefix: us-west-2 -> us, eu-west-1 -> eu, ap-northeast-1 -> ap
+        prefix = region.split('-')[0] if region else 'us'
+        for chunk in _do_stream(prefix + '.' + model):
+          yield chunk
+      else:
+        raise
 
   class ThreadedHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True

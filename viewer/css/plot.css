@@ -592,6 +592,46 @@ div.plot.optimize-open {
   margin-bottom: 0.3em;
 }
 
+.code-block-wrap {
+  position: relative;
+  margin: 0.6em 0;
+}
+
+.code-block-wrap pre.optimize-code {
+  margin: 0;
+  padding-right: 36px;
+}
+
+.code-copy-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0;
+  transition: opacity 150ms ease, color 150ms ease, background 150ms ease;
+  z-index: 1;
+}
+
+.code-block-wrap:hover .code-copy-btn {
+  opacity: 1;
+}
+
+.code-copy-btn:hover {
+  color: var(--text-primary, #e2e8f0);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.code-copy-btn .fa-check {
+  color: var(--secondary-color, #10b981);
+}
+
 pre.optimize-code {
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
@@ -740,4 +780,15 @@ pre.optimize-code code {
 
 :root.light-mode pre.optimize-code code {
   color: #059669;
+}
+
+:root.light-mode .code-copy-btn {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #94a3b8;
+}
+
+:root.light-mode .code-copy-btn:hover {
+  color: #1e293b;
+  background: rgba(0, 0, 0, 0.1);
 }

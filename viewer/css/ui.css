@@ -128,6 +128,31 @@ pre code {
   }
 }
 
+/* Sidebar resize handle */
+#sidebar-resize-handle {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  #sidebar-resize-handle {
+    display: block;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    cursor: col-resize;
+    z-index: 51;
+    background: transparent;
+    transition: background var(--transition-fast);
+  }
+
+  #sidebar-resize-handle:hover,
+  #sidebar-resize-handle.dragging {
+    background: var(--primary-color);
+    opacity: 0.5;
+  }
+}
+
 .sidebar-header {
   margin-bottom: 2rem;
   text-align: center;
@@ -168,6 +193,7 @@ pre code {
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
+  white-space: nowrap;
 }
 
 .sidebar-section h4 i {
@@ -188,12 +214,17 @@ pre code {
   gap: 0.2rem;
 }
 
+.form-group-compact label {
+  white-space: nowrap;
+}
+
 .ai-label {
   font-size: 0.85em;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .ai-hint {
@@ -849,6 +880,13 @@ p.legend-entry {
   font-size: 1em;
   color: var(--text-primary);
   transition: opacity var(--transition-fast);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+p.legend-entry:hover {
+  white-space: normal;
 }
 
 p.legend-entry i {
