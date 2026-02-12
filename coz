@@ -1022,8 +1022,13 @@ Based on the causal profiling data, suggest specific optimizations for the targe
             raise ValueError(f'Unknown provider: {provider}')
 
           send_chunk({'done': True})
+        except BrokenPipeError:
+          pass  # Client disconnected (e.g., user closed panel)
         except Exception as e:
-          send_chunk({'error': str(e)})
+          try:
+            send_chunk({'error': str(e)})
+          except BrokenPipeError:
+            pass
 
         self.close_connection = True
         return
