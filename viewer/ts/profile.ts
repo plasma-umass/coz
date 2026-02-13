@@ -61,6 +61,778 @@ interface IgnoredRecord {
 // Matches ExperimentTargetDelta in profiler.h.
 const MIN_DELTA = 5;
 
+// Source snippet cache and server availability flag
+interface SourceSnippet {
+  file: string;
+  target_line: number;
+  lines: {number: number; text: string; is_target: boolean}[];
+}
+
+const _source_cache: {[key: string]: SourceSnippet | null} = {};
+let _source_server_available: boolean | null = null;
+// Track which plot name currently has source panel open (null = none)
+let _source_open_name: string | null = null;
+
+// AI optimization panel state
+let _optimize_open_name: string | null = null;
+const _optimize_cache: {[key: string]: string} = {};
+let _optimize_server_available: boolean | null = null;
+
+interface LLMConfig {
+  anthropic_key_set: boolean;
+  openai_key_set: boolean;
+  ollama_host: string;
+  anthropic_key?: string;
+  openai_key?: string;
+  aws_access_key?: string;
+  aws_secret_key?: string;
+  aws_session_token?: string;
+  bedrock_available?: boolean;
+  bedrock_region?: string;
+  aws_credentials_set?: boolean;
+}
+let _llm_config: LLMConfig | null = null;
+
+// ---- Cookie-based settings persistence (shared across localhost ports) ----
+
+interface LLMSettings {
+  provider?: string;
+  anthropic_key?: string;
+  openai_key?: string;
+  aws_access_key?: string;
+  aws_secret_key?: string;
+  aws_session_token?: string;
+  bedrock_region?: string;
+  ollama_host?: string;
+  models?: {[provider: string]: string};
+}
+
+function getLLMSettings(): LLMSettings {
+  try {
+    let match = document.cookie.match(/(?:^|;\s*)coz-llm=([^;]*)/);
+    if (match) return JSON.parse(decodeURIComponent(match[1]));
+  } catch (e) {}
+  // Migrate from localStorage if present (one-time)
+  try {
+    let raw = localStorage.getItem('coz-llm-settings');
+    if (raw) {
+      let settings = JSON.parse(raw);
+      document.cookie = 'coz-llm=' + encodeURIComponent(raw) + ';max-age=31536000;path=/;SameSite=Lax';
+      localStorage.removeItem('coz-llm-settings');
+      return settings;
+    }
+  } catch (e) {}
+  return {};
+}
+
+function saveLLMSettings(): void {
+  let s = getLLMSettings();
+  let provider = getSelectedProvider();
+  s.provider = provider;
+
+  // Save API key per provider
+  let apiKeyEl = document.getElementById('ai-api-key') as HTMLInputElement;
+  if (provider === 'anthropic') s.anthropic_key = apiKeyEl ? apiKeyEl.value : '';
+  else if (provider === 'openai') s.openai_key = apiKeyEl ? apiKeyEl.value : '';
+
+  // Save model per provider
+  if (!s.models) s.models = {};
+  let model = getModelName();
+  if (model) s.models[provider] = model;
+
+  // Save Bedrock region only — AWS credentials come from env vars, session tokens are ephemeral
+  let regionEl = document.getElementById('ai-bedrock-region') as HTMLInputElement;
+  if (regionEl) s.bedrock_region = regionEl.value;
+  // Clear any stale AWS credentials from saved settings
+  delete s.aws_access_key;
+  delete s.aws_secret_key;
+  delete s.aws_session_token;
+
+  // Save Ollama host
+  s.ollama_host = getOllamaHost();
+
+  document.cookie = 'coz-llm=' + encodeURIComponent(JSON.stringify(s)) + ';max-age=31536000;path=/;SameSite=Lax';
+}
+
+// Saved model selections to restore after async model fetches complete
+let _saved_model_selections: {[provider: string]: string} = {};
+
+// ---- End settings persistence ----
+
+// Probe whether the source-snippet endpoint exists
+(function probeSourceServer() {
+  let xhr = new XMLHttpRequest();
+  xhr.open('GET', '/source-snippet?path=__probe__&line=1', true);
+  xhr.onload = function() {
+    _source_server_available = true;
+  };
+  xhr.onerror = function() {
+    _source_server_available = false;
+  };
+  xhr.send();
+})();
+
+// Probe whether the optimize endpoint exists and fetch LLM config
+(function probeLLMConfig() {
+  let xhr = new XMLHttpRequest();
+  xhr.open('GET', '/llm-config', true);
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      _optimize_server_available = true;
+      try {
+        _llm_config = JSON.parse(xhr.responseText);
+        updateProviderUI();
+      } catch (e) {
+        _llm_config = null;
+      }
+    } else {
+      _optimize_server_available = false;
+    }
+  };
+  xhr.onerror = function() {
+    _optimize_server_available = false;
+  };
+  xhr.send();
+})();
+
+function getSelectedProvider(): string {
+  let el = document.getElementById('ai-provider') as HTMLSelectElement;
+  return el ? el.value : 'anthropic';
+}
+
+function getApiKey(): string {
+  let el = document.getElementById('ai-api-key') as HTMLInputElement;
+  return el ? el.value : '';
+}
+
+function getModelName(): string {
+  let el = document.getElementById('ai-model') as HTMLSelectElement;
+  return el ? el.value : '';
+}
+
+interface ModelOption {
+  value: string;
+  label: string;
+}
+
+// Hardcoded fallback models (used when dynamic fetch fails or no API key)
+const _fallback_models: {[key: string]: ModelOption[]} = {
+  'anthropic': [
+    {value: 'claude-opus-4-20250514', label: 'Claude Opus 4'},
+    {value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4'},
+    {value: 'claude-haiku-4-20250514', label: 'Claude Haiku 4'},
+  ],
+  'openai': [
+    {value: 'gpt-4o', label: 'gpt-4o'},
+    {value: 'gpt-4o-mini', label: 'gpt-4o-mini'},
+    {value: 'o3-mini', label: 'o3-mini'},
+  ],
+  'bedrock': [
+    {value: 'anthropic.claude-opus-4-20250514-v1:0', label: 'Claude Opus 4'},
+    {value: 'anthropic.claude-sonnet-4-20250514-v1:0', label: 'Claude Sonnet 4'},
+    {value: 'anthropic.claude-haiku-4-20250514-v1:0', label: 'Claude Haiku 4'},
+  ],
+  'ollama': []
+};
+
+// Dynamically fetched models (populated after API calls)
+const _provider_models: {[key: string]: ModelOption[]} = {
+  'anthropic': [], 'openai': [], 'bedrock': [], 'ollama': []
+};
+
+// Cache flags — true means we've done a live fetch this session
+let _ollama_models_fetched = false;
+let _bedrock_models_fetched = false;
+let _anthropic_models_fetched = false;
+let _openai_models_fetched = false;
+
+// localStorage helpers for model cache
+function _getCachedModels(provider: string): ModelOption[] {
+  try {
+    let raw = localStorage.getItem('coz-models-' + provider);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return [];
+}
+
+function _setCachedModels(provider: string, models: ModelOption[]): void {
+  try {
+    localStorage.setItem('coz-models-' + provider, JSON.stringify(models));
+  } catch (e) {}
+}
+
+function populateModelDropdown(): void {
+  let provider = getSelectedProvider();
+  let modelEl = document.getElementById('ai-model') as HTMLSelectElement;
+  if (!modelEl) return;
+
+  if (provider === 'anthropic') { fetchAnthropicModels(modelEl); return; }
+  if (provider === 'openai') { fetchOpenAIModels(modelEl); return; }
+  if (provider === 'bedrock') { fetchBedrockModels(modelEl); return; }
+  if (provider === 'ollama') { fetchOllamaModels(modelEl); return; }
+
+  _setModelOptions(modelEl, _fallback_models[provider] || []);
+}
+
+function _setModelOptions(el: HTMLSelectElement, models: ModelOption[]): void {
+  el.innerHTML = '';
+  for (let i = 0; i < models.length; i++) {
+    let opt = document.createElement('option');
+    opt.value = models[i].value;
+    opt.textContent = models[i].label;
+    el.appendChild(opt);
+  }
+  // Restore saved model selection if available
+  let provider = getSelectedProvider();
+  let savedModel = _saved_model_selections[provider];
+  if (savedModel) {
+    for (let i = 0; i < models.length; i++) {
+      if (models[i].value === savedModel) {
+        el.value = savedModel;
+        break;
+      }
+    }
+  }
+}
+
+function _setFetchedFlag(provider: string, value: boolean): void {
+  if (provider === 'ollama') _ollama_models_fetched = value;
+  else if (provider === 'bedrock') _bedrock_models_fetched = value;
+  else if (provider === 'anthropic') _anthropic_models_fetched = value;
+  else if (provider === 'openai') _openai_models_fetched = value;
+}
+
+function _getFetchedFlag(provider: string): boolean {
+  if (provider === 'ollama') return _ollama_models_fetched;
+  if (provider === 'bedrock') return _bedrock_models_fetched;
+  if (provider === 'anthropic') return _anthropic_models_fetched;
+  if (provider === 'openai') return _openai_models_fetched;
+  return false;
+}
+
+let _force_model_refresh = false;
+
+function _fetchModels(provider: string, url: string, modelEl: HTMLSelectElement, fallback: ModelOption[]): void {
+  let isForced = _force_model_refresh;
+  _force_model_refresh = false;
+
+  // If we already fetched live this session and have in-memory models, just use them
+  if (!isForced && _provider_models[provider].length > 0 && _getFetchedFlag(provider)) {
+    _setModelOptions(modelEl, _provider_models[provider]);
+    return;
+  }
+
+  if (isForced) {
+    // Show loading state on manual refresh
+    modelEl.innerHTML = '<option value="">Refreshing models...</option>';
+  } else {
+    // Show cached models instantly (localStorage or fallback) — no "Loading..." flash
+    let cached = _getCachedModels(provider);
+    if (cached.length > 0) {
+      _provider_models[provider] = cached;
+      _setModelOptions(modelEl, cached);
+    } else if (fallback.length > 0) {
+      _setModelOptions(modelEl, fallback);
+    } else {
+      modelEl.innerHTML = '<option value="">Loading models...</option>';
+    }
+  }
+
+  // Fetch from server
+  let xhr = new XMLHttpRequest();
+  xhr.open('GET', url, true);
+  xhr.onload = function() {
+    if (getSelectedProvider() !== provider) return;
+    if (xhr.status === 200) {
+      try {
+        let data = JSON.parse(xhr.responseText);
+        let models: ModelOption[] = data.models || [];
+        if (models.length > 0) {
+          _provider_models[provider] = models;
+          _setFetchedFlag(provider, true);
+          _setCachedModels(provider, models);
+          _setModelOptions(modelEl, models);
+          return;
+        }
+        // API returned 0 models — show error if present
+        let error = data.error || 'No models returned';
+        console.warn('[coz] ' + provider + ' models fetch: ' + error);
+        if (isForced) {
+          modelEl.innerHTML = '<option value="">Error: ' + error.substring(0, 60) + '</option>';
+        }
+      } catch (e) {
+        console.warn('[coz] ' + provider + ' models parse error:', e);
+        if (isForced) {
+          modelEl.innerHTML = '<option value="">Error parsing response</option>';
+        }
+      }
+    } else {
+      console.warn('[coz] ' + provider + ' models HTTP ' + xhr.status);
+      if (isForced) {
+        modelEl.innerHTML = '<option value="">HTTP error ' + xhr.status + '</option>';
+      }
+    }
+    _setFetchedFlag(provider, true);
+    // On non-forced, fallback was already shown; on forced error, add fallbacks below
+    if (isForced && fallback.length > 0) {
+      for (let i = 0; i < fallback.length; i++) {
+        let opt = document.createElement('option');
+        opt.value = fallback[i].value;
+        opt.textContent = fallback[i].label;
+        modelEl.appendChild(opt);
+      }
+    }
+  };
+  xhr.onerror = function() {
+    console.warn('[coz] ' + provider + ' models network error');
+    if (getSelectedProvider() === provider && isForced) {
+      modelEl.innerHTML = '<option value="">Network error</option>';
+      for (let i = 0; i < fallback.length; i++) {
+        let opt = document.createElement('option');
+        opt.value = fallback[i].value;
+        opt.textContent = fallback[i].label;
+        modelEl.appendChild(opt);
+      }
+    }
+    _setFetchedFlag(provider, true);
+  };
+  xhr.send();
+}
+
+function fetchAnthropicModels(modelEl: HTMLSelectElement): void {
+  // Check if there's a key available (form, saved, or env) — if not, skip fetch
+  let key = getApiKey();
+  if (!key && _llm_config) key = _llm_config.anthropic_key || '';
+  if (!key) {
+    _setModelOptions(modelEl, _fallback_models['anthropic']);
+    return;
+  }
+  // Server uses its own env var; only pass key if user typed one not in env
+  let envKey = _llm_config ? _llm_config.anthropic_key || '' : '';
+  let url = (key && key !== envKey) ? '/anthropic-models?api_key=' + encodeURIComponent(key) : '/anthropic-models';
+  _fetchModels('anthropic', url, modelEl, _fallback_models['anthropic']);
+}
+
+function fetchOpenAIModels(modelEl: HTMLSelectElement): void {
+  let key = getApiKey();
+  if (!key && _llm_config) key = _llm_config.openai_key || '';
+  if (!key) {
+    _setModelOptions(modelEl, _fallback_models['openai']);
+    return;
+  }
+  let envKey = _llm_config ? _llm_config.openai_key || '' : '';
+  let url = (key && key !== envKey) ? '/openai-models?api_key=' + encodeURIComponent(key) : '/openai-models';
+  _fetchModels('openai', url, modelEl, _fallback_models['openai']);
+}
+
+function fetchBedrockModels(modelEl: HTMLSelectElement): void {
+  // Only pass region — server uses its own AWS env credentials
+  let regionEl = document.getElementById('ai-bedrock-region') as HTMLInputElement;
+  let region = regionEl && regionEl.value ? regionEl.value : '';
+  _fetchModels('bedrock', '/bedrock-models?region=' + encodeURIComponent(region), modelEl, _fallback_models['bedrock']);
+}
+
+function fetchOllamaModels(modelEl: HTMLSelectElement): void {
+  let host = getOllamaHost();
+  _fetchModels('ollama', '/ollama-models?host=' + encodeURIComponent(host), modelEl, _fallback_models['ollama']);
+}
+
+function getOllamaHost(): string {
+  let el = document.getElementById('ai-ollama-host') as HTMLInputElement;
+  return el && el.value ? el.value : 'http://localhost:11434';
+}
+
+// Populate initial model dropdown (must be after _provider_models is defined)
+populateModelDropdown();
+
+function updateProviderUI(): void {
+  if (!_llm_config) return;
+  let providerEl = document.getElementById('ai-provider') as HTMLSelectElement;
+  let statusEl = document.getElementById('ai-key-status') as HTMLSpanElement;
+  if (!providerEl) return;
+
+  // Load saved settings from cookie
+  let saved = getLLMSettings();
+  _saved_model_selections = saved.models || {};
+
+  // Determine provider: saved > auto-detect from env > default
+  if (saved.provider) {
+    providerEl.value = saved.provider;
+  } else if (_llm_config.anthropic_key_set) {
+    providerEl.value = 'anthropic';
+  } else if (_llm_config.openai_key_set) {
+    providerEl.value = 'openai';
+  }
+
+  let provider = providerEl.value;
+
+  // Pre-fill API key: saved > env var
+  let apiKeyEl = document.getElementById('ai-api-key') as HTMLInputElement;
+  if (apiKeyEl) {
+    if (provider === 'anthropic') {
+      apiKeyEl.value = saved.anthropic_key || _llm_config.anthropic_key || '';
+    } else if (provider === 'openai') {
+      apiKeyEl.value = saved.openai_key || _llm_config.openai_key || '';
+    }
+  }
+
+  // Pre-fill AWS credential fields from env vars only (not saved — session tokens are ephemeral)
+  let awsFields: [string, string][] = [
+    ['ai-aws-access-key', 'aws_access_key'],
+    ['ai-aws-secret-key', 'aws_secret_key'],
+    ['ai-aws-session-token', 'aws_session_token'],
+  ];
+  for (let i = 0; i < awsFields.length; i++) {
+    let el = document.getElementById(awsFields[i][0]) as HTMLInputElement;
+    if (el) el.value = (_llm_config as any)[awsFields[i][1]] || '';
+  }
+
+  // Pre-fill region: saved > env var
+  let regionEl = document.getElementById('ai-bedrock-region') as HTMLInputElement;
+  if (regionEl) regionEl.value = saved.bedrock_region || _llm_config.bedrock_region || '';
+
+  // Pre-fill Ollama host: saved > env var
+  let ollamaEl = document.getElementById('ai-ollama-host') as HTMLInputElement;
+  if (ollamaEl && saved.ollama_host) ollamaEl.value = saved.ollama_host;
+
+  // Update status
+  if (statusEl) {
+    let hasKey = (provider === 'anthropic' && (apiKeyEl && apiKeyEl.value || _llm_config.anthropic_key_set)) ||
+                 (provider === 'openai' && (apiKeyEl && apiKeyEl.value || _llm_config.openai_key_set));
+    if (hasKey) {
+      statusEl.textContent = '(configured)';
+      statusEl.className = 'ai-status configured';
+    }
+  }
+
+  toggleProviderFields();
+}
+
+function toggleProviderFields(): void {
+  let provider = getSelectedProvider();
+  let keyGroup = document.getElementById('ai-key-group');
+  let ollamaGroup = document.getElementById('ai-ollama-group');
+  let bedrockGroup = document.getElementById('ai-bedrock-group');
+  let statusEl = document.getElementById('ai-key-status') as HTMLSpanElement;
+
+  let needsKey = (provider === 'anthropic' || provider === 'openai');
+  if (keyGroup) keyGroup.style.display = needsKey ? 'flex' : 'none';
+  if (ollamaGroup) ollamaGroup.style.display = provider === 'ollama' ? 'flex' : 'none';
+  if (bedrockGroup) bedrockGroup.style.display = provider === 'bedrock' ? 'block' : 'none';
+
+  // Set API key for current provider: saved > env var > clear
+  if (needsKey) {
+    let apiKeyEl = document.getElementById('ai-api-key') as HTMLInputElement;
+    if (apiKeyEl) {
+      let saved = getLLMSettings();
+      if (provider === 'anthropic') {
+        apiKeyEl.value = saved.anthropic_key || (_llm_config ? _llm_config.anthropic_key || '' : '');
+      } else if (provider === 'openai') {
+        apiKeyEl.value = saved.openai_key || (_llm_config ? _llm_config.openai_key || '' : '');
+      }
+    }
+  }
+
+  // Update status indicator
+  if (statusEl) {
+    let apiKeyEl = document.getElementById('ai-api-key') as HTMLInputElement;
+    let hasKey = apiKeyEl && apiKeyEl.value;
+    if (hasKey) {
+      statusEl.textContent = '(configured)';
+      statusEl.className = 'ai-status configured';
+    } else if (needsKey) {
+      statusEl.textContent = '';
+      statusEl.className = 'ai-status';
+    }
+  }
+
+  // Update Bedrock status
+  let bedrockStatusEl = document.getElementById('ai-bedrock-status') as HTMLSpanElement;
+  if (bedrockStatusEl && _llm_config) {
+    if (_llm_config.bedrock_available) {
+      bedrockStatusEl.textContent = '(boto3 available)';
+      bedrockStatusEl.className = 'ai-status configured';
+    } else {
+      bedrockStatusEl.textContent = '(boto3 not found)';
+      bedrockStatusEl.className = 'ai-status';
+    }
+  }
+
+  // Populate model dropdown for this provider
+  populateModelDropdown();
+}
+
+function formatOptimizationText(text: string): string {
+  // Extract code blocks first (before markdown transforms corrupt them)
+  let codeBlocks: string[] = [];
+  text = text.replace(/```(\w*)\n([\s\S]*?)```/g, function(_match: string, _lang: string, code: string) {
+    let trimmed = code.trim();
+    let idx = codeBlocks.length;
+    codeBlocks.push(trimmed);
+    return '\x00CODEBLOCK' + idx + '\x00';
+  });
+  // Inline code — protect from further transforms
+  let inlineCode: string[] = [];
+  text = text.replace(/`([^`]+)`/g, function(_match: string, code: string) {
+    let idx = inlineCode.length;
+    inlineCode.push(code);
+    return '\x00INLINE' + idx + '\x00';
+  });
+  // Bold
+  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Italic
+  text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  // Headers
+  text = text.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+  text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  text = text.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  text = text.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // List items
+  text = text.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
+  text = text.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
+  // Wrap consecutive <li> in <ul>
+  text = text.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+  // Paragraphs (double newlines)
+  text = text.replace(/\n\n/g, '</p><p>');
+  // Single newlines (not before/after block elements)
+  text = text.replace(/\n/g, '<br>');
+  // Restore inline code
+  text = text.replace(/\x00INLINE(\d+)\x00/g, function(_m: string, idx: string) {
+    return '<code>' + escapeHtml(inlineCode[parseInt(idx, 10)]) + '</code>';
+  });
+  // Restore code blocks with copy buttons
+  text = text.replace(/\x00CODEBLOCK(\d+)\x00/g, function(_m: string, idx: string) {
+    let raw = codeBlocks[parseInt(idx, 10)];
+    let encoded = raw.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return '<div class="code-block-wrap">' +
+      '<button class="code-copy-btn" data-code="' + encoded + '" title="Copy code"><i class="fa fa-copy"></i></button>' +
+      '<pre class="optimize-code"><code>' + escapeHtml(raw) + '</code></pre>' +
+      '</div>';
+  });
+  return '<p>' + text + '</p>';
+}
+
+// Event delegation for code block copy buttons
+document.addEventListener('click', function(e: Event) {
+  let target = e.target as HTMLElement;
+  // Walk up to find the button (in case the <i> icon was clicked)
+  let btn = target.closest('.code-copy-btn') as HTMLElement;
+  if (!btn) return;
+  let code = btn.getAttribute('data-code');
+  if (!code) return;
+  // Decode HTML entities back to raw text
+  let textarea = document.createElement('textarea');
+  textarea.innerHTML = code;
+  let rawCode = textarea.value;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(rawCode).then(function() {
+      btn.innerHTML = '<i class="fa fa-check"></i>';
+      setTimeout(function() {
+        btn.innerHTML = '<i class="fa fa-copy"></i>';
+      }, 2000);
+    });
+  }
+});
+
+// Expected response length for progress estimation (chars)
+const EXPECTED_RESPONSE_LENGTH = 2500;
+
+interface OptimizeCallbacks {
+  onChunk: (fullText: string, newChunk: string) => void;
+  onDone: (fullText: string) => void;
+  onError: (error: string) => void;
+}
+
+function fetchOptimizationStream(name: string, measurements: Measurement[], callbacks: OptimizeCallbacks): {abort: () => void} {
+  let cacheKey = name + '::' + getSelectedProvider();
+  if (cacheKey in _optimize_cache) {
+    callbacks.onDone(_optimize_cache[cacheKey]);
+    return {abort: function() {}};
+  }
+
+  let match = name.match(/^(.+):(\d+)$/);
+  if (!match) {
+    callbacks.onError('Could not parse file:line from plot name');
+    return {abort: function() {}};
+  }
+
+  let filePath = match[1];
+  let line = parseInt(match[2], 10);
+
+  let speedupData = measurements.map(function(m: Measurement) {
+    return {speedup: m.speedup, progress_speedup: m.progress_speedup};
+  });
+
+  let bedrockRegionEl = document.getElementById('ai-bedrock-region') as HTMLInputElement;
+  let bedrockRegion = bedrockRegionEl && bedrockRegionEl.value ? bedrockRegionEl.value : '';
+  let awsAccessKeyEl = document.getElementById('ai-aws-access-key') as HTMLInputElement;
+  let awsSecretKeyEl = document.getElementById('ai-aws-secret-key') as HTMLInputElement;
+  let awsSessionTokenEl = document.getElementById('ai-aws-session-token') as HTMLInputElement;
+
+  let bodyStr = JSON.stringify({
+    path: filePath,
+    line: line,
+    speedup_data: speedupData,
+    provider: getSelectedProvider(),
+    api_key: getApiKey(),
+    model: getModelName(),
+    ollama_host: getOllamaHost(),
+    bedrock_region: bedrockRegion,
+    aws_access_key: awsAccessKeyEl ? awsAccessKeyEl.value : '',
+    aws_secret_key: awsSecretKeyEl ? awsSecretKeyEl.value : '',
+    aws_session_token: awsSessionTokenEl ? awsSessionTokenEl.value : ''
+  });
+
+  let abortController = new AbortController();
+  let fullText = '';
+
+  fetch('/optimize', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: bodyStr,
+    signal: abortController.signal
+  }).then(function(response) {
+    if (!response.ok) {
+      callbacks.onError('Server error: ' + response.status);
+      return;
+    }
+    let reader = response.body!.getReader();
+    let decoder = new TextDecoder();
+    let buffer = '';
+
+    function readChunk(): void {
+      reader.read().then(function(result) {
+        if (result.done) {
+          // Process any remaining buffer
+          if (buffer.trim()) {
+            processLines(buffer);
+          }
+          if (fullText) {
+            _optimize_cache[cacheKey] = fullText;
+            callbacks.onDone(fullText);
+          }
+          return;
+        }
+        buffer += decoder.decode(result.value, {stream: true});
+        processLines(buffer);
+        // Keep only unprocessed remainder
+        let lastNewline = buffer.lastIndexOf('\n');
+        if (lastNewline >= 0) {
+          buffer = buffer.substring(lastNewline + 1);
+        }
+        readChunk();
+      }).catch(function(err: Error) {
+        if (err.name !== 'AbortError') {
+          callbacks.onError(err.message || 'Stream read error');
+        }
+      });
+    }
+
+    function processLines(text: string): void {
+      let lines = text.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trim();
+        if (!line) continue;
+        try {
+          let data = JSON.parse(line);
+          if (data.chunk) {
+            fullText += data.chunk;
+            callbacks.onChunk(fullText, data.chunk);
+          } else if (data.error) {
+            callbacks.onError(data.error);
+          } else if (data.done) {
+            _optimize_cache[cacheKey] = fullText;
+            callbacks.onDone(fullText);
+          }
+        } catch (e) {
+          // Not valid JSON yet, may be partial line
+        }
+      }
+    }
+
+    readChunk();
+  }).catch(function(err: Error) {
+    if (err.name !== 'AbortError') {
+      callbacks.onError(err.message || 'Network error');
+    }
+  });
+
+  return {abort: function() { abortController.abort(); }};
+}
+
+function fetchSourceSnippet(name: string, callback: (snippet: SourceSnippet | null) => void): void {
+  if (name in _source_cache) {
+    callback(_source_cache[name]);
+    return;
+  }
+  // Parse "file:line" from name
+  let match = name.match(/^(.+):(\d+)$/);
+  if (!match) {
+    _source_cache[name] = null;
+    callback(null);
+    return;
+  }
+  let filePath = match[1];
+  let line = match[2];
+  let xhr = new XMLHttpRequest();
+  xhr.open('GET', '/source-snippet?path=' + encodeURIComponent(filePath) + '&line=' + encodeURIComponent(line), true);
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      let data = JSON.parse(xhr.responseText);
+      _source_cache[name] = data;
+      callback(data);
+    } else {
+      _source_cache[name] = null;
+      callback(null);
+    }
+  };
+  xhr.onerror = function() {
+    _source_cache[name] = null;
+    callback(null);
+  };
+  xhr.send();
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function highlightSyntax(text: string): string {
+  // Tokenize the raw text in a single pass, then escape and wrap each token
+  let keywords = /^(if|else|for|while|do|switch|case|break|continue|return|goto|sizeof|typedef|struct|union|enum|class|namespace|template|typename|public|private|protected|virtual|override|const|static|extern|volatile|inline|void|auto|register|unsigned|signed|restrict|nullptr|NULL|true|false|new|delete|throw|try|catch|using)$/;
+  let types = /^(int|char|float|double|long|short|bool|size_t|ssize_t|uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|FILE|pthread_t|pthread_mutex_t|pthread_cond_t)$/;
+  // Single-pass tokenizer regex
+  let tokenRe = /(\/\/.*$)|(#\w+)|("(?:[^"\\]|\\.)*")|('(?:[^'\\]|\\.)*')|(\b\d+\.?\d*[fFlLuU]*\b)|(\b[a-zA-Z_]\w*\b)|(\+\=|-\=|\*\=|\/\=|%\=|&\=|\|\=|\^=|==|!=|<=|>=|<<|>>|->)|([^a-zA-Z0-9_\s"'#\/]+|\s+|.)/g;
+  let result = '';
+  let m: RegExpExecArray | null;
+  while ((m = tokenRe.exec(text)) !== null) {
+    let tok = m[0];
+    let esc = escapeHtml(tok);
+    if (m[1]) { // comment
+      result += '<span class="syn-comment">' + esc + '</span>';
+    } else if (m[2]) { // preprocessor
+      result += '<span class="syn-preprocessor">' + esc + '</span>';
+    } else if (m[3] || m[4]) { // string or char literal
+      result += '<span class="syn-string">' + esc + '</span>';
+    } else if (m[5]) { // number
+      result += '<span class="syn-number">' + esc + '</span>';
+    } else if (m[6]) { // identifier — check if keyword or type
+      if (keywords.test(tok)) {
+        result += '<span class="syn-keyword">' + esc + '</span>';
+      } else if (types.test(tok)) {
+        result += '<span class="syn-type">' + esc + '</span>';
+      } else {
+        result += esc;
+      }
+    } else if (m[7]) { // operator
+      result += '<span class="syn-operator">' + esc + '</span>';
+    } else {
+      result += esc;
+    }
+  }
+  return result;
+}
+
 /**
  * Returns if this data point is valid.
  * Infinity / -Infinity occurs when dividing by 0.
@@ -567,6 +1339,193 @@ class Profile {
                   .attr('title', function(d) { return d; })
                   .style('width', div_width+'px');
     plot_title_sel.exit().remove();
+
+    /****** Add source code toggle buttons ******/
+    if (_source_server_available !== false) {
+      let source_btn_sel = plot_div_sel.selectAll('span.source-toggle').data(function(d) { return [d.name]; });
+      source_btn_sel.enter().append('span')
+        .attr('class', 'source-toggle')
+        .html('&#60;/&#62;')
+        .attr('title', 'View source')
+        .on('click', function(name: string) {
+          let wasOpen = (_source_open_name === name);
+          // Close all panels everywhere
+          container.selectAll('.source-panel').remove();
+          container.selectAll('.source-toggle').classed('active', false);
+          container.selectAll('div.plot').classed('source-open', false);
+          _source_open_name = null;
+          if (wasOpen) return;
+          // Open this one
+          let btn = d3.select(this);
+          let plotDiv = d3.select((<Element>this).parentNode);
+          _source_open_name = name;
+          btn.classed('active', true);
+          plotDiv.classed('source-open', true);
+          fetchSourceSnippet(name, function(snippet) {
+            // Guard: only render if this is still the open panel
+            if (_source_open_name !== name) return;
+            if (!snippet) {
+              btn.classed('active', false).classed('unavailable', true);
+              plotDiv.classed('source-open', false);
+              _source_open_name = null;
+              return;
+            }
+            let html = '';
+            for (let i = 0; i < snippet.lines.length; i++) {
+              let ln = snippet.lines[i];
+              let cls = ln.is_target ? 'source-line target' : 'source-line';
+              html += '<div class="' + cls + '">' +
+                '<span class="line-number">' + ln.number + '</span>' +
+                '<span class="line-text">' + highlightSyntax(ln.text) + '</span></div>';
+            }
+            plotDiv.append('div').attr('class', 'source-panel').html(html);
+          });
+        });
+      source_btn_sel.exit().remove();
+    }
+
+    /****** Add AI optimization toggle buttons ******/
+    if (_optimize_server_available !== false) {
+      let opt_btn_sel = plot_div_sel.selectAll('span.optimize-toggle').data(function(d) { return [d]; });
+      opt_btn_sel.enter().append('span')
+        .attr('class', 'optimize-toggle')
+        .html('<i class="fa fa-magic"></i>')
+        .attr('title', 'AI optimization suggestions');
+      // Track active abort handle for cancellation
+      let _optimize_abort: {abort: () => void} | null = null;
+
+      opt_btn_sel.on('click', function(d: ExperimentResult) {
+          let name = d.name;
+          let wasOpen = (_optimize_open_name === name);
+
+          // Close all optimize panels and cancel pending request
+          container.selectAll('.optimize-panel').remove();
+          container.selectAll('.optimize-toggle').classed('active', false);
+          container.selectAll('div.plot').classed('optimize-open', false);
+          if (_optimize_abort) { _optimize_abort.abort(); _optimize_abort = null; }
+          _optimize_open_name = null;
+          if (wasOpen) return;
+
+          // Gather measurements from all progress points
+          let allMeasurements: Measurement[] = [];
+          for (let i = 0; i < d.progress_points.length; i++) {
+            if (d.progress_points[i].measurements.length > 0) {
+              allMeasurements = d.progress_points[i].measurements;
+              break;
+            }
+          }
+
+          let btn = d3.select(this);
+          let plotDiv = d3.select((<Element>this).parentNode);
+          _optimize_open_name = name;
+          btn.classed('active', true);
+          plotDiv.classed('optimize-open', true);
+
+          // Show loading state with progress bar and close button
+          let loadingModel = getModelName();
+          let loadingProvider = getSelectedProvider();
+          let loadingLabel = loadingModel || loadingProvider;
+          let loadingNote = loadingProvider === 'ollama'
+            ? '<div class="optimize-loading-note">Large models may take a minute to load</div>' : '';
+          let panel = plotDiv.append('div').attr('class', 'optimize-panel');
+          panel.html(
+            '<div class="optimize-header">' +
+              '<span class="optimize-header-title"><i class="fa fa-magic"></i> Analyzing with ' + escapeHtml(loadingLabel) + '</span>' +
+              '<button class="optimize-close-btn" title="Close"><i class="fa fa-times"></i></button>' +
+            '</div>' +
+            '<div class="optimize-progress-wrap">' +
+              '<div class="optimize-progress"><div class="optimize-progress-bar" style="width:0%"></div></div>' +
+            '</div>' +
+            '<div class="optimize-content optimize-streaming"></div>' +
+            loadingNote
+          );
+
+          // Close button handler (for loading state)
+          function closePanel() {
+            if (_optimize_abort) { _optimize_abort.abort(); _optimize_abort = null; }
+            container.selectAll('.optimize-panel').remove();
+            container.selectAll('.optimize-toggle').classed('active', false);
+            container.selectAll('div.plot').classed('optimize-open', false);
+            _optimize_open_name = null;
+          }
+          panel.select('.optimize-close-btn').on('click', closePanel);
+
+          let rawText = '';
+
+          _optimize_abort = fetchOptimizationStream(name, allMeasurements, {
+            onChunk: function(fullText: string, _newChunk: string) {
+              if (_optimize_open_name !== name) return;
+              rawText = fullText;
+              // Update progress bar (estimate based on chars received)
+              let pct = Math.min(95, Math.round((fullText.length / EXPECTED_RESPONSE_LENGTH) * 100));
+              let bar = panel.select('.optimize-progress-bar');
+              bar.style('width', pct + '%')
+                 .classed('indeterminate', false);
+              // Update content with streaming text
+              panel.select('.optimize-content').html(formatOptimizationText(fullText));
+              // Auto-scroll to bottom
+              let contentEl = panel.select('.optimize-content').node() as HTMLElement;
+              if (contentEl) {
+                let panelEl = panel.node() as HTMLElement;
+                if (panelEl) panelEl.scrollTop = panelEl.scrollHeight;
+              }
+            },
+            onDone: function(fullText: string) {
+              if (_optimize_open_name !== name) return;
+              _optimize_abort = null;
+              rawText = fullText;
+              // Set progress to 100%
+              panel.select('.optimize-progress-bar').style('width', '100%');
+              // Final render
+              panel.select('.optimize-content')
+                .classed('optimize-streaming', false)
+                .html(formatOptimizationText(fullText));
+              // Remove progress bar after brief delay
+              setTimeout(function() {
+                panel.select('.optimize-progress-wrap').remove();
+              }, 500);
+              // Update header to show done state with copy button
+              panel.select('.optimize-header').html(
+                '<span class="optimize-header-title"><i class="fa fa-magic"></i> AI Suggestion</span>' +
+                '<span class="optimize-header-actions">' +
+                  '<button class="optimize-copy-btn" title="Copy to clipboard"><i class="fa fa-copy"></i> Copy</button>' +
+                  '<button class="optimize-close-btn" title="Close"><i class="fa fa-times"></i></button>' +
+                '</span>'
+              );
+              // Re-bind close button
+              panel.select('.optimize-close-btn').on('click', closePanel);
+              // Copy button handler
+              panel.select('.optimize-copy-btn').on('click', function() {
+                if (navigator.clipboard) {
+                  navigator.clipboard.writeText(rawText).then(function() {
+                    let copyBtn = panel.select('.optimize-copy-btn');
+                    copyBtn.html('<i class="fa fa-check"></i> Copied');
+                    setTimeout(function() {
+                      copyBtn.html('<i class="fa fa-copy"></i> Copy');
+                    }, 2000);
+                  });
+                }
+              });
+            },
+            onError: function(error: string) {
+              if (_optimize_open_name !== name) return;
+              _optimize_abort = null;
+              panel.select('.optimize-progress-wrap').remove();
+              panel.select('.optimize-content')
+                .classed('optimize-streaming', false)
+                .attr('class', 'optimize-error')
+                .html('<i class="fa fa-exclamation-triangle"></i> ' + escapeHtml(error));
+              // Update header with close button
+              panel.select('.optimize-header').html(
+                '<span class="optimize-header-title" style="color:var(--danger-color,#ef4444)"><i class="fa fa-exclamation-triangle"></i> Error</span>' +
+                '<button class="optimize-close-btn" title="Close"><i class="fa fa-times"></i></button>'
+              );
+              panel.select('.optimize-close-btn').on('click', closePanel);
+            }
+          });
+        });
+      opt_btn_sel.exit().remove();
+    }
 
     /****** Update scales ******/
     xscale.domain([0, 1]).range([0, plot_width]);

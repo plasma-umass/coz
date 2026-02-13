@@ -71,6 +71,12 @@ coz run --- ./toy/toy
    - Handles `coz run` and `coz plot` commands
    - Sets up LD_PRELOAD to inject libcoz.so
    - Manages profiler environment variables
+   - `coz plot` serves a local HTTP server with API endpoints:
+     - `/llm-config`: Returns env var availability for LLM providers
+     - `/anthropic-models`, `/openai-models`, `/bedrock-models`, `/ollama-models`: Dynamic model listing
+     - `/optimize`: Streaming AI optimization suggestions (POST, ndjson)
+     - `/source-snippet`: Source code context for viewer panels
+   - Bedrock endpoints use `converse_stream` API (model-agnostic) with inference profile fallback
 
 3. **include/coz.h**: Instrumentation macros for target programs
    - `COZ_PROGRESS` / `COZ_PROGRESS_NAMED`: Throughput progress points
@@ -79,10 +85,10 @@ coz run --- ./toy/toy
 
 4. **viewer** (`viewer/`): Web-based profile visualization UI
    - TypeScript/JavaScript single-page application for viewing `.coz` profile files
-   - `ts/profile.ts`: Profile parsing and D3.js plot rendering (loess smoothing, interactive tooltips)
-   - `ts/ui.ts`: UI logic including file loading, drag-and-drop, theme toggle, keyboard shortcuts
-   - `index.htm`: Main HTML with sidebar controls, welcome page, and help modals
-   - `css/ui.css`, `css/plot.css`: Modern dark/light theme styling
+   - `ts/profile.ts`: Profile parsing, D3.js plot rendering (loess smoothing, interactive tooltips), AI optimization panel, LLM provider management, dynamic model fetching with localStorage caching, cookie-based settings persistence
+   - `ts/ui.ts`: UI logic including file loading, drag-and-drop, theme toggle, keyboard shortcuts, resizable sidebar, model refresh handler
+   - `index.htm`: Main HTML with sidebar controls, welcome page, help modals, AI provider/model selectors with refresh button
+   - `css/ui.css`, `css/plot.css`: Modern dark/light theme styling, code block copy buttons, syntax highlighting
    - Uses Bootstrap 3, D3.js v3, jQuery, and science.js for statistics
 
 ### Causal Profiling Mechanism
@@ -302,9 +308,18 @@ Text mode outputs:
 - Drag-and-drop support for loading additional profiles
 - Interactive D3.js plots with loess-smoothed trend lines
 - Sort by impact, alphabetical, max/min speedup
-- Minimum points filter slider
-- Dark/light theme toggle
+- Minimum points filter slider (auto-adjusts if needed)
+- Dark/light theme toggle (time-of-day default)
 - Keyboard shortcuts: `Ctrl+O` to open file, `?` for help
+- Resizable sidebar via drag handle (persisted in localStorage)
+- Source code snippets with syntax highlighting (click `</>` icon)
+- AI optimization suggestions (click magic wand icon)
+  - Streams responses with progress bar, copyable code blocks
+  - Supports Anthropic, OpenAI, Amazon Bedrock, and Ollama
+  - Dynamic model fetching with localStorage cache and manual refresh
+  - Bedrock uses inference profile IDs via `list_inference_profiles` API
+  - Settings (provider, keys, model selections, region) persisted in cookies
+  - AWS credentials sourced from server env vars (not persisted client-side)
 
 **Viewer development:**
 

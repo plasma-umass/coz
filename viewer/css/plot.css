@@ -171,7 +171,7 @@ p.legend-entry {
   align-items: center;
   padding: 0.4rem 0;
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 1em;
   color: var(--text-primary, #e2e8f0);
   transition: opacity 0.15s ease;
   border-radius: var(--border-radius-sm, 6px);
@@ -318,6 +318,409 @@ div.plot {
 }
 
 /* ==========================================================================
+   Source Code Panel
+   ========================================================================== */
+
+.source-toggle {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #6366f1;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  z-index: 2;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+div.plot:hover .source-toggle {
+  opacity: 1;
+}
+
+.source-toggle:hover {
+  color: #818cf8;
+}
+
+.source-toggle.active {
+  opacity: 1;
+  color: #6366f1;
+}
+
+.source-toggle.unavailable {
+  display: none;
+}
+
+/* Raise the plot's stacking context when source panel is open */
+div.plot.source-open {
+  z-index: 20;
+}
+
+.source-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 10;
+  margin-top: 2px;
+  background: var(--bg-card, #1a1a38);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
+  border-radius: 0 0 var(--border-radius-sm, 6px) var(--border-radius-sm, 6px);
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-x: auto;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.source-line {
+  display: flex;
+  padding: 1px 8px;
+  white-space: pre;
+}
+
+.source-line.target {
+  background: rgba(99, 102, 241, 0.15);
+  border-left: 3px solid #6366f1;
+  padding-left: 5px;
+}
+
+.source-line .line-number {
+  color: var(--text-muted, #64748b);
+  text-align: right;
+  min-width: 3em;
+  padding-right: 10px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.source-line .line-text {
+  color: var(--text-primary, #e2e8f0);
+}
+
+/* Syntax highlighting */
+.source-line .syn-keyword {
+  color: #c084fc;
+  font-weight: 600;
+}
+
+.source-line .syn-type {
+  color: #67e8f9;
+}
+
+.source-line .syn-number {
+  color: #fbbf24;
+}
+
+.source-line .syn-string {
+  color: #86efac;
+}
+
+.source-line .syn-comment {
+  color: #64748b;
+  font-style: italic;
+}
+
+.source-line .syn-operator {
+  color: #f472b6;
+}
+
+.source-line .syn-preprocessor {
+  color: #fb923c;
+}
+
+:root.light-mode .source-line .syn-keyword {
+  color: #7c3aed;
+  font-weight: 600;
+}
+
+:root.light-mode .source-line .syn-type {
+  color: #0891b2;
+}
+
+:root.light-mode .source-line .syn-number {
+  color: #b45309;
+}
+
+:root.light-mode .source-line .syn-string {
+  color: #16a34a;
+}
+
+:root.light-mode .source-line .syn-comment {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+:root.light-mode .source-line .syn-operator {
+  color: #db2777;
+}
+
+:root.light-mode .source-line .syn-preprocessor {
+  color: #c2410c;
+}
+
+/* ==========================================================================
+   AI Optimization Panel
+   ========================================================================== */
+
+.optimize-toggle {
+  position: absolute;
+  top: 4px;
+  right: 28px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #6366f1;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  z-index: 2;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+div.plot:hover .optimize-toggle {
+  opacity: 1;
+}
+
+.optimize-toggle:hover {
+  color: #818cf8;
+}
+
+.optimize-toggle.active {
+  opacity: 1;
+  color: #6366f1;
+}
+
+div.plot.optimize-open {
+  z-index: 20;
+}
+
+.optimize-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 10;
+  margin-top: 2px;
+  background: var(--bg-card, #1a1a38);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
+  border-radius: 0 0 var(--border-radius-sm, 6px) var(--border-radius-sm, 6px);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  max-height: 400px;
+  overflow-y: auto;
+  min-width: 350px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.optimize-header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--bg-tertiary, #16213e);
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  z-index: 1;
+}
+
+.optimize-header-title {
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-color, #f59e0b);
+}
+
+.optimize-copy-btn {
+  background: none;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
+  color: var(--text-muted, #64748b);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.optimize-copy-btn:hover {
+  color: var(--text-primary, #e2e8f0);
+  border-color: var(--text-muted, #64748b);
+}
+
+.optimize-content {
+  padding: 10px 12px;
+  color: var(--text-primary, #e2e8f0);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.optimize-content p {
+  margin: 0 0 0.6em;
+}
+
+.optimize-content strong {
+  color: var(--accent-color, #f59e0b);
+}
+
+.optimize-content h1,
+.optimize-content h2,
+.optimize-content h3,
+.optimize-content h4 {
+  color: var(--text-primary, #e2e8f0);
+  margin: 1em 0 0.4em;
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.optimize-content h1:first-child,
+.optimize-content h2:first-child,
+.optimize-content h3:first-child,
+.optimize-content h4:first-child {
+  margin-top: 0;
+}
+
+.optimize-content ul,
+.optimize-content ol {
+  margin: 0.4em 0;
+  padding-left: 1.5em;
+}
+
+.optimize-content li {
+  margin-bottom: 0.3em;
+}
+
+.code-block-wrap {
+  position: relative;
+  margin: 0.6em 0;
+}
+
+.code-block-wrap pre.optimize-code {
+  margin: 0;
+  padding-right: 36px;
+}
+
+.code-copy-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0;
+  transition: opacity 150ms ease, color 150ms ease, background 150ms ease;
+  z-index: 1;
+}
+
+.code-block-wrap:hover .code-copy-btn {
+  opacity: 1;
+}
+
+.code-copy-btn:hover {
+  color: var(--text-primary, #e2e8f0);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.code-copy-btn .fa-check {
+  color: var(--secondary-color, #10b981);
+}
+
+pre.optimize-code {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin: 0.6em 0;
+  overflow-x: auto;
+}
+
+pre.optimize-code code {
+  color: #10b981;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  background: none;
+  padding: 0;
+}
+
+.optimize-loading {
+  color: var(--text-muted, #64748b);
+}
+
+.optimize-progress-wrap {
+  padding: 0 10px 6px;
+}
+
+.optimize-progress {
+  width: 100%;
+  height: 4px;
+  background: var(--border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.optimize-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--accent-color, #f59e0b);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.optimize-progress-bar.indeterminate {
+  width: 40% !important;
+  animation: progress-slide 1.5s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+.optimize-loading-note {
+  font-size: 11px;
+  padding: 0 12px 8px;
+  opacity: 0.6;
+}
+
+.optimize-streaming {
+  min-height: 40px;
+}
+
+.optimize-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted, #64748b);
+  font-size: 14px;
+  padding: 0 4px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  line-height: 1;
+}
+
+.optimize-close-btn:hover {
+  color: var(--text-primary, #e2e8f0);
+}
+
+.optimize-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.optimize-error {
+  padding: 10px 12px;
+  color: var(--danger-color, #ef4444);
+  font-size: 12px;
+}
+
+/* ==========================================================================
    Light Mode Adjustments
    ========================================================================== */
 
@@ -341,4 +744,51 @@ div.plot {
 
 :root.light-mode .d3-tip:after {
   color: rgba(255, 255, 255, 0.98);
+}
+
+:root.light-mode .source-toggle {
+  color: #4f46e5;
+}
+
+:root.light-mode .source-toggle:hover {
+  color: #3730a3;
+}
+
+:root.light-mode .optimize-toggle {
+  color: #4f46e5;
+}
+
+:root.light-mode .optimize-toggle:hover {
+  color: #3730a3;
+}
+
+:root.light-mode .source-panel {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+}
+
+:root.light-mode .source-line.target {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+:root.light-mode .optimize-panel {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+}
+
+:root.light-mode pre.optimize-code {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.light-mode pre.optimize-code code {
+  color: #059669;
+}
+
+:root.light-mode .code-copy-btn {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #94a3b8;
+}
+
+:root.light-mode .code-copy-btn:hover {
+  color: #1e293b;
+  background: rgba(0, 0, 0, 0.1);
 }

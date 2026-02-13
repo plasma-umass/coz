@@ -1,0 +1,9 @@
+[project]
+name = "coz-profiler"
+version = "0.2.0"
+description = "Coz: Finding Code that Counts with Causal Profiling"
+requires-python = ">=3.7"
+license = {text = "BSD-2-Clause"}
+
+[project.optional-dependencies]
+bedrock = ["boto3"]
