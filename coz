@@ -151,6 +151,17 @@ def open_browser(url):
   import webbrowser
   webbrowser.open_new_tab(url)
 
+def _can_open_browser():
+  """Check if we're in an environment where a browser can be opened."""
+  # SSH session — no local display
+  if os.environ.get('SSH_TTY') or os.environ.get('SSH_CONNECTION'):
+    return False
+  # Linux: need X11 or Wayland
+  if sys.platform == 'linux':
+    if not os.environ.get('DISPLAY') and not os.environ.get('WAYLAND_DISPLAY'):
+      return False
+  return True
+
 def parse_profile(profile_path, include_raw=False):
   """Parse .coz or .jsonl profile and return aggregated data and metadata."""
   import json
@@ -184,8 +195,12 @@ def parse_profile(profile_path, include_raw=False):
         record_type = record.get('type', '')
 
         if record_type == 'experiment':
+          selected_line = record.get('selected', '')
+          if '/coz.h:' in selected_line:
+            experiment = None
+            continue
           experiment = {
-            'selected': record.get('selected', ''),
+            'selected': selected_line,
             'speedup': float(record.get('speedup', 0)),
             'duration': int(record.get('duration', 0)),
             'selected_samples': int(record.get('selected_samples', 0))
@@ -223,8 +238,9 @@ def parse_profile(profile_path, include_raw=False):
           runtime = int(record.get('time', 0))
         elif record_type == 'samples':
           loc = record.get('location', '')
-          count = int(record.get('count', 0))
-          samples[loc] = samples.get(loc, 0) + count
+          if '/coz.h:' not in loc:
+            count = int(record.get('count', 0))
+            samples[loc] = samples.get(loc, 0) + count
       else:
         # Legacy tab-separated format
         parts = line.split('\t')
@@ -236,8 +252,12 @@ def parse_profile(profile_path, include_raw=False):
             fields[k] = v
 
         if record_type == 'experiment':
+          selected_line = fields.get('selected', '')
+          if '/coz.h:' in selected_line:
+            experiment = None
+            continue
           experiment = {
-            'selected': fields.get('selected', ''),
+            'selected': selected_line,
             'speedup': float(fields.get('speedup', 0)),
             'duration': int(fields.get('duration', 0)),
             'selected_samples': int(fields.get('selected-samples', 0))
@@ -275,8 +295,9 @@ def parse_profile(profile_path, include_raw=False):
           runtime = int(fields.get('time', 0))
         elif record_type == 'samples':
           loc = fields.get('location', '')
-          count = int(fields.get('count', 0))
-          samples[loc] = samples.get(loc, 0) + count
+          if '/coz.h:' not in loc:
+            count = int(fields.get('count', 0))
+            samples[loc] = samples.get(loc, 0) + count
 
   return data, experiment_count, runtime, samples, raw_experiments
 
@@ -615,8 +636,7 @@ def _coz_plot(args):
         profile_path = default_profile
         break
 
-  # Find an available port
-  port = args.port
+  profile_basename = os.path.basename(profile_path) if profile_path else None
 
   class CozHandler(http.server.SimpleHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
@@ -867,11 +887,14 @@ def _coz_plot(args):
         self.wfile.write(content)
         return
 
-      # Serve profile.coz from current directory when requested
-      if self.path == '/current-profile.coz' and profile_path:
+      # Serve the profile file when requested by its basename
+      if profile_basename and self.path == '/' + profile_basename and profile_path:
         try:
-          with open(profile_path, 'rb') as f:
-            content = f.read()
+          with open(profile_path, 'r') as f:
+            lines = f.readlines()
+          # Filter out coz.h self-instrumentation from old profiles
+          filtered = [l for l in lines if '/coz.h:' not in l]
+          content = ''.join(filtered).encode('utf-8')
           self.send_response(200)
           self.send_header('Content-Type', 'text/plain')
           self.send_header('Content-Length', len(content))
@@ -1191,30 +1214,57 @@ Based on the causal profiling data, suggest specific optimizations for the targe
     allow_reuse_address = True
     daemon_threads = True
 
-  try:
-    with ThreadedHTTPServer(("", port), CozHandler) as httpd:
-      # Build URL with query parameter if profile exists
-      if profile_path:
-        url = f'http://localhost:{port}/?load=current-profile.coz'
-        print(f'Loading profile: {profile_path}')
-      else:
-        url = f'http://localhost:{port}/'
-      print(f'Serving coz viewer at http://localhost:{port}/')
-      print(f'Press Ctrl+C to stop the server')
+  # Find an available port with retry
+  import random
+  preferred = args.port
+  candidates = list(range(preferred, preferred + 10))
+  candidates += [random.randint(49152, 65535) for _ in range(5)]
+  httpd = None
+  port = None
+  for candidate in candidates:
+    try:
+      httpd = ThreadedHTTPServer(("", candidate), CozHandler)
+      port = candidate
+      break
+    except OSError as e:
+      if e.errno in (48, 98):  # EADDRINUSE (macOS / Linux)
+        continue
+      raise
+  if httpd is None:
+    sys.stderr.write('error: could not find an available port (tried %d-%d and random high ports)\n'
+                     % (preferred, preferred + 9))
+    sys.exit(1)
 
-      # Open browser in a separate thread
+  with httpd:
+    # Build URL with query parameter if profile exists
+    if profile_path:
+      url = f'http://localhost:{port}/?load={profile_basename}'
+      print(f'Loading profile: {profile_path}')
+    else:
+      url = f'http://localhost:{port}/'
+    if port != preferred:
+      print(f'Port {preferred} was busy, using {port} instead')
+    print(f'Serving coz viewer at {url}')
+    print('Press Ctrl+C to stop the server')
+
+    # Open browser unless suppressed or headless
+    if not args.no_browser and _can_open_browser():
       t1 = threading.Thread(target=open_browser, args=(url,))
       t1.start()
+    elif not _can_open_browser():
+      print('No display detected. Connect from your browser or use SSH port forwarding:')
+      print(f'  ssh -L {port}:localhost:{port} user@host')
 
-      try:
-        httpd.serve_forever()
-      except KeyboardInterrupt:
-        print('\nShutting down server...')
-  except OSError as e:
-    if e.errno == 48 or e.errno == 98:  # Address already in use (macOS/Linux)
-      sys.stderr.write(f'error: port {port} is already in use. Try --port <number>\n')
-      sys.exit(1)
-    raise
+    # Run server in a daemon thread; block the main thread on input().
+    # input() is a simple C fgets() call that Python has always handled
+    # Ctrl-C correctly with — no select/kqueue/signal machinery needed.
+    server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    server_thread.start()
+    try:
+      input()
+    except (KeyboardInterrupt, EOFError):
+      pass
+    print('\nShutting down server...')
   
 
 # Special format handler for line reference arguments
@@ -1302,6 +1352,10 @@ _plot_parser.add_argument('--text', '-t',
 _plot_parser.add_argument('--verbose', '-v',
                           action='store_true', default=False,
                           help='Show detailed scatter plots for each source line (with --text)')
+
+_plot_parser.add_argument('--no-browser',
+                          action='store_true', default=False,
+                          help='Start server without opening a browser')
 
 _plot_parser.add_argument('--json', '-j',
                           metavar='<output.json>',
