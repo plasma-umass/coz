@@ -1245,7 +1245,7 @@ Based on the causal profiling data, suggest specific optimizations for the targe
     if port != preferred:
       print(f'Port {preferred} was busy, using {port} instead')
     print(f'Serving coz viewer at {url}')
-    print('Press Ctrl+C to stop the server')
+    print('Press Enter to stop the server')
 
     # Open browser unless suppressed or headless
     if not args.no_browser and _can_open_browser():
@@ -1255,9 +1255,6 @@ Based on the causal profiling data, suggest specific optimizations for the targe
       print('No display detected. Connect from your browser or use SSH port forwarding:')
       print(f'  ssh -L {port}:localhost:{port} user@host')
 
-    # Run server in a daemon thread; block the main thread on input().
-    # input() is a simple C fgets() call that Python has always handled
-    # Ctrl-C correctly with — no select/kqueue/signal machinery needed.
     server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     server_thread.start()
     try:
