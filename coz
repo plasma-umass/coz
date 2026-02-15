@@ -14,6 +14,28 @@ import sys
 
 from os.path import abspath, realpath, curdir, dirname, sep as path_sep
 
+def _read_version():
+  # Installed package (deb/rpm/pip)
+  try:
+    from importlib.metadata import version
+    return version('coz-profiler')
+  except Exception:
+    pass
+  # Running from source: read pyproject.toml with stdlib tomllib (3.11+) or tomli
+  _pyproject = os.path.join(dirname(realpath(__file__)), 'pyproject.toml')
+  try:
+    try:
+      import tomllib
+    except ModuleNotFoundError:
+      import tomli as tomllib
+    with open(_pyproject, 'rb') as f:
+      return tomllib.load(f)['project']['version']
+  except Exception:
+    pass
+  return 'unknown'
+
+__version__ = _read_version()
+
 # Entry point
 def run_command_line():
   # By default, parse all arguments
@@ -1276,6 +1298,7 @@ def line_ref(val):
 
 ######### Build the top-level parser #########
 _parser = argparse.ArgumentParser()
+_parser.add_argument('--version', action='version', version=f'coz {__version__}')
 _subparsers = _parser.add_subparsers()
 
 ######### Build the parser for the `run` sub-command #########
