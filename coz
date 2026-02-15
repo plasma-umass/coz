@@ -1297,7 +1297,11 @@ def line_ref(val):
     raise argparse.ArgumentTypeError(msg)
 
 ######### Build the top-level parser #########
-_parser = argparse.ArgumentParser()
+_parser = argparse.ArgumentParser(
+  formatter_class=argparse.RawDescriptionHelpFormatter,
+  description='Coz: a causal profiler that determines optimization potential.\n'
+              'https://github.com/plasma-umass/coz'
+)
 _parser.add_argument('--version', action='version', version=f'coz {__version__}')
 _subparsers = _parser.add_subparsers()
 
