@@ -90,6 +90,17 @@ static string line_to_json_string(const line* l) {
   return json_escape(f->get_name() + ":" + to_string(l->get_line()));
 }
 
+/// Check if a line is from the coz.h instrumentation header
+static bool is_coz_header(const line* l) {
+  auto f = l->get_file();
+  if(!f) return false;
+  const auto& name = f->get_name();
+  if(name.length() < 6) return false;
+  // Check for coz.h preceded by a directory separator (/ on Unix, \ on Windows)
+  char sep = name[name.length() - 6];
+  return (sep == '/' || sep == '\\') && name.compare(name.length() - 5, 5, "coz.h") == 0;
+}
+
 /**
  * Start the profiler
  */
@@ -723,7 +734,8 @@ void profiler::process_samples(thread_state* state) {
         if(sampled_line.second)
           state->local_delay.fetch_add(_delay_size.load());
 
-      } else if(sampled_line.first != nullptr && _next_line.load() == nullptr) {
+      } else if(sampled_line.first != nullptr && _next_line.load() == nullptr
+                && !is_coz_header(sampled_line.first)) {
         _next_line.store(sampled_line.first);
       }
     }
@@ -786,7 +798,8 @@ void profiler::process_all_samples() {
             }
             needs_signal = true;
           }
-        } else if(!experiment_active && sampled_line.first != nullptr && _next_line.load() == nullptr) {
+        } else if(!experiment_active && sampled_line.first != nullptr && _next_line.load() == nullptr
+                  && !is_coz_header(sampled_line.first)) {
           // When not in an experiment, select this line for the next experiment
           _next_line.store(sampled_line.first);
         }

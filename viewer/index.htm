@@ -164,9 +164,9 @@
                   <div id="drop-zone" class="drop-zone">
                     <div class="drop-zone-content">
                       <i class="fa fa-cloud-upload drop-icon"></i>
-                      <p class="drop-text">Drag & drop your <code>.coz</code> file here</p>
+                      <p class="drop-text">Drag & drop your <code>.coz</code> or <code>.jsonl</code> file here</p>
                       <p class="drop-subtext">or click to browse</p>
-                      <input type="file" id="drop-zone-input" accept=".coz" hidden>
+                      <input type="file" id="drop-zone-input" accept=".coz,.jsonl" hidden>
                     </div>
                     <div class="drop-zone-hover">
                       <i class="fa fa-download"></i>
@@ -207,7 +207,7 @@
                         <div class="step-number">4</div>
                         <div class="step-content">
                           <h4>Analyze Results</h4>
-                          <p>Load your <code>profile.coz</code> file here to visualize optimization opportunities.</p>
+                          <p>Load your <code>profile.jsonl</code> or <code>profile.coz</code> file here to visualize optimization opportunities.</p>
                         </div>
                       </div>
                     </div>
@@ -312,7 +312,7 @@ void handle_transaction() {
 
                         <h5>Environment Variables</h5>
                         <ul class="env-list">
-                          <li><code>COZ_OUTPUT</code> &mdash; Output file path (default: profile.coz)</li>
+                          <li><code>COZ_OUTPUT</code> &mdash; Output file path (default: profile.jsonl)</li>
                           <li><code>COZ_SOURCE_SCOPE</code> &mdash; Glob pattern for source files</li>
                           <li><code>COZ_BINARY_SCOPE</code> &mdash; Binary scope filter</li>
                           <li><code>COZ_FILTER_SYSTEM</code> &mdash; Set to 1 to drop system headers</li>
@@ -346,7 +346,7 @@ void handle_transaction() {
             <div id="modal-drop-zone" class="modal-drop-zone">
               <div class="drop-zone-content">
                 <i class="fa fa-cloud-upload drop-icon"></i>
-                <p class="drop-text">Drag & drop your <code>.coz</code> file here</p>
+                <p class="drop-text">Drag & drop your <code>.coz</code> or <code>.jsonl</code> file here</p>
                 <p class="drop-subtext">or</p>
               </div>
               <div class="drop-zone-hover">
@@ -359,7 +359,7 @@ void handle_transaction() {
               <label for="load-profile-file" class="btn btn-outline btn-block">
                 <i class="fa fa-file-text-o"></i> Browse Files
               </label>
-              <input type="file" class="hidden-input" id="load-profile-file" accept=".coz" />
+              <input type="file" class="hidden-input" id="load-profile-file" accept=".coz,.jsonl" />
             </form>
 
             <div class="divider">
@@ -483,7 +483,7 @@ void handle_transaction() {
 
                   <h5>Environment Variables</h5>
                   <ul class="env-list">
-                    <li><code>COZ_OUTPUT</code> &mdash; Output file path (default: profile.coz)</li>
+                    <li><code>COZ_OUTPUT</code> &mdash; Output file path (default: profile.jsonl)</li>
                     <li><code>COZ_SOURCE_SCOPE</code> &mdash; Glob pattern for source files</li>
                     <li><code>COZ_BINARY_SCOPE</code> &mdash; Binary scope filter</li>
                     <li><code>COZ_FILTER_SYSTEM</code> &mdash; Set to 1 to drop system headers</li>

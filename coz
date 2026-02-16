@@ -914,8 +914,31 @@ def _coz_plot(args):
         try:
           with open(profile_path, 'r') as f:
             lines = f.readlines()
-          # Filter out coz.h self-instrumentation from old profiles
-          filtered = [l for l in lines if '/coz.h:' not in l]
+          # Filter out coz.h self-instrumentation experiments.
+          # Must skip both the experiment line AND subsequent data point lines,
+          # since data points reference the preceding experiment.
+          filtered = []
+          skip_data = False
+          for line in lines:
+            stripped = line.strip()
+            if not stripped:
+              continue
+            if stripped.startswith('{'):
+              # JSON Lines format
+              if '"type":"experiment"' in stripped and '/coz.h:' in stripped:
+                skip_data = True
+                continue
+              if '"type":"experiment"' in stripped:
+                skip_data = False
+            else:
+              # Legacy tab-separated format
+              if stripped.startswith('experiment\t') and '/coz.h:' in stripped:
+                skip_data = True
+                continue
+              if stripped.startswith('experiment\t'):
+                skip_data = False
+            if not skip_data:
+              filtered.append(line)
           content = ''.join(filtered).encode('utf-8')
           self.send_response(200)
           self.send_header('Content-Type', 'text/plain')

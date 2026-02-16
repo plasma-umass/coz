@@ -192,8 +192,8 @@ function autoAdjustMinPoints() {
 }
 // Handle file loading from a File object
 function handleFileLoad(file) {
-    if (!file.name.endsWith('.coz')) {
-        display_warning('Invalid File', 'Please select a .coz profile file');
+    if (!file.name.endsWith('.coz') && !file.name.endsWith('.jsonl')) {
+        display_warning('Invalid File', 'Please select a .coz or .jsonl profile file');
         return;
     }
     const reader = new FileReader();
@@ -273,7 +273,7 @@ document.body.addEventListener('dragover', (e) => {
 document.body.addEventListener('drop', (e) => {
     e.preventDefault();
     const files = e.dataTransfer ? e.dataTransfer.files : null;
-    if (files && files.length > 0 && files[0].name.endsWith('.coz')) {
+    if (files && files.length > 0 && (files[0].name.endsWith('.coz') || files[0].name.endsWith('.jsonl'))) {
         handleFileLoad(files[0]);
     }
 }, false);
@@ -578,6 +578,7 @@ function checkAutoLoad() {
         xhr.send();
     }
 }
-// Auto-load on page ready
-document.addEventListener('DOMContentLoaded', checkAutoLoad);
+// Auto-load profile from ?load= query parameter.
+// Call directly since this script is at the bottom of <body> and all DOM elements exist.
+checkAutoLoad();
 //# sourceMappingURL=ui.js.map

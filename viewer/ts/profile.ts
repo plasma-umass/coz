@@ -1017,11 +1017,20 @@ class Profile {
       } else if (entry.type === 'runtime') {
         // Do nothing
       } else if (entry.type === 'experiment') {
-        experiment = entry;
+        // Skip experiments targeting coz.h instrumentation overhead
+        if ((<Experiment>entry).selected && (<Experiment>entry).selected.indexOf('/coz.h:') !== -1) {
+          experiment = null;
+        } else {
+          experiment = entry;
+        }
       } else if (entry.type === 'throughput-point' || entry.type === 'progress-point' || entry.type === 'throughput_point') {
-        this.addThroughputMeasurement(experiment, entry);
+        if (experiment !== null) {
+          this.addThroughputMeasurement(experiment, entry);
+        }
       } else if (entry.type === 'latency-point') {
-        this.addLatencyMeasurement(experiment, entry);
+        if (experiment !== null) {
+          this.addLatencyMeasurement(experiment, entry);
+        }
       } else {
         display_warning('Invalid Profile', 'The profile you loaded contains an invalid line: <pre>' + lines[i] + '</pre>');
       }
