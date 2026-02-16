@@ -1,6 +1,6 @@
 [project]
 name = "coz-profiler"
-version = "0.2.4"
+version = "0.2.5"
 description = "Coz: Finding Code that Counts with Causal Profiling"
 requires-python = ">=3.7"
 license = {text = "BSD-2-Clause"}
