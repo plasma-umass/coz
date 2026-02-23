@@ -635,7 +635,7 @@ bool memory_map::process_file(const string& name, uintptr_t load_address,
           }
         }
 
-        if(line_info.end_sequence) {
+        if(line_info.end_sequence || line_info.line == 0) {
           prev_address = 0;
         } else {
           prev_filename = canonicalize_path(line_info.file->path);

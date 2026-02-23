@@ -130,6 +130,7 @@ if(INSTALL_COZ)
     include(CMakePackageConfigHelpers)
     install(PROGRAMS coz DESTINATION ${CMAKE_INSTALL_BINDIR})
     install(FILES LICENSE.md DESTINATION ${CMAKE_INSTALL_DOCDIR})
+    install(FILES pyproject.toml DESTINATION ${CMAKE_INSTALL_DATADIR}/coz)
 
     # Install the viewer web application
     install(DIRECTORY viewer/

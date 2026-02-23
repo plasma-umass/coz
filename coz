@@ -21,17 +21,25 @@ def _read_version():
     return version('coz-profiler')
   except Exception:
     pass
-  # Running from source: read pyproject.toml with stdlib tomllib (3.11+) or tomli
-  _pyproject = os.path.join(dirname(realpath(__file__)), 'pyproject.toml')
+  # Running from source or cmake install: read pyproject.toml
   try:
     try:
       import tomllib
     except ModuleNotFoundError:
       import tomli as tomllib
-    with open(_pyproject, 'rb') as f:
-      return tomllib.load(f)['project']['version']
-  except Exception:
-    pass
+  except ModuleNotFoundError:
+    return 'unknown'
+  _script_dir = dirname(realpath(__file__))
+  _candidates = [
+    os.path.join(_script_dir, 'pyproject.toml'),                    # from source
+    os.path.join(_script_dir, '..', 'share', 'coz', 'pyproject.toml'),  # cmake install
+  ]
+  for _pyproject in _candidates:
+    try:
+      with open(_pyproject, 'rb') as f:
+        return tomllib.load(f)['project']['version']
+    except Exception:
+      pass
   return 'unknown'
 
 __version__ = _read_version()
