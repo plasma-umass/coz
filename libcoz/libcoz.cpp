@@ -54,6 +54,24 @@ extern "C" void _coz_add_delays() {
   }
 }
 
+/**
+ * Called by the application before a custom blocking operation.
+ * For use with synchronization primitives not intercepted by Coz
+ * (e.g., MySQL's custom mutexes, RocksDB internal locks).
+ */
+extern "C" void _coz_pre_block() {
+  if(initialized) profiler::get_instance().pre_block();
+}
+
+/**
+ * Called by the application after a custom blocking operation completes.
+ * If skip_delays is non-zero, delays inserted during the blocked period
+ * are skipped (use when woken by another thread).
+ */
+extern "C" void _coz_post_block(int skip_delays) {
+  if(initialized) profiler::get_instance().post_block(skip_delays != 0);
+}
+
 #ifdef __APPLE__
 /**
  * Helper functions called from mac_interpose.cpp

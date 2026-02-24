@@ -299,19 +299,6 @@ void profiler::profiler_thread(spinlock& l) {
     }
     _latency_points_lock.unlock();
 
-    // Sync all non-blocked threads' local_delay to global_delay before starting.
-    // This prevents stale residual from a previous experiment from causing threads
-    // to skip delays (local > global branch in add_delays).
-    // Skip blocked threads — their pre_block/post_block mechanism handles accounting.
-    {
-      size_t current_global = _global_delay.load();
-      _thread_states.for_each([current_global](pid_t tid, thread_state* state) {
-        if(!state->is_blocked.load()) {
-          state->local_delay.store(current_global);
-        }
-      });
-    }
-
 #ifdef __APPLE__
     // Reset overshoot counter for this experiment
     g_experiment_overshoot.store(0, std::memory_order_relaxed);
