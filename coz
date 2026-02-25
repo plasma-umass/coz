@@ -372,13 +372,36 @@ def calculate_speedups(data, min_points=1, min_delta=5):
       if len(measurements) >= min_points:
         # Calculate max speedup
         max_speedup = max(m[1] for m in measurements) if measurements else 0
+
+        # Calculate linear regression slope and R-squared
+        slope = None
+        r_squared = None
+        if len(measurements) >= 2:
+          n = len(measurements)
+          sum_x = sum(m[0] for m in measurements)
+          sum_y = sum(m[1] for m in measurements)
+          sum_xy = sum(m[0] * m[1] for m in measurements)
+          sum_x2 = sum(m[0] ** 2 for m in measurements)
+          sum_y2 = sum(m[1] ** 2 for m in measurements)
+          denom = n * sum_x2 - sum_x ** 2
+          if denom != 0:
+            slope = (n * sum_xy - sum_x * sum_y) / denom
+            # R-squared: coefficient of determination
+            ss_tot = sum_y2 - (sum_y ** 2) / n
+            intercept = (sum_y - slope * sum_x) / n
+            ss_res = sum((y - (intercept + slope * x)) ** 2 for x, y in measurements)
+            if ss_tot > 0:
+              r_squared = 1.0 - ss_res / ss_tot
+
         results.append({
           'line': selected,
           'progress_point': pp_name,
           'measurements': measurements,
           'max_speedup': max_speedup,
           'num_points': len(measurements),
-          'baseline_speedup': baseline_speedup
+          'baseline_speedup': baseline_speedup,
+          'slope': slope,
+          'r_squared': r_squared
         })
 
   # Sort by max speedup (highest first)
@@ -402,15 +425,17 @@ def print_text_summary(profile_path, results, experiment_count, runtime, samples
   max_line_len = max(max_line_len, 11)  # "Source Line" header
 
   # Print header
-  header = f"{'Source Line':<{max_line_len}} | Max Speedup | Points"
+  header = f"{'Source Line':<{max_line_len}} | {'Slope':>7} | {'R²':>5} | Max Speedup | Points"
   print(header)
-  print('-' * max_line_len + '-+-------------+-------')
+  print('-' * max_line_len + '-+---------+-------+-------------+-------')
 
   # Print each result
   for r in results:
     speedup_pct = r['max_speedup'] * 100
     sign = '+' if speedup_pct >= 0 else ''
-    print(f"{r['line']:<{max_line_len}} | {sign}{speedup_pct:>9.1f}% | {r['num_points']:>5}")
+    slope_str = f"{r['slope']:>7.3f}" if r.get('slope') is not None else '    N/A'
+    r2_str = f"{r['r_squared']:>5.2f}" if r.get('r_squared') is not None else '  N/A'
+    print(f"{r['line']:<{max_line_len}} | {slope_str} | {r2_str} | {sign}{speedup_pct:>9.1f}% | {r['num_points']:>5}")
 
 def print_scatter_plot(result):
   """Print an ASCII scatter plot for a single result."""

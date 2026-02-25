@@ -169,7 +169,16 @@ public:
     // Handle all samples and add delays as required
     if(_experiment_active) {
       state->set_in_use(true);
+#ifndef __APPLE__
+      // On Linux, samples accumulate in the per-thread perf_event buffer between
+      // timer signals (every 10ms).  Process pending samples so the delay counters
+      // are up-to-date before we potentially unblock another thread.
+      // process_samples() calls add_delays() at the end.
+      process_samples(state);
+#else
+      // On macOS, samples are processed centrally by the profiler thread.
       add_delays(state);
+#endif
       state->set_in_use(false);
     }
   }
@@ -197,7 +206,18 @@ public:
       state->local_delay.fetch_add(_global_delay.load() - state->pre_block_time);
     }
 
+    // Must clear is_blocked before process_samples() because add_delays()
+    // (called at the end of process_samples()) returns early if is_blocked is true.
     state->is_blocked.store(false);
+
+#ifndef __APPLE__
+    // On Linux, process any samples that accumulated while this thread was
+    // blocked to bring its delay counters up to date (BCOZ fix).
+    if(_experiment_active) {
+      process_samples(state);
+    }
+#endif
+
     state->set_in_use(false);
   }
 
