@@ -122,6 +122,18 @@ After profiling, run `coz plot` to automatically open your results in the browse
 
 You may need to adjust the "Minimum Points" slider to see results if the profile has limited data.
 
+#### AI-Powered Optimization Suggestions
+
+The viewer includes an AI assistant that analyzes causal profiling results and suggests concrete optimizations. Click the magic wand icon on any plot to get context-aware suggestions based on the profiling data and source code.
+
+Supported LLM providers:
+- **Anthropic** (Claude) — set `ANTHROPIC_API_KEY`
+- **OpenAI** (GPT-4o, o3, etc.) — set `OPENAI_API_KEY`
+- **Amazon Bedrock** — set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+- **Ollama** — local models, no API key required
+
+The viewer dynamically fetches available models from each provider and caches them locally. Provider settings, API keys, and model selections persist across sessions via cookies.
+
 ## Using Coz
 Using Coz requires a small amount of setup, but you can jump ahead to the section on the included [sample applications](#sample-applications) in this repository if you want to try Coz right away.
 
@@ -148,7 +160,7 @@ When coz tests a hypothetical optimization it will report the effect of that opt
 Coz has command line options to specify progress points when profiling the application instead of modifying its source. This feature is currently disabled because it did not work particularly well. Adding support for better command line-specified progress points is planned in the near future.
 
 ## Processing Results
-Run `coz plot` to view your profile in the browser.
+Run `coz plot` to view your profile in the browser. Use `coz plot --text` for terminal output, or `coz plot --text --verbose` for detailed data points.
 
 ## Sample Applications
 The `benchmarks/` directory includes several small programs with progress points already wired up. Once you configure with `-DBUILD_BENCHMARKS=ON` (see above), you can run them straight from the build tree:

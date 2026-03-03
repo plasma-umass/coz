@@ -11,7 +11,7 @@
 
   char padding[1024];
 
-const unsigned long long its = 100000000ULL;
+const unsigned long long its = 400000000ULL;
 
 void a() {
   volatile unsigned long long x;

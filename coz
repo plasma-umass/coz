@@ -7,11 +7,42 @@
 
 import argparse
 import copy
+import glob
 import os
 import subprocess
 import sys
 
 from os.path import abspath, realpath, curdir, dirname, sep as path_sep
+
+def _read_version():
+  # Installed package (deb/rpm/pip)
+  try:
+    from importlib.metadata import version
+    return version('coz-profiler')
+  except Exception:
+    pass
+  # Running from source or cmake install: read pyproject.toml
+  try:
+    try:
+      import tomllib
+    except ModuleNotFoundError:
+      import tomli as tomllib
+  except ModuleNotFoundError:
+    return 'unknown'
+  _script_dir = dirname(realpath(__file__))
+  _candidates = [
+    os.path.join(_script_dir, 'pyproject.toml'),                    # from source
+    os.path.join(_script_dir, '..', 'share', 'coz', 'pyproject.toml'),  # cmake install
+  ]
+  for _pyproject in _candidates:
+    try:
+      with open(_pyproject, 'rb') as f:
+        return tomllib.load(f)['project']['version']
+    except Exception:
+      pass
+  return 'unknown'
+
+__version__ = _read_version()
 
 # Entry point
 def run_command_line():
@@ -64,6 +95,11 @@ def _coz_run(args):
     os.path.join(coz_prefix, 'build', 'libcoz', 'libcoz.so'),
   ]
 
+  # Also search multiarch library paths (e.g., lib/aarch64-linux-gnu/libcoz.so)
+  library_locations.extend(
+    glob.glob(os.path.join(coz_prefix, '..', 'lib', '*', 'libcoz.so'))
+  )
+
   # Find the first library location that exists
   coz_runtime_found = False
   coz_runtime = None
@@ -73,6 +109,11 @@ def _coz_run(args):
     if os.path.exists(candidate):
       coz_runtime_found = True
       coz_runtime = candidate
+
+  # Allow environment variable to override library location
+  if 'COZ_PRELOAD' in env:
+    coz_runtime = env['COZ_PRELOAD']
+    coz_runtime_found = True
 
   if not coz_runtime_found:
     sys.stderr.write('error: unable to locate coz runtime library\n')
@@ -112,6 +153,15 @@ def _coz_run(args):
   if args.fixed_speedup != None:
     env['COZ_FIXED_SPEEDUP'] = str(args.fixed_speedup)
 
+  if args.verbose:
+    env['COZ_VERBOSE'] = '1'
+
+  # JSON is now the default format
+  if args.legacy_format:
+    env['COZ_OUTPUT_FORMAT'] = 'legacy'
+  else:
+    env['COZ_OUTPUT_FORMAT'] = 'json'
+
   try:
     result = subprocess.call(args.remaining_args, env=env)
   except KeyboardInterrupt:
@@ -119,82 +169,201 @@ def _coz_run(args):
     result = 130
     # Add a newline to mimic output when running without coz
     print()
+  except FileNotFoundError:
+    print(f"Error: Command not found: {args.remaining_args[0]}", file=sys.stderr)
+    result = 127  # Standard "command not found" exit code
+  except PermissionError:
+    print(f"Error: Permission denied: {args.remaining_args[0]}", file=sys.stderr)
+    result = 126  # Standard "permission denied" exit code
   exit(result)
 
 def open_browser(url):
   import webbrowser
   webbrowser.open_new_tab(url)
 
-def parse_profile(profile_path):
-  """Parse .coz profile and return aggregated data and metadata."""
+def _can_open_browser():
+  """Check if we're in an environment where a browser can be opened."""
+  # SSH session — no local display
+  if os.environ.get('SSH_TTY') or os.environ.get('SSH_CONNECTION'):
+    return False
+  # Linux: need X11 or Wayland
+  if sys.platform == 'linux':
+    if not os.environ.get('DISPLAY') and not os.environ.get('WAYLAND_DISPLAY'):
+      return False
+  return True
+
+def parse_profile(profile_path, include_raw=False):
+  """Parse .coz or .jsonl profile and return aggregated data and metadata."""
+  import json
+
   # Data structure: {selected_line: {progress_point: {speedup: {'delta': n, 'duration': n}}}}
   data = {}
   experiment_count = 0
   runtime = 0
   samples = {}
+  raw_experiments = [] if include_raw else None
 
   with open(profile_path, 'r') as f:
+    # Detect format from first line
+    first_line = f.readline().strip()
+    f.seek(0)
+
+    is_json = first_line.startswith('{')
+
     experiment = None
     for line in f:
       line = line.strip()
       if not line:
         continue
-      parts = line.split('\t')
-      record_type = parts[0]
-      fields = {}
-      for part in parts[1:]:
-        if '=' in part:
-          k, v = part.split('=', 1)
-          fields[k] = v
 
-      if record_type == 'experiment':
-        experiment = {
-          'selected': fields.get('selected', ''),
-          'speedup': float(fields.get('speedup', 0)),
-          'duration': int(fields.get('duration', 0))
-        }
-        experiment_count += 1
-      elif record_type in ('throughput-point', 'progress-point'):
-        if experiment:
-          selected = experiment['selected']
-          speedup = experiment['speedup']
-          duration = experiment['duration']
-          pp_name = fields.get('name', '')
-          delta = int(fields.get('delta', 0))
+      if is_json:
+        # JSON Lines format
+        try:
+          record = json.loads(line)
+        except json.JSONDecodeError:
+          continue
+        record_type = record.get('type', '')
 
-          if selected not in data:
-            data[selected] = {}
-          if pp_name not in data[selected]:
-            data[selected][pp_name] = {}
-          if speedup not in data[selected][pp_name]:
-            data[selected][pp_name][speedup] = {'delta': 0, 'duration': 0}
+        if record_type == 'experiment':
+          selected_line = record.get('selected', '')
+          if '/coz.h:' in selected_line:
+            experiment = None
+            continue
+          experiment = {
+            'selected': selected_line,
+            'speedup': float(record.get('speedup', 0)),
+            'duration': int(record.get('duration', 0)),
+            'selected_samples': int(record.get('selected_samples', 0))
+          }
+          experiment_count += 1
+        elif record_type == 'throughput_point':
+          if experiment:
+            selected = experiment['selected']
+            speedup = experiment['speedup']
+            duration = experiment['duration']
+            pp_name = record.get('name', '')
+            delta = int(record.get('delta', 0))
 
-          data[selected][pp_name][speedup]['delta'] += delta
-          data[selected][pp_name][speedup]['duration'] += duration
-      elif record_type == 'runtime':
-        runtime = int(fields.get('time', 0))
-      elif record_type == 'samples':
-        loc = fields.get('location', '')
-        count = int(fields.get('count', 0))
-        samples[loc] = samples.get(loc, 0) + count
+            if selected not in data:
+              data[selected] = {}
+            if pp_name not in data[selected]:
+              data[selected][pp_name] = {}
+            if speedup not in data[selected][pp_name]:
+              data[selected][pp_name][speedup] = {'delta': 0, 'duration': 0}
 
-  return data, experiment_count, runtime, samples
+            data[selected][pp_name][speedup]['delta'] += delta
+            data[selected][pp_name][speedup]['duration'] += duration
 
-def calculate_speedups(data, min_points=1):
-  """Calculate program speedup for each source line."""
+            if include_raw:
+              raw_experiments.append({
+                'selected': selected,
+                'speedup': speedup,
+                'duration': duration,
+                'selected_samples': experiment['selected_samples'],
+                'progress_point': pp_name,
+                'delta': delta,
+                'period': duration / delta if delta > 0 else None
+              })
+        elif record_type == 'runtime':
+          runtime = int(record.get('time', 0))
+        elif record_type == 'samples':
+          loc = record.get('location', '')
+          if '/coz.h:' not in loc:
+            count = int(record.get('count', 0))
+            samples[loc] = samples.get(loc, 0) + count
+      else:
+        # Legacy tab-separated format
+        parts = line.split('\t')
+        record_type = parts[0]
+        fields = {}
+        for part in parts[1:]:
+          if '=' in part:
+            k, v = part.split('=', 1)
+            fields[k] = v
+
+        if record_type == 'experiment':
+          selected_line = fields.get('selected', '')
+          if '/coz.h:' in selected_line:
+            experiment = None
+            continue
+          experiment = {
+            'selected': selected_line,
+            'speedup': float(fields.get('speedup', 0)),
+            'duration': int(fields.get('duration', 0)),
+            'selected_samples': int(fields.get('selected-samples', 0))
+          }
+          experiment_count += 1
+        elif record_type in ('throughput-point', 'progress-point'):
+          if experiment:
+            selected = experiment['selected']
+            speedup = experiment['speedup']
+            duration = experiment['duration']
+            pp_name = fields.get('name', '')
+            delta = int(fields.get('delta', 0))
+
+            if selected not in data:
+              data[selected] = {}
+            if pp_name not in data[selected]:
+              data[selected][pp_name] = {}
+            if speedup not in data[selected][pp_name]:
+              data[selected][pp_name][speedup] = {'delta': 0, 'duration': 0}
+
+            data[selected][pp_name][speedup]['delta'] += delta
+            data[selected][pp_name][speedup]['duration'] += duration
+
+            if include_raw:
+              raw_experiments.append({
+                'selected': selected,
+                'speedup': speedup,
+                'duration': duration,
+                'selected_samples': experiment['selected_samples'],
+                'progress_point': pp_name,
+                'delta': delta,
+                'period': duration / delta if delta > 0 else None
+              })
+        elif record_type == 'runtime':
+          runtime = int(fields.get('time', 0))
+        elif record_type == 'samples':
+          loc = fields.get('location', '')
+          if '/coz.h:' not in loc:
+            count = int(fields.get('count', 0))
+            samples[loc] = samples.get(loc, 0) + count
+
+  return data, experiment_count, runtime, samples, raw_experiments
+
+def calculate_speedups(data, min_points=1, min_delta=5):
+  """Calculate program speedup for each source line.
+
+  Args:
+    min_delta: Minimum number of progress point visits for a data point
+               to be considered reliable (matches ExperimentTargetDelta).
+  """
   results = []
   for selected, progress_points in data.items():
     for pp_name, speedups in progress_points.items():
-      if 0.0 not in speedups:
-        continue  # Need baseline
-      baseline_entry = speedups[0.0]
-      if baseline_entry['delta'] == 0:
-        continue
-      baseline = baseline_entry['duration'] / baseline_entry['delta']
+      # Find baseline: prefer 0% speedup, fall back to lowest speedup with sufficient delta
+      baseline = None
+      baseline_speedup = None
+
+      if 0.0 in speedups and speedups[0.0]['delta'] >= min_delta:
+        baseline_entry = speedups[0.0]
+        baseline = baseline_entry['duration'] / baseline_entry['delta']
+        baseline_speedup = 0.0
+      else:
+        # Fall back to lowest speedup with valid data
+        for speedup in sorted(speedups.keys()):
+          if speedups[speedup]['delta'] >= min_delta:
+            baseline_entry = speedups[speedup]
+            baseline = baseline_entry['duration'] / baseline_entry['delta']
+            baseline_speedup = speedup
+            break
+
+      if baseline is None:
+        continue  # No valid baseline found
 
       measurements = []
       for speedup, agg in sorted(speedups.items()):
-        if agg['delta'] == 0:
+        if agg['delta'] < min_delta:
           continue
         data_point = agg['duration'] / agg['delta']
         progress_speedup = (baseline - data_point) / baseline
@@ -203,12 +372,36 @@ def calculate_speedups(data, min_points=1):
       if len(measurements) >= min_points:
         # Calculate max speedup
         max_speedup = max(m[1] for m in measurements) if measurements else 0
+
+        # Calculate linear regression slope and R-squared
+        slope = None
+        r_squared = None
+        if len(measurements) >= 2:
+          n = len(measurements)
+          sum_x = sum(m[0] for m in measurements)
+          sum_y = sum(m[1] for m in measurements)
+          sum_xy = sum(m[0] * m[1] for m in measurements)
+          sum_x2 = sum(m[0] ** 2 for m in measurements)
+          sum_y2 = sum(m[1] ** 2 for m in measurements)
+          denom = n * sum_x2 - sum_x ** 2
+          if denom != 0:
+            slope = (n * sum_xy - sum_x * sum_y) / denom
+            # R-squared: coefficient of determination
+            ss_tot = sum_y2 - (sum_y ** 2) / n
+            intercept = (sum_y - slope * sum_x) / n
+            ss_res = sum((y - (intercept + slope * x)) ** 2 for x, y in measurements)
+            if ss_tot > 0:
+              r_squared = 1.0 - ss_res / ss_tot
+
         results.append({
           'line': selected,
           'progress_point': pp_name,
           'measurements': measurements,
           'max_speedup': max_speedup,
-          'num_points': len(measurements)
+          'num_points': len(measurements),
+          'baseline_speedup': baseline_speedup,
+          'slope': slope,
+          'r_squared': r_squared
         })
 
   # Sort by max speedup (highest first)
@@ -232,15 +425,17 @@ def print_text_summary(profile_path, results, experiment_count, runtime, samples
   max_line_len = max(max_line_len, 11)  # "Source Line" header
 
   # Print header
-  header = f"{'Source Line':<{max_line_len}} | Max Speedup | Points"
+  header = f"{'Source Line':<{max_line_len}} | {'Slope':>7} | {'R²':>5} | Max Speedup | Points"
   print(header)
-  print('-' * max_line_len + '-+-------------+-------')
+  print('-' * max_line_len + '-+---------+-------+-------------+-------')
 
   # Print each result
   for r in results:
     speedup_pct = r['max_speedup'] * 100
     sign = '+' if speedup_pct >= 0 else ''
-    print(f"{r['line']:<{max_line_len}} | {sign}{speedup_pct:>9.1f}% | {r['num_points']:>5}")
+    slope_str = f"{r['slope']:>7.3f}" if r.get('slope') is not None else '    N/A'
+    r2_str = f"{r['r_squared']:>5.2f}" if r.get('r_squared') is not None else '  N/A'
+    print(f"{r['line']:<{max_line_len}} | {slope_str} | {r2_str} | {sign}{speedup_pct:>9.1f}% | {r['num_points']:>5}")
 
 def print_scatter_plot(result):
   """Print an ASCII scatter plot for a single result."""
@@ -315,30 +510,112 @@ def print_scatter_plot(result):
   print("        0%   20%   40%   60%   80%  100%")
   print("              Line Speedup")
 
+def _output_json(output_path, profile_path, data, results, experiment_count,
+                 runtime, samples, raw_experiments):
+  """Output detailed experiment data as JSON for analysis."""
+  import json
+
+  output = {
+    'profile_path': profile_path,
+    'experiment_count': experiment_count,
+    'runtime_ns': runtime,
+    'runtime_sec': runtime / 1e9 if runtime > 0 else 0,
+
+    # Sample counts by location
+    'samples': samples,
+
+    # Aggregated data by selected line -> progress point -> speedup
+    'aggregated': {},
+
+    # Calculated speedup results
+    'results': [],
+
+    # Raw experiment data for detailed analysis
+    'raw_experiments': raw_experiments or []
+  }
+
+  # Convert aggregated data (speedup keys are floats, need string keys for JSON)
+  for selected, pps in data.items():
+    output['aggregated'][selected] = {}
+    for pp, speedups in pps.items():
+      output['aggregated'][selected][pp] = {}
+      for speedup, agg in speedups.items():
+        output['aggregated'][selected][pp][str(speedup)] = {
+          'speedup_pct': speedup * 100,
+          'delta': agg['delta'],
+          'duration_ns': agg['duration'],
+          'period_ns': agg['duration'] / agg['delta'] if agg['delta'] > 0 else None
+        }
+
+  # Convert results
+  for r in results:
+    # Calculate linear regression slope if we have enough points
+    measurements = r['measurements']
+    slope = None
+    if len(measurements) >= 2:
+      n = len(measurements)
+      sum_x = sum(m[0] for m in measurements)
+      sum_y = sum(m[1] for m in measurements)
+      sum_xy = sum(m[0] * m[1] for m in measurements)
+      sum_x2 = sum(m[0] ** 2 for m in measurements)
+      denom = n * sum_x2 - sum_x ** 2
+      if denom != 0:
+        slope = (n * sum_xy - sum_x * sum_y) / denom
+
+    result_entry = {
+      'line': r['line'],
+      'progress_point': r['progress_point'],
+      'max_speedup': r['max_speedup'],
+      'max_speedup_pct': r['max_speedup'] * 100,
+      'num_points': r['num_points'],
+      'slope': slope,
+      'measurements': [
+        {'line_speedup': ls, 'line_speedup_pct': ls * 100,
+         'program_speedup': ps, 'program_speedup_pct': ps * 100}
+        for ls, ps in r['measurements']
+      ]
+    }
+    output['results'].append(result_entry)
+
+  with open(output_path, 'w') as f:
+    json.dump(output, f, indent=2)
+
+  print(f"\nJSON output written to: {output_path}")
+
 def _coz_plot_text(args):
   """Handle text-based profile output."""
   profile_path = abspath(args.input) if args.input else None
   if profile_path is None:
-    default_profile = abspath(curdir + path_sep + 'profile.coz')
-    if os.path.exists(default_profile):
-      profile_path = default_profile
+    # Prefer .jsonl if both exist
+    for ext in ['profile.jsonl', 'profile.coz']:
+      default_profile = abspath(curdir + path_sep + ext)
+      if os.path.exists(default_profile):
+        profile_path = default_profile
+        break
 
   if not profile_path or not os.path.exists(profile_path):
-    sys.stderr.write('error: no profile found. Specify with -i or run from directory with profile.coz\n')
+    sys.stderr.write('error: no profile found. Specify with -i or run from directory with profile.coz or profile.jsonl\n')
     sys.exit(1)
 
-  data, experiment_count, runtime, samples = parse_profile(profile_path)
+  data, experiment_count, runtime, samples, raw_experiments = parse_profile(profile_path, include_raw=True)
   results = calculate_speedups(data)
 
-  print_text_summary(profile_path, results, experiment_count, runtime, samples)
+  # Only print text output if --text is specified or --json is not specified
+  if args.text or not args.json:
+    print_text_summary(profile_path, results, experiment_count, runtime, samples)
 
-  if args.verbose and results:
-    print()
-    print("=" * 70)
-    print("DETAILED SCATTER PLOTS")
-    print("=" * 70)
-    for r in results:
-      print_scatter_plot(r)
+    if args.verbose and results:
+      print()
+      print("=" * 70)
+      print("DETAILED SCATTER PLOTS")
+      print("=" * 70)
+      for r in results:
+        print_scatter_plot(r)
+
+  # Output JSON if requested
+  if args.json:
+    _output_json(args.json, profile_path, data, results, experiment_count,
+                 runtime, samples, raw_experiments)
 
 def _find_viewer_directory():
   """Find the viewer directory relative to this script's location."""
@@ -361,8 +638,8 @@ def _find_viewer_directory():
   return None
 
 def _coz_plot(args):
-  # Handle text-based output mode
-  if args.text:
+  # Handle text-based output mode or JSON-only output
+  if args.text or args.json:
     _coz_plot_text(args)
     return
 
@@ -370,6 +647,29 @@ def _coz_plot(args):
   import socketserver
   import threading
   import urllib.parse
+
+  # Capture LLM configuration from environment variables
+  # Check if boto3 is available for Bedrock
+  try:
+    import boto3
+    _bedrock_available = True
+  except ImportError:
+    _bedrock_available = False
+
+  llm_config = {
+    'anthropic_key_set': bool(os.environ.get('ANTHROPIC_API_KEY', '')),
+    'openai_key_set': bool(os.environ.get('OPENAI_API_KEY', '')),
+    'ollama_host': os.environ.get('OLLAMA_HOST', 'http://localhost:11434'),
+    'bedrock_available': _bedrock_available,
+    'bedrock_region': os.environ.get('AWS_REGION', os.environ.get('AWS_DEFAULT_REGION', '')),
+    'aws_credentials_set': bool(os.environ.get('AWS_ACCESS_KEY_ID', '')),
+    # Actual key values for pre-populating UI fields
+    'anthropic_key': os.environ.get('ANTHROPIC_API_KEY', ''),
+    'openai_key': os.environ.get('OPENAI_API_KEY', ''),
+    'aws_access_key': os.environ.get('AWS_ACCESS_KEY_ID', ''),
+    'aws_secret_key': os.environ.get('AWS_SECRET_ACCESS_KEY', ''),
+    'aws_session_token': os.environ.get('AWS_SESSION_TOKEN', ''),
+  }
 
   viewer_dir = _find_viewer_directory()
 
@@ -381,26 +681,298 @@ def _coz_plot(args):
     t1.start()
     return
 
-  # Check for profile.coz in current directory (or use specified input file)
+  # Check for profile.coz or profile.jsonl in current directory (or use specified input file)
   profile_path = abspath(args.input) if args.input else None
   if profile_path is None:
-    default_profile = abspath(curdir + path_sep + 'profile.coz')
-    if os.path.exists(default_profile):
-      profile_path = default_profile
+    # Prefer .jsonl if both exist
+    for ext in ['profile.jsonl', 'profile.coz']:
+      default_profile = abspath(curdir + path_sep + ext)
+      if os.path.exists(default_profile):
+        profile_path = default_profile
+        break
 
-  # Find an available port
-  port = args.port
+  profile_basename = os.path.basename(profile_path) if profile_path else None
 
   class CozHandler(http.server.SimpleHTTPRequestHandler):
+    protocol_version = 'HTTP/1.1'
+
     def __init__(self, *args, **kwargs):
       super().__init__(*args, directory=viewer_dir, **kwargs)
 
     def do_GET(self):
-      # Serve profile.coz from current directory when requested
-      if self.path == '/current-profile.coz' and profile_path:
+      # Serve source code snippets for the viewer
+      if self.path.startswith('/source-snippet?'):
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        if 'path' not in params or 'line' not in params:
+          self.send_error(400, 'Missing path or line parameter')
+          return
         try:
-          with open(profile_path, 'rb') as f:
-            content = f.read()
+          file_path = params['path'][0]
+          target_line = int(params['line'][0])
+        except (ValueError, IndexError):
+          self.send_error(400, 'Invalid parameters')
+          return
+        # Probe request — just confirm the endpoint exists
+        if file_path == '__probe__':
+          content = b'{"probe": true}'
+          self.send_response(200)
+          self.send_header('Content-Type', 'application/json')
+          self.send_header('Content-Length', len(content))
+          self.end_headers()
+          self.wfile.write(content)
+          return
+        try:
+          with open(file_path, 'r', errors='replace') as f:
+            all_lines = f.readlines()
+        except FileNotFoundError:
+          self.send_error(404, f'File not found: {file_path}')
+          return
+        except Exception as e:
+          self.send_error(500, str(e))
+          return
+        # Extract 5 lines centered on target (2 above, target, 2 below)
+        start = max(0, target_line - 3)  # target_line is 1-based
+        end = min(len(all_lines), target_line + 2)
+        lines = []
+        for i in range(start, end):
+          lines.append({
+            'number': i + 1,
+            'text': all_lines[i].rstrip('\n\r'),
+            'is_target': (i + 1) == target_line
+          })
+        import json as json_mod
+        result = json_mod.dumps({'file': file_path, 'target_line': target_line, 'lines': lines})
+        content = result.encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(content))
+        self.end_headers()
+        self.wfile.write(content)
+        return
+
+      # Serve available Ollama models
+      if self.path.startswith('/ollama-models'):
+        import json as json_mod
+        import urllib.request
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        host = params.get('host', [llm_config['ollama_host']])[0]
+        url = host.rstrip('/') + '/api/tags'
+        try:
+          req = urllib.request.Request(url, headers={'Accept': 'application/json'})
+          with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json_mod.loads(resp.read())
+          models = []
+          for m in data.get('models', []):
+            name = m.get('name', '')
+            if name:
+              # Strip :latest suffix for cleaner display
+              label = name.replace(':latest', '')
+              models.append({'value': name, 'label': label})
+          result = json_mod.dumps({'models': models})
+        except Exception as e:
+          result = json_mod.dumps({'models': [], 'error': str(e)})
+        content = result.encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(content))
+        self.end_headers()
+        self.wfile.write(content)
+        return
+
+      # Serve available Anthropic models
+      if self.path.startswith('/anthropic-models'):
+        import json as json_mod
+        import urllib.request
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        api_key = params.get('api_key', [''])[0] or os.environ.get('ANTHROPIC_API_KEY', '')
+        if not api_key:
+          result = json_mod.dumps({'models': [], 'error': 'No API key'})
+        else:
+          try:
+            req = urllib.request.Request(
+              'https://api.anthropic.com/v1/models?limit=100',
+              headers={
+                'x-api-key': api_key,
+                'anthropic-version': '2023-06-01',
+                'Accept': 'application/json'
+              }
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+              data = json_mod.loads(resp.read())
+            models = []
+            for m in data.get('data', []):
+              model_id = m.get('id', '')
+              display = m.get('display_name', model_id)
+              models.append({'value': model_id, 'label': display})
+            result = json_mod.dumps({'models': models})
+          except Exception as e:
+            result = json_mod.dumps({'models': [], 'error': str(e)})
+        content = result.encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(content))
+        self.end_headers()
+        self.wfile.write(content)
+        return
+
+      # Serve available OpenAI models
+      if self.path.startswith('/openai-models'):
+        import json as json_mod
+        import urllib.request
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        api_key = params.get('api_key', [''])[0] or os.environ.get('OPENAI_API_KEY', '')
+        if not api_key:
+          result = json_mod.dumps({'models': [], 'error': 'No API key'})
+        else:
+          try:
+            req = urllib.request.Request(
+              'https://api.openai.com/v1/models',
+              headers={
+                'Authorization': f'Bearer {api_key}',
+                'Accept': 'application/json'
+              }
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+              data = json_mod.loads(resp.read())
+            # Curated set of models known to work with chat completions
+            known_good = {
+              'gpt-4o', 'gpt-4o-mini',
+              'gpt-4-turbo', 'gpt-4-turbo-preview',
+              'gpt-4', 'gpt-4-0613',
+              'gpt-3.5-turbo', 'gpt-3.5-turbo-0125',
+              'o1', 'o1-mini', 'o1-preview',
+              'o3', 'o3-mini', 'o3-pro',
+              'o4-mini',
+              'chatgpt-4o-latest',
+            }
+            available_ids = {m.get('id', '') for m in data.get('data', [])}
+            models = []
+            for model_id in sorted(known_good):
+              if model_id in available_ids:
+                models.append({'value': model_id, 'label': model_id})
+            result = json_mod.dumps({'models': models})
+          except Exception as e:
+            result = json_mod.dumps({'models': [], 'error': str(e)})
+        content = result.encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(content))
+        self.end_headers()
+        self.wfile.write(content)
+        return
+
+      # Serve available Bedrock models
+      if self.path.startswith('/bedrock-models'):
+        import json as json_mod
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        region = (params.get('region', [''])[0]
+                  or os.environ.get('AWS_REGION', '')
+                  or os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'))
+        try:
+          import boto3
+          import re as _re
+          # Let boto3 handle credentials via its default chain
+          client = boto3.client('bedrock', region_name=region)
+
+          # Build a map of model_id -> inference_profile_id from cross-region profiles
+          profile_map = {}
+          try:
+            profiles_resp = client.list_inference_profiles(typeEquals='SYSTEM_DEFINED')
+            for p in profiles_resp.get('inferenceProfileSummaries', []):
+              profile_id = p.get('inferenceProfileId', '')
+              for m in p.get('models', []):
+                mid = m.get('modelArn', '').split('/')[-1] if 'modelArn' in m else ''
+                if mid:
+                  profile_map[mid] = profile_id
+          except Exception:
+            pass  # Fallback: use raw model IDs
+
+          resp = client.list_foundation_models()
+          models = []
+          for m in resp.get('modelSummaries', []):
+            if 'TEXT' not in m.get('outputModalities', []):
+              continue
+            model_id = m.get('modelId', '')
+            # Skip context-size variants (e.g. model:0:18k, model:0:200k)
+            if _re.search(r':\d+k$', model_id):
+              continue
+            # Skip rerank / embedding models
+            if 'rerank' in model_id.lower() or 'embed' in model_id.lower():
+              continue
+            # Skip multimedia-only variants
+            if model_id.endswith(':mm'):
+              continue
+            provider_name = m.get('providerName', '')
+            model_name = m.get('modelName', '')
+            label = (provider_name + ' ' + model_name).strip()
+            # Use inference profile ID if available (required for newer models)
+            value = profile_map.get(model_id, model_id)
+            models.append({'value': value, 'label': label})
+          # Sort: Anthropic first, then alphabetically by label
+          models.sort(key=lambda x: (0 if 'anthropic' in x['value'] else 1, x['label']))
+          result = json_mod.dumps({'models': models})
+        except Exception as e:
+          result = json_mod.dumps({'models': [], 'error': str(e)})
+        content = result.encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(content))
+        self.end_headers()
+        self.wfile.write(content)
+        return
+
+      # Serve LLM configuration
+      if self.path == '/llm-config':
+        import json as json_mod
+        content = json_mod.dumps(llm_config).encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(content))
+        self.end_headers()
+        self.wfile.write(content)
+        return
+
+      # Serve the profile file when requested by its basename
+      if profile_basename and self.path == '/' + profile_basename and profile_path:
+        try:
+          with open(profile_path, 'r') as f:
+            lines = f.readlines()
+          # Filter out coz.h self-instrumentation experiments.
+          # Must skip both the experiment line AND subsequent data point lines,
+          # since data points reference the preceding experiment.
+          filtered = []
+          skip_data = False
+          for line in lines:
+            stripped = line.strip()
+            if not stripped:
+              continue
+            if stripped.startswith('{'):
+              # JSON Lines format
+              if '"type":"experiment"' in stripped and '/coz.h:' in stripped:
+                skip_data = True
+                continue
+              if '"type":"experiment"' in stripped:
+                skip_data = False
+            else:
+              # Legacy tab-separated format
+              if stripped.startswith('experiment\t') and '/coz.h:' in stripped:
+                skip_data = True
+                continue
+              if stripped.startswith('experiment\t'):
+                skip_data = False
+            if not skip_data:
+              filtered.append(line)
+          content = ''.join(filtered).encode('utf-8')
           self.send_response(200)
           self.send_header('Content-Type', 'text/plain')
           self.send_header('Content-Length', len(content))
@@ -413,34 +985,361 @@ def _coz_plot(args):
       # Default handler for other files
       super().do_GET()
 
+    def do_POST(self):
+      if self.path == '/optimize':
+        import json as json_mod
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length)
+        try:
+          req = json_mod.loads(body)
+        except json_mod.JSONDecodeError:
+          self.send_error(400, 'Invalid JSON')
+          return
+
+        file_path = req.get('path', '')
+        line_num = req.get('line', 0)
+        speedup_data = req.get('speedup_data', [])
+        provider = req.get('provider', 'anthropic')
+        api_key = req.get('api_key', '')
+        model = req.get('model', '')
+        ollama_host = req.get('ollama_host', 'http://localhost:11434')
+
+        # Read source context (~30 lines centered on target)
+        source_context = ''
+        try:
+          with open(file_path, 'r', errors='replace') as f:
+            all_lines = f.readlines()
+          start = max(0, line_num - 16)
+          end = min(len(all_lines), line_num + 15)
+          for i in range(start, end):
+            marker = ' >>>' if (i + 1) == line_num else '    '
+            source_context += f'{marker} {i+1:4d}: {all_lines[i].rstrip()}\n'
+        except Exception as e:
+          source_context = f'(Could not read source: {e})'
+
+        # Build speedup curve description
+        curve_desc = ''
+        if speedup_data:
+          curve_desc = 'Causal profiling speedup curve data points (line_speedup% -> program_speedup%):\n'
+          for pt in speedup_data:
+            curve_desc += f'  {pt["speedup"]*100:.0f}% -> {pt["progress_speedup"]*100:.1f}%\n'
+          # Compute slope via linear regression
+          n = len(speedup_data)
+          sum_x = sum(p['speedup'] for p in speedup_data)
+          sum_y = sum(p['progress_speedup'] for p in speedup_data)
+          sum_xy = sum(p['speedup'] * p['progress_speedup'] for p in speedup_data)
+          sum_x2 = sum(p['speedup'] ** 2 for p in speedup_data)
+          denom = n * sum_x2 - sum_x ** 2
+          if denom != 0:
+            slope = (n * sum_xy - sum_x * sum_y) / denom
+            max_prog = max(p['progress_speedup'] for p in speedup_data)
+            curve_desc += f'\nLinear regression slope: {slope:.3f}\n'
+            curve_desc += f'Maximum predicted program speedup: {max_prog*100:.1f}%\n'
+            if slope > 0.3:
+              curve_desc += 'Interpretation: STRONG optimization candidate - steep upward slope indicates this code is genuinely on the critical path.\n'
+            elif slope > 0.1:
+              curve_desc += 'Interpretation: MODERATE optimization candidate - meaningful speedup potential.\n'
+            elif slope > -0.05:
+              curve_desc += 'Interpretation: LOW priority - optimizing this code would have minimal impact on overall performance.\n'
+            else:
+              curve_desc += 'Interpretation: NEGATIVE slope - optimizing this code may actually hurt performance (possible contention or synchronization issue).\n'
+
+        system_prompt = """You are an expert C/C++/Rust performance optimization advisor integrated into Coz, a causal profiler.
+
+IMPORTANT CONTEXT - Causal Profiling:
+Unlike traditional profilers that measure where programs spend time (observational), Coz uses controlled experiments with "virtual speedups" to establish CAUSAL relationships between code optimization and program performance. The data you are given represents PROVEN causal effects, not just hotspot data.
+
+How to interpret the speedup curve:
+- Each data point shows: "if this line were optimized by X%, the whole program would speed up by Y%"
+- A steep upward slope means this code is genuinely on the critical path
+- A flat curve means this code is NOT a bottleneck (even if it uses lots of CPU)
+- A negative slope suggests contention - making this code faster could increase lock contention or synchronization overhead
+
+This is native C/C++/Rust code. Focus your optimization suggestions on:
+1. Algorithmic improvements (better data structures, reduced complexity)
+2. Memory access patterns (cache locality, prefetching, avoiding false sharing)
+3. Parallelism opportunities (SIMD, thread-level parallelism, lock-free structures)
+4. Compiler hints and intrinsics (__builtin_expect, restrict, alignment)
+5. System call reduction and I/O batching
+6. Lock contention reduction (if negative slope suggests contention)
+
+Provide specific, actionable code suggestions. Show optimized code when possible."""
+
+        user_prompt = f"""Analyze this code and suggest optimizations based on causal profiling data.
+
+Source file: {file_path}
+Target line: {line_num}
+
+{curve_desc}
+Source context (target line marked with >>>):
+{source_context}
+
+Based on the causal profiling data, suggest specific optimizations for the target line and surrounding code. Include:
+1. What the causal data tells us about this code's importance
+2. Specific optimization strategies
+3. Optimized code (if applicable)
+4. Expected impact based on the speedup curve"""
+
+        # Dispatch to streaming provider
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/x-ndjson')
+        self.send_header('Connection', 'close')
+        self.send_header('Cache-Control', 'no-cache')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.end_headers()
+
+        def send_chunk(data):
+          """Send a newline-delimited JSON line."""
+          line = json_mod.dumps(data) + '\n'
+          self.wfile.write(line.encode('utf-8'))
+          self.wfile.flush()
+
+        try:
+          if provider == 'anthropic':
+            key = api_key or os.environ.get('ANTHROPIC_API_KEY', '')
+            if not key:
+              raise ValueError('No Anthropic API key provided. Set ANTHROPIC_API_KEY env var or enter key in sidebar.')
+            for chunk in _stream_anthropic(key, model or 'claude-opus-4-20250514', system_prompt, user_prompt):
+              send_chunk({'chunk': chunk})
+          elif provider == 'openai':
+            key = api_key or os.environ.get('OPENAI_API_KEY', '')
+            if not key:
+              raise ValueError('No OpenAI API key provided. Set OPENAI_API_KEY env var or enter key in sidebar.')
+            for chunk in _stream_openai(key, model or 'gpt-4o', system_prompt, user_prompt):
+              send_chunk({'chunk': chunk})
+          elif provider == 'bedrock':
+            region = req.get('bedrock_region', '') or os.environ.get('AWS_REGION', '') or os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+            aws_creds = {
+              'aws_access_key_id': req.get('aws_access_key', '') or None,
+              'aws_secret_access_key': req.get('aws_secret_key', '') or None,
+              'aws_session_token': req.get('aws_session_token', '') or None,
+            }
+            for chunk in _stream_bedrock(region, model or 'anthropic.claude-opus-4-20250514-v1:0', system_prompt, user_prompt, aws_creds):
+              send_chunk({'chunk': chunk})
+          elif provider == 'ollama':
+            for chunk in _stream_ollama(ollama_host, model or 'llama3', system_prompt, user_prompt):
+              send_chunk({'chunk': chunk})
+          else:
+            raise ValueError(f'Unknown provider: {provider}')
+
+          send_chunk({'done': True})
+        except BrokenPipeError:
+          pass  # Client disconnected (e.g., user closed panel)
+        except Exception as e:
+          try:
+            send_chunk({'error': str(e)})
+          except BrokenPipeError:
+            pass
+
+        self.close_connection = True
+        return
+
+      self.send_error(404, 'Not found')
+
     def log_message(self, format, *args):
-      # Suppress default logging
-      pass
+      # Only log 5xx errors (not 404s from normal probing)
+      if args and str(args[0]).startswith('5'):
+        sys.stderr.write(f'[coz-server] {format % args}\n')
 
-  try:
-    with socketserver.TCPServer(("", port), CozHandler) as httpd:
-      # Build URL with query parameter if profile exists
-      if profile_path:
-        url = f'http://localhost:{port}/?load=current-profile.coz'
-        print(f'Loading profile: {profile_path}')
+  def _stream_anthropic(key, model, system, user):
+    """Stream text chunks from Anthropic API."""
+    import json as json_mod
+    import urllib.request
+    req_body = json_mod.dumps({
+      'model': model,
+      'max_tokens': 4096,
+      'stream': True,
+      'system': system,
+      'messages': [{'role': 'user', 'content': user}]
+    }).encode('utf-8')
+    req = urllib.request.Request(
+      'https://api.anthropic.com/v1/messages',
+      data=req_body,
+      headers={
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01'
+      }
+    )
+    with urllib.request.urlopen(req, timeout=180) as resp:
+      for raw_line in resp:
+        line = raw_line.decode('utf-8').strip()
+        if line.startswith('data: '):
+          data_str = line[6:]
+          if data_str == '[DONE]':
+            break
+          try:
+            event = json_mod.loads(data_str)
+            if event.get('type') == 'content_block_delta':
+              text = event.get('delta', {}).get('text', '')
+              if text:
+                yield text
+          except json_mod.JSONDecodeError:
+            pass
+
+  def _stream_openai(key, model, system, user):
+    """Stream text chunks from OpenAI API."""
+    import json as json_mod
+    import urllib.request
+    req_body = json_mod.dumps({
+      'model': model,
+      'max_tokens': 4096,
+      'stream': True,
+      'messages': [
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': user}
+      ]
+    }).encode('utf-8')
+    req = urllib.request.Request(
+      'https://api.openai.com/v1/chat/completions',
+      data=req_body,
+      headers={
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {key}'
+      }
+    )
+    with urllib.request.urlopen(req, timeout=180) as resp:
+      for raw_line in resp:
+        line = raw_line.decode('utf-8').strip()
+        if line.startswith('data: '):
+          data_str = line[6:]
+          if data_str == '[DONE]':
+            break
+          try:
+            event = json_mod.loads(data_str)
+            text = event.get('choices', [{}])[0].get('delta', {}).get('content', '')
+            if text:
+              yield text
+          except (json_mod.JSONDecodeError, IndexError):
+            pass
+
+  def _stream_ollama(host, model, system, user):
+    """Stream text chunks from Ollama API."""
+    import json as json_mod
+    import urllib.request
+    req_body = json_mod.dumps({
+      'model': model,
+      'stream': True,
+      'messages': [
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': user}
+      ]
+    }).encode('utf-8')
+    url = host.rstrip('/') + '/api/chat'
+    req = urllib.request.Request(
+      url,
+      data=req_body,
+      headers={'Content-Type': 'application/json'}
+    )
+    with urllib.request.urlopen(req, timeout=300) as resp:
+      for raw_line in resp:
+        line = raw_line.decode('utf-8').strip()
+        if not line:
+          continue
+        try:
+          data = json_mod.loads(line)
+          text = data.get('message', {}).get('content', '')
+          if text:
+            yield text
+          if data.get('done', False):
+            break
+        except json_mod.JSONDecodeError:
+          pass
+
+  def _stream_bedrock(region, model, system, user, aws_creds=None):
+    """Stream text chunks from Amazon Bedrock using the Converse Stream API (model-agnostic)."""
+    try:
+      import boto3
+      from botocore.exceptions import ClientError
+    except ImportError:
+      raise ValueError('boto3 is required for Amazon Bedrock. Install with: pip install boto3')
+    client_kwargs = {'region_name': region}
+    if aws_creds:
+      if aws_creds.get('aws_access_key_id') and aws_creds.get('aws_secret_access_key'):
+        client_kwargs['aws_access_key_id'] = aws_creds['aws_access_key_id']
+        client_kwargs['aws_secret_access_key'] = aws_creds['aws_secret_access_key']
+        if aws_creds.get('aws_session_token'):
+          client_kwargs['aws_session_token'] = aws_creds['aws_session_token']
+    client = boto3.client('bedrock-runtime', **client_kwargs)
+
+    def _do_stream(model_id):
+      resp = client.converse_stream(
+        modelId=model_id,
+        system=[{'text': system}],
+        messages=[{'role': 'user', 'content': [{'text': user}]}],
+        inferenceConfig={'maxTokens': 4096}
+      )
+      for event in resp['stream']:
+        if 'contentBlockDelta' in event:
+          text = event['contentBlockDelta'].get('delta', {}).get('text', '')
+          if text:
+            yield text
+
+    try:
+      for chunk in _do_stream(model):
+        yield chunk
+    except ClientError as e:
+      # If model requires an inference profile, retry with region prefix
+      if 'inference profile' in str(e).lower() and '.' not in model.split('.')[0]:
+        # Derive region prefix: us-west-2 -> us, eu-west-1 -> eu, ap-northeast-1 -> ap
+        prefix = region.split('-')[0] if region else 'us'
+        for chunk in _do_stream(prefix + '.' + model):
+          yield chunk
       else:
-        url = f'http://localhost:{port}/'
-      print(f'Serving coz viewer at http://localhost:{port}/')
-      print(f'Press Ctrl+C to stop the server')
+        raise
 
-      # Open browser in a separate thread
+  class ThreadedHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+  # Find an available port with retry
+  import random
+  preferred = args.port
+  candidates = list(range(preferred, preferred + 10))
+  candidates += [random.randint(49152, 65535) for _ in range(5)]
+  httpd = None
+  port = None
+  for candidate in candidates:
+    try:
+      httpd = ThreadedHTTPServer(("", candidate), CozHandler)
+      port = candidate
+      break
+    except OSError as e:
+      if e.errno in (48, 98):  # EADDRINUSE (macOS / Linux)
+        continue
+      raise
+  if httpd is None:
+    sys.stderr.write('error: could not find an available port (tried %d-%d and random high ports)\n'
+                     % (preferred, preferred + 9))
+    sys.exit(1)
+
+  with httpd:
+    # Build URL with query parameter if profile exists
+    if profile_path:
+      url = f'http://localhost:{port}/?load={profile_basename}'
+      print(f'Loading profile: {profile_path}')
+    else:
+      url = f'http://localhost:{port}/'
+    if port != preferred:
+      print(f'Port {preferred} was busy, using {port} instead')
+    print(f'Serving coz viewer at {url}')
+    print('Press Enter to stop the server')
+
+    # Open browser unless suppressed or headless
+    if not args.no_browser and _can_open_browser():
       t1 = threading.Thread(target=open_browser, args=(url,))
       t1.start()
+    elif not _can_open_browser():
+      print('No display detected. Connect from your browser or use SSH port forwarding:')
+      print(f'  ssh -L {port}:localhost:{port} user@host')
 
-      try:
-        httpd.serve_forever()
-      except KeyboardInterrupt:
-        print('\nShutting down server...')
-  except OSError as e:
-    if e.errno == 48 or e.errno == 98:  # Address already in use (macOS/Linux)
-      sys.stderr.write(f'error: port {port} is already in use. Try --port <number>\n')
-      sys.exit(1)
-    raise
+    server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    server_thread.start()
+    try:
+      input()
+    except (KeyboardInterrupt, EOFError):
+      pass
+    print('\nShutting down server...')
   
 
 # Special format handler for line reference arguments
@@ -454,7 +1353,12 @@ def line_ref(val):
     raise argparse.ArgumentTypeError(msg)
 
 ######### Build the top-level parser #########
-_parser = argparse.ArgumentParser()
+_parser = argparse.ArgumentParser(
+  formatter_class=argparse.RawDescriptionHelpFormatter,
+  description='Coz: a causal profiler that determines optimization potential.\n'
+              'https://github.com/plasma-umass/coz'
+)
+_parser.add_argument('--version', action='version', version=f'coz {__version__}')
 _subparsers = _parser.add_subparsers()
 
 ######### Build the parser for the `run` sub-command #########
@@ -480,8 +1384,8 @@ _run_parser.add_argument('--progress', '-p',
 
 _run_parser.add_argument('--output', '-o',
                          metavar='<profile output>',
-                         default=abspath(curdir+path_sep+'profile.coz'),
-                         help='Profiler output (default=`profile.coz`)')
+                         default=abspath(curdir+path_sep+'profile.jsonl'),
+                         help='Profiler output (default=`profile.jsonl`)')
 
 _run_parser.add_argument('--end-to-end',
                          action='store_true', default=False,
@@ -495,6 +1399,14 @@ _run_parser.add_argument('--fixed-speedup',
                          metavar='<speedup> (0-100)',
                          type=int, choices=list(range(0, 101)), default=None,
                          help='Evaluate optimizations of a specific amount')
+
+_run_parser.add_argument('--verbose', '-v',
+                         action='store_true', default=False,
+                         help='Print verbose output (libraries loaded, debug info found, etc.)')
+
+_run_parser.add_argument('--legacy-format',
+                         action='store_true', default=False,
+                         help='Output profile in legacy tab-separated format (.coz extension)')
 
 # Use defaults to recover handler function and parser object from parser output
 _run_parser.set_defaults(func=_coz_run, parser=_run_parser)
@@ -520,6 +1432,15 @@ _plot_parser.add_argument('--text', '-t',
 _plot_parser.add_argument('--verbose', '-v',
                           action='store_true', default=False,
                           help='Show detailed scatter plots for each source line (with --text)')
+
+_plot_parser.add_argument('--no-browser',
+                          action='store_true', default=False,
+                          help='Start server without opening a browser')
+
+_plot_parser.add_argument('--json', '-j',
+                          metavar='<output.json>',
+                          default=None,
+                          help='Output detailed experiment data as JSON for analysis')
 
 # Use defaults to recover handler function and parser object from parser output
 _plot_parser.set_defaults(func=_coz_plot, parser=_plot_parser)

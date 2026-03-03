@@ -15,10 +15,11 @@
 class thread_state {
 public:
   bool in_use = false;      //< Set by the main thread to prevent signal handler from racing
-  size_t local_delay = 0;   //< The count of delays (or selected line visits) in the thread
+  std::atomic<size_t> local_delay{0};   //< The count of delays (or selected line visits) in the thread
   perf_event sampler;       //< The sampler object for this thread
   timer process_timer;      //< The timer that triggers sample processing for this thread
   size_t pre_block_time;    //< The time saved before (possibly) blocking
+  std::atomic<bool> is_blocked{false};  //< True between pre_block() and post_block(); skip delays
   
   inline void set_in_use(bool value) {
     in_use = value;

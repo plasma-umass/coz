@@ -55,7 +55,18 @@ public:
       offset++;
     }
   }
-  
+
+  // Iterate through all non-null entries and call the provided function
+  template<typename F>
+  void for_each(F fn) {
+    for(size_t i = 0; i < MapSize; i++) {
+      K key = _entries[i]._tag.load();
+      if(key != NullKey) {
+        fn(key, &_entries[i]._value);
+      }
+    }
+  }
+
 private:
   size_t get_bucket(K key) {
     // TODO: Support hash function parameter if this class is reused

@@ -79,6 +79,10 @@ public:
       return _origin->get_count() - _start_count;
     }
 
+    const std::string& get_name() const {
+      return _origin->get_name();
+    }
+
   protected:
     const throughput_point* _origin;
     size_t _start_count;
@@ -167,6 +171,10 @@ public:
   
     virtual size_t get_difference() const {
       return _origin->get_begin_count() - _origin->get_end_count();
+    }
+
+    const std::string& get_name() const {
+      return _origin->get_name();
     }
 
   protected:
