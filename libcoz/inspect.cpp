@@ -223,13 +223,6 @@ bool in_scope(const string& name, const unordered_set<string>& scope) {
 }
 
 
-static bool is_coz_header(const string& path) {
-  // Never profile coz's own instrumentation header
-  const string suffix = "/coz.h";
-  return path.size() >= suffix.size() &&
-         path.compare(path.size() - suffix.size(), suffix.size(), suffix) == 0;
-}
-
 static bool file_matches_scope(const string& name,
                                const unordered_set<string>& scope,
                                bool allow_system_sources) {
