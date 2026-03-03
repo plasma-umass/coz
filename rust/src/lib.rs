@@ -11,10 +11,10 @@
 //! [coz-readme]: https://github.com/plasma-umass/coz/blob/master/README.md
 //! [rust-readme]: https://github.com/alexcrichton/coz-rs/blob/master/README.md
 
-use once_cell::sync::OnceCell;
 use std::ffi::{CStr, CString};
 use std::mem;
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+use std::sync::{LazyLock, OnceLock};
 
 /// Equivalent of the `COZ_PROGRESS` and `COZ_PROGRESS_NAMED` macros
 ///
@@ -103,7 +103,7 @@ macro_rules! scope {
 /// `end!()`, but if necessary you can also create one of these manually in your
 /// own application for your own macros.
 pub struct Counter {
-    slot: OnceCell<Option<&'static coz_counter_t>>,
+    slot: OnceLock<Option<&'static coz_counter_t>>,
     ty: libc::c_int,
     name: &'static str,
 }
@@ -138,7 +138,7 @@ impl Counter {
 
     const fn new(ty: libc::c_int, name: &'static str) -> Counter {
         Counter {
-            slot: OnceCell::new(),
+            slot: OnceLock::new(),
             ty,
             name,
         }
@@ -211,8 +211,7 @@ type AddDelaysFn = unsafe extern "C" fn();
 
 #[cfg(target_os = "linux")]
 fn coz_get_counter(ty: libc::c_int, name: &CStr) -> Option<*mut coz_counter_t> {
-    static GET_COUNTER: OnceCell<Option<GetCounterFn>> = OnceCell::new();
-    let func = GET_COUNTER.get_or_init(|| {
+    static GET_COUNTER: LazyLock<Option<GetCounterFn>> = LazyLock::new(|| {
         let name = CStr::from_bytes_with_nul(b"_coz_get_counter\0").unwrap();
         // SAFETY: We are calling an external function that does exist in Linux.
         // No specific invariants that we must uphold have been defined.
@@ -226,6 +225,7 @@ fn coz_get_counter(ty: libc::c_int, name: &CStr) -> Option<*mut coz_counter_t> {
             Some(unsafe { mem::transmute(func) })
         }
     });
+    let func = &*GET_COUNTER;
 
     // SAFETY: We are calling an external function which exists as it is not None
     // No specific invariants that we must uphold have been defined.
@@ -239,8 +239,7 @@ fn coz_get_counter(ty: libc::c_int, name: &CStr) -> Option<*mut coz_counter_t> {
 /// the profiler cannot detect progress points and will report 0 experiments.
 #[cfg(target_os = "linux")]
 fn coz_add_delays() {
-    static ADD_DELAYS: OnceCell<Option<AddDelaysFn>> = OnceCell::new();
-    let func = ADD_DELAYS.get_or_init(|| {
+    static ADD_DELAYS: LazyLock<Option<AddDelaysFn>> = LazyLock::new(|| {
         let name = CStr::from_bytes_with_nul(b"_coz_add_delays\0").unwrap();
         let func = unsafe { libc::dlsym(libc::RTLD_DEFAULT, name.as_ptr()) };
         if func.is_null() {
@@ -249,6 +248,7 @@ fn coz_add_delays() {
             Some(unsafe { mem::transmute(func) })
         }
     });
+    let func = &*ADD_DELAYS;
 
     if let Some(f) = func {
         // SAFETY: _coz_add_delays is a void->void function with no invariants.
