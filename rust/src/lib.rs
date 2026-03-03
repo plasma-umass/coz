@@ -203,12 +203,11 @@ struct coz_counter_t {
 /// `typedef coz_counter_t* (*coz_get_counter_t)(int, const char*);`
 type GetCounterFn = unsafe extern "C" fn(libc::c_int, *const libc::c_char) -> *mut coz_counter_t;
 
-#[cfg(target_os = "linux")]
 fn coz_get_counter(ty: libc::c_int, name: &CStr) -> Option<*mut coz_counter_t> {
     static GET_COUNTER: OnceCell<Option<GetCounterFn>> = OnceCell::new();
     let func = GET_COUNTER.get_or_init(|| {
         let name = CStr::from_bytes_with_nul(b"_coz_get_counter\0").unwrap();
-        // SAFETY: We are calling an external function that does exist in Linux.
+        // SAFETY: dlsym is available on all POSIX platforms (Linux, macOS, etc.).
         // No specific invariants that we must uphold have been defined.
         let func = unsafe { libc::dlsym(libc::RTLD_DEFAULT, name.as_ptr()) };
         if func.is_null() {
@@ -224,9 +223,4 @@ fn coz_get_counter(ty: libc::c_int, name: &CStr) -> Option<*mut coz_counter_t> {
     // SAFETY: We are calling an external function which exists as it is not None
     // No specific invariants that we must uphold have been defined.
     func.map(|f| unsafe { f(ty, name.as_ptr()) })
-}
-
-#[cfg(not(target_os = "linux"))]
-fn coz_get_counter(_ty: libc::c_int, _name: &CStr) -> Option<*mut coz_counter_t> {
-    None
 }

@@ -1,0 +1,10 @@
+[package]
+name = "rust-filter-test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+coz = { path = "../../rust" }
+
+[profile.release]
+debug = 2
