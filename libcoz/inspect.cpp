@@ -33,6 +33,7 @@
 #include "util.h"
 
 #include "ccutil/log.h"
+#include "path_filter.h"
 
 using namespace std;
 
@@ -221,38 +222,6 @@ bool in_scope(const string& name, const unordered_set<string>& scope) {
   return in_scope_normalized(normalized, scope);
 }
 
-static bool path_has_prefix(const string& path, const string& prefix) {
-  if(prefix.empty())
-    return false;
-  if(prefix.size() > path.size())
-    return false;
-  if(path.compare(0, prefix.size(), prefix) != 0)
-    return false;
-  return path.size() == prefix.size() || path[prefix.size()] == '/';
-}
-
-static bool is_system_path(const string& normalized) {
-  static const vector<string> prefixes = {
-    "/usr/include",
-    "/usr/lib",
-    "/usr/local/include",
-    "/usr/local/lib",
-    "/lib",
-    "/lib64"
-  };
-  for(const auto& prefix : prefixes) {
-    if(path_has_prefix(normalized, prefix))
-      return true;
-  }
-  return false;
-}
-
-static bool is_coz_header(const string& path) {
-  // Never profile coz's own instrumentation header
-  const string suffix = "/coz.h";
-  return path.size() >= suffix.size() &&
-         path.compare(path.size() - suffix.size(), suffix.size(), suffix) == 0;
-}
 
 static bool file_matches_scope(const string& name,
                                const unordered_set<string>& scope,
@@ -266,6 +235,10 @@ static bool file_matches_scope(const string& name,
     return false;
   if(scope.empty())
     return true;
+  // Filter Rust toolchain/dependency paths unless user specified an explicit source scope
+  bool default_scope = (scope.size() == 1 && scope.count("%") == 1);
+  if(default_scope && is_rust_path(normalized))
+    return false;
   return in_scope_normalized(normalized, scope);
 }
 
