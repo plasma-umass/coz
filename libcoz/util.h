@@ -29,11 +29,14 @@
  */
 static size_t get_time() {
 #if defined(__APPLE__)
-  // Note: mach_absolute_time() returns ticks, not nanoseconds.
-  // However, converting to nanoseconds causes experiments to run too long
-  // for short benchmarks. The profiler constants implicitly assume
-  // the current behavior on macOS.
-  return mach_absolute_time();
+  // Convert mach_absolute_time ticks to nanoseconds using timebase info.
+  // This ensures consistent units with _global_delay (nanoseconds) and
+  // nanosleep-based wait() calls.
+  static mach_timebase_info_data_t timebase = {0, 0};
+  if (timebase.denom == 0) {
+    mach_timebase_info(&timebase);
+  }
+  return (mach_absolute_time() * timebase.numer) / timebase.denom;
 #else
   struct timespec ts;
   if(clock_gettime(CLOCK_REALTIME, &ts)) {

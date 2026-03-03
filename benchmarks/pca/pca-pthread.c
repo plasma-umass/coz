@@ -146,8 +146,7 @@ void *calc_mean(void *arg) {
       for (j = 0; j < num_cols; j++) {
          sum += matrix[i][j];
       }
-      mean[i] = sum / num_cols;   
-			COZ_PROGRESS;
+      mean[i] = sum / num_cols;
    }
    
    return (void *)0;

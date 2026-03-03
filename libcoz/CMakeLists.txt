@@ -2,6 +2,8 @@ set(sources
     ${PROJECT_SOURCE_DIR}/include/coz.h
     inspect.cpp
     inspect.h
+    lief_loader.cpp
+    lief_loader.h
     libcoz.cpp
     perf.cpp
     perf.h
@@ -19,11 +21,8 @@ if(APPLE)
     list(APPEND sources
         perf_macos.cpp
         perf_macos.h
-        macho_support.cpp
-        macho_support.h
         mac_interpose.cpp
         mac_interpose.h
-        elf_compat.h
     )
 endif()
 
@@ -44,9 +43,9 @@ target_include_directories(coz
         $<INSTALL_INTERFACE:include>)
 # Platform-specific libraries
 if(APPLE)
-    target_link_libraries(coz PRIVATE ${CMAKE_DL_LIBS} Threads::Threads libelfin::libelfin)
+    target_link_libraries(coz PRIVATE ${CMAKE_DL_LIBS} Threads::Threads libelfin::libelfin LIEF::LIEF)
 else()
-    target_link_libraries(coz PRIVATE ${CMAKE_DL_LIBS} rt Threads::Threads libelfin::libelfin)
+    target_link_libraries(coz PRIVATE ${CMAKE_DL_LIBS} rt Threads::Threads libelfin::libelfin LIEF::LIEF)
 endif()
 
 add_library(coz-instrumentation INTERFACE)

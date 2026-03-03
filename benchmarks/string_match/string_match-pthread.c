@@ -51,8 +51,8 @@
 #define OFFSET 5
 
 typedef struct {
-  int keys_file_len;
-  int encrypted_file_len;
+  long keys_file_len;
+  long encrypted_file_len;
   long bytes_comp;
   char * keys_file;
   char * encrypt_file;
@@ -155,7 +155,7 @@ void string_match_splitter(void *data_in)
     pthread_attr_init(&attr);
     pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
 
-    int req_bytes = data->keys_file_len / num_procs;
+    long req_bytes = data->keys_file_len / num_procs;
 
     str_map_data_t *map_data = (str_map_data_t*)malloc(sizeof(str_map_data_t) 
                                                                                         * num_procs);
@@ -167,8 +167,8 @@ void string_match_splitter(void *data_in)
 	    map_data[i].keys_file = data->keys_file + data->bytes_comp;
 	    map_data[i].TID = i;
 	    	    
-	    /* Assign the required number of bytes */	    
-	    int available_bytes = data->keys_file_len - data->bytes_comp;
+	    /* Assign the required number of bytes */
+	    long available_bytes = data->keys_file_len - data->bytes_comp;
 	    if(available_bytes < 0)
 		    available_bytes = 0;
 
@@ -177,7 +177,7 @@ void string_match_splitter(void *data_in)
 
 
 	    char* final_ptr = map_data[i].keys_file + out[i].length;
-	    int counter = data->bytes_comp + out[i].length;
+	    long counter = data->bytes_comp + out[i].length;
 
 		 /* make sure we end at a word */
 	    while(counter <= data->keys_file_len && *final_ptr != '\n'
@@ -223,7 +223,8 @@ void *string_match_map(void *args)
     
     str_map_data_t* data_in = (str_map_data_t*)( ((map_args_t*)args)->data);
 
-	int key_len, total_len = 0;
+	int key_len;
+	long total_len = 0;
 	char * key_file = data_in->keys_file;
 	char * cur_word = (char*)malloc(MAX_REC_LEN);
 	char * cur_word_final = (char*)malloc(MAX_REC_LEN);

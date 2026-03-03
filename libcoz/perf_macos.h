@@ -189,5 +189,14 @@ void macos_sampling_stop();
 void macos_sampling_register_event(perf_event* event);
 void macos_sampling_unregister_event(perf_event* event);
 
+/// Get the Mach port of the sampling thread (so other coz threads can skip it).
+/// Returns MACH_PORT_NULL if sampling has not started yet.
+mach_port_t macos_get_sampling_thread_port();
+
+/// Register a Mach thread port as a coz-internal thread that the sampling
+/// thread should never suspend.  Call once per internal thread (e.g. the
+/// profiler thread).
+void macos_register_internal_thread(mach_port_t port);
+
 #endif // __APPLE__
 #endif // CAUSAL_RUNTIME_PERF_MACOS_H

@@ -26,7 +26,7 @@ static void* pthread_handle = NULL;   //< The `dlopen` handle to libpthread
 
 #define GET_SYMBOL_HANDLE(name, handle) \
   decltype(::name)* real_##name = nullptr; \
-  while(!__atomic_exchange_n(&resolving, true, __ATOMIC_ACQ_REL)) {} \
+  while(__atomic_exchange_n(&resolving, true, __ATOMIC_ACQ_REL)) {} \
   uintptr_t addr = reinterpret_cast<uintptr_t>(dlsym(handle, #name)); \
   memcpy(&real_##name, &addr, sizeof(uintptr_t)); \
   if(real_##name) { \
@@ -44,8 +44,17 @@ static void* pthread_handle = NULL;   //< The `dlopen` handle to libpthread
 static void* get_pthread_handle() {
 #ifdef __APPLE__
   // On macOS, pthread is part of libSystem which is always loaded
-  // Use RTLD_NEXT to skip our wrappers and find the real functions
-  return RTLD_NEXT;
+  // We need to use a direct handle to libSystem.B.dylib to avoid
+  // DYLD interposition when resolving symbols
+  static void* libsystem_handle = nullptr;
+  if(libsystem_handle == nullptr) {
+    libsystem_handle = dlopen("/usr/lib/libSystem.B.dylib", RTLD_NOW | RTLD_NOLOAD);
+    if(libsystem_handle == nullptr) {
+      // Fallback to loading it
+      libsystem_handle = dlopen("/usr/lib/libSystem.B.dylib", RTLD_NOW);
+    }
+  }
+  return libsystem_handle ? libsystem_handle : RTLD_DEFAULT;
 #else
   if(pthread_handle == NULL && !__atomic_exchange_n(&in_dlopen, true, __ATOMIC_ACQ_REL)) {
     pthread_handle = dlopen("libpthread.so.0", RTLD_NOW | RTLD_GLOBAL);
@@ -135,7 +144,10 @@ static int resolve_sigtimedwait(const sigset_t* set, siginfo_t* info, const stru
 
 static int resolve_pthread_create(pthread_t* t, const pthread_attr_t* attr, void* (*fn)(void*), void* arg) throw() {
   GET_SYMBOL_HANDLE(pthread_create, get_pthread_handle());
-  if(real_pthread_create) return real_pthread_create(t, attr, fn, arg);
+  if(real_pthread_create) {
+    int result = real_pthread_create(t, attr, fn, arg);
+    return result;
+  }
   else return -1;
 }
 
