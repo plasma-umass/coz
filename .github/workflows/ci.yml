@@ -48,9 +48,15 @@ jobs:
         test -x build/benchmarks/lock_test/lock_test
         echo "Build artifacts verified"
 
-    - name: Run toy benchmark with coz
+    - name: Run unit tests
       run: |
         cd build
+        ctest --output-on-failure -j$(nproc)
+        rm -f profile.jsonl
+        echo "Unit tests passed"
+
+    - name: Run toy benchmark with coz
+      run: |
         # Run coz with the toy benchmark for a short duration
         timeout 30 ../coz run -o profile.jsonl --- ./benchmarks/toy/toy || true
 
