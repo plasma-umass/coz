@@ -909,12 +909,12 @@ class Profile {
                     experiment = entry;
                 }
             }
-            else if (entry.type === 'throughput-point' || entry.type === 'progress-point' || entry.type === 'throughput_point') {
+            else if (entry.type === 'throughput-point' || entry.type === 'throughput_point' || entry.type === 'progress-point') {
                 if (experiment !== null) {
                     this.addThroughputMeasurement(experiment, entry);
                 }
             }
-            else if (entry.type === 'latency-point') {
+            else if (entry.type === 'latency-point' || entry.type === 'latency_point') {
                 if (experiment !== null) {
                     this.addLatencyMeasurement(experiment, entry);
                 }

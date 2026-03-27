@@ -40,13 +40,13 @@ interface Experiment {
 }
 
 interface ThroughputPoint {
-  type: 'throughput-point' | 'progress-point' | 'throughput_point';
+  type: 'throughput-point' | 'throughput_point' | 'progress-point';
   name: string;
   delta: number;
 }
 
 interface LatencyPoint {
-  type: 'latency-point';
+  type: 'latency-point' | 'latency_point';
   name: string;
   arrivals: number;
   departures: number;
@@ -1023,11 +1023,11 @@ class Profile {
         } else {
           experiment = entry;
         }
-      } else if (entry.type === 'throughput-point' || entry.type === 'progress-point' || entry.type === 'throughput_point') {
+      } else if (entry.type === 'throughput-point' || entry.type === 'throughput_point' || entry.type === 'progress-point') {
         if (experiment !== null) {
           this.addThroughputMeasurement(experiment, entry);
         }
-      } else if (entry.type === 'latency-point') {
+      } else if (entry.type === 'latency-point' || entry.type === 'latency_point') {
         if (experiment !== null) {
           this.addLatencyMeasurement(experiment, entry);
         }
