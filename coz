@@ -236,7 +236,7 @@ def parse_profile(profile_path, include_raw=False):
             'selected_samples': int(record.get('selected_samples', 0))
           }
           experiment_count += 1
-        elif record_type == 'throughput_point':
+        elif record_type == 'throughput-point':
           if experiment:
             selected = experiment['selected']
             speedup = experiment['speedup']
