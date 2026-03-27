@@ -30,13 +30,12 @@ run_profile() {
 
 PROFILE_DEFAULT="$OUTDIR/profile-default.coz"
 run_profile "$PROFILE_DEFAULT"
-
-grep -Eq '^samples[[:space:]]+location=.*dwarf_scope_test\.cpp' "$PROFILE_DEFAULT"
-if grep -Eq '/usr/(include|lib)/' "$PROFILE_DEFAULT"; then
-  echo "unexpected system source in default profile" >&2
-  exit 1
-fi
+grep -Eq '^{"type":"samples","location":.*dwarf_scope_test\.cpp' "$PROFILE_DEFAULT"
 
 PROFILE_FILTERED="$OUTDIR/profile-filtered.coz"
 COZ_FILTER_SYSTEM=1 run_profile "$PROFILE_FILTERED"
-grep -Eq '^samples[[:space:]]+location=.*dwarf_scope_test\.cpp' "$PROFILE_FILTERED"
+grep -Eq '^{"type":"samples","location":.*dwarf_scope_test\.cpp' "$PROFILE_FILTERED"
+if grep -Eq '/usr/(include|lib)/' "$PROFILE_FILTERED"; then
+  echo "unexpected system source in filtered profile" >&2
+  exit 1
+fi

@@ -39,7 +39,9 @@ libelfin/
 
 viewer/node_modules
 rust/Cargo.lock
-rust/target
+rust/target/
+tests/rust_filter/Cargo.lock
+tests/rust_filter/target/
 
 # CMake generated files
 CMakeLists.txt.user
