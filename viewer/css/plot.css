@@ -358,6 +358,9 @@ div.plot.source-open {
 }
 
 .source-panel {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
   position: absolute;
   left: 0;
   right: 0;
@@ -375,7 +378,6 @@ div.plot.source-open {
 }
 
 .source-line {
-  display: flex;
   padding: 1px 8px;
   white-space: pre;
 }
