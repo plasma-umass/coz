@@ -1190,7 +1190,7 @@ class Profile {
     // Remove the noseries class from legend entries
     legend_entries_sel.classed('noseries', false).text('');
     legend_entries_sel.append('i')
-      .attr('class', (d, i) => { return `fa fa-circle${this._disabled_progress_points.indexOf(d) !== -1 ? '-o' : ''} series${i % 4}`; })
+      .attr('class', (d, i) => { return `fa fa-circle${this._disabled_progress_points.indexOf(d) !== -1 ? '-o' : ''} series${i % 8}`; })
       .on('click', (d, i) => {
         const ind = this._disabled_progress_points.indexOf(d);
         if (ind !== -1) {
@@ -1292,8 +1292,13 @@ class Profile {
     let tip = (<any> d3).tip()
       .attr('class', 'd3-tip')
       .offset([-5, 0])
-      .html(function (d: Measurement) {
-        return '<strong>Line Speedup:</strong> ' + percentFormat(d.speedup) + '<br>' +
+      .html(function (d: any) {
+        let name = d.point_name || '';
+        // Show just filename:line, not the full path
+        let slash = name.lastIndexOf('/');
+        if (slash !== -1) name = name.substring(slash + 1);
+        return '<strong>Progress Point:</strong> ' + name + '<br>' +
+              '<strong>Line Speedup:</strong> ' + percentFormat(d.speedup) + '<br>' +
               '<strong>Progress Speedup:</strong> ' + percentFormat(d.progress_speedup);
       })
       .direction(function (d: Measurement) {
@@ -1646,7 +1651,7 @@ class Profile {
     series_sel.attr('class', function(d, k) {
       // Use progress point's position in array to assign it a stable color, no matter
       // which points are enabled for display.
-      return `series series${(progress_points.indexOf(d.name)) % 5}`; })
+      return `series series${(progress_points.indexOf(d.name)) % 8}`; })
               .attr('style', 'clip-path: url(#clip);');
     series_sel.exit().remove();
 
@@ -1681,17 +1686,21 @@ class Profile {
     lines_sel.exit().remove();
 
     /****** Add or update points ******/
-    let points_sel = series_sel.selectAll('circle').data(function(d) { return d.measurements; });
+    let points_sel = series_sel.selectAll('circle').data(function(d) {
+      return d.measurements.map(function(m) {
+        return { speedup: m.speedup, progress_speedup: m.progress_speedup, point_name: d.name };
+      });
+    });
     points_sel.enter().append('circle').attr('r', radius);
     points_sel.attr('cx', function(d) { return xscale(d.speedup); })
               .attr('cy', function(d) { return yscale(d.progress_speedup); })
-              .on('mouseover', function(d, i) {
+              .on('mouseover', function(d) {
                 d3.select(this).classed('highlight', true);
-                tip.show(d, i);
+                tip.show(d, this);
               })
-              .on('mouseout', function(d, i) {
+              .on('mouseout', function() {
                 d3.select(this).classed('highlight', false);
-                tip.hide(d, i);
+                tip.hide();
               });
     points_sel.exit().remove();
     

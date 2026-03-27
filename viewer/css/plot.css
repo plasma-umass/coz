@@ -216,6 +216,9 @@ p.noseries {
   line-height: 1.5;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  max-width: 320px;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 .d3-tip strong {
