@@ -39,14 +39,22 @@ jobs:
       run: |
         cd build
         cmake .. -DBUILD_BENCHMARKS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
-        make -j$(nproc) toy lock_test
+        make -j$(nproc) toy lock_test kmeans
 
     - name: Verify build artifacts
       run: |
         test -f build/libcoz/libcoz.so
         test -x build/benchmarks/toy/toy
         test -x build/benchmarks/lock_test/lock_test
+        test -x build/benchmarks/kmeans/kmeans
         echo "Build artifacts verified"
+
+    - name: Run unit tests
+      run: |
+        cd build
+        ctest --output-on-failure -j$(nproc)
+        rm -f profile.jsonl
+        echo "Unit tests passed"
 
     - name: Run toy benchmark with coz
       run: |
@@ -115,7 +123,7 @@ jobs:
                 obj = json.loads(line)
                 if obj.get('type') == 'experiment':
                     current_exp = obj
-                elif obj.get('type') == 'throughput_point' and current_exp:
+                elif obj.get('type') == 'throughput-point' and current_exp:
                     current_exp['delta'] = float(obj['delta'])
                     experiments.append(current_exp)
                     current_exp = None
@@ -192,7 +200,7 @@ jobs:
                 obj = json.loads(line)
                 if obj.get('type') == 'experiment':
                     current_exp = obj
-                elif obj.get('type') == 'throughput_point' and current_exp:
+                elif obj.get('type') == 'throughput-point' and current_exp:
                     current_exp['delta'] = float(obj['delta'])
                     experiments.append(current_exp)
                     current_exp = None

@@ -400,7 +400,7 @@ void profiler::profiler_thread(spinlock& l) {
       for(const auto& s : saved_throughput_points) {
         size_t delta = s->get_delta();
         if(_json_output) {
-          output << "{\"type\":\"throughput_point\",\"name\":\"" << json_escape(s->get_name()) << "\","
+          output << "{\"type\":\"throughput-point\",\"name\":\"" << json_escape(s->get_name()) << "\","
                  << "\"delta\":" << delta << "}\n";
         } else {
           s->log(output);
@@ -409,7 +409,7 @@ void profiler::profiler_thread(spinlock& l) {
 
       for(const auto& s : saved_latency_points) {
         if(_json_output) {
-          output << "{\"type\":\"latency_point\",\"name\":\"" << json_escape(s->get_name()) << "\","
+          output << "{\"type\":\"latency-point\",\"name\":\"" << json_escape(s->get_name()) << "\","
                  << "\"arrivals\":" << s->get_begin_delta() << ","
                  << "\"departures\":" << s->get_end_delta() << ","
                  << "\"difference\":" << s->get_difference() << "}\n";
