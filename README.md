@@ -156,6 +156,54 @@ To profile latency, you must place two progress points that correspond to the st
 
 When coz tests a hypothetical optimization it will report the effect of that optimization on the average latency between these two points. Coz can track this information without any knowledge of individual transactions thanks to [Little's Law](https://en.wikipedia.org/wiki/Little%27s_law).
 
+### AI-Suggested Progress Points (`coz suggest-points`)
+If you're new to Coz or working in an unfamiliar codebase, the hardest part is deciding *where* to place progress points. The `coz suggest-points` subcommand uses an LLM agent to read your source, identify what counts as a unit of work, and propose concrete `COZ_PROGRESS_NAMED` / `COZ_BEGIN` / `COZ_END` placements. Each proposal is shown with a rationale and a unified diff; nothing is written until you confirm.
+
+```shell
+export ANTHROPIC_API_KEY=...
+
+coz suggest-points src/                         # explore src/, then prompt to apply
+coz suggest-points --dry-run src/               # print diffs only, no prompt
+coz suggest-points --apply src/                 # skip the prompt, apply everything
+coz suggest-points --kind latency src/          # only propose COZ_BEGIN/COZ_END pairs
+coz suggest-points --hint "HTTP server" src/    # give the agent a domain hint
+```
+
+The agent has read-only tools (`list_files`, `read_file`, `grep`) scoped to the paths you pass, and emits one proposal per call. When you accept a proposal, the macro is inserted at the chosen line (matching surrounding indentation), `#include "coz.h"` is added if missing, and the original file is backed up to `*.coz.bak`. Latency points are only applied in matched `BEGIN`/`END` pairs. Files that already contain Coz macros are left alone.
+
+#### Choosing an LLM provider
+
+`coz suggest-points` supports the same providers as the viewer's optimization assistant. Pick one with `--provider`; the agentic tool-use loop is used on all of them, so results are comparable across providers (quality depends on how well the chosen model follows tool-use instructions).
+
+| Provider | Flag | Credentials | Default model |
+| --- | --- | --- | --- |
+| Anthropic (Claude) | `--provider anthropic` *(default)* | `ANTHROPIC_API_KEY` (or `--api-key`) | `claude-opus-4-7` |
+| OpenAI (GPT-4o, o3, …) | `--provider openai` | `OPENAI_API_KEY` (or `--api-key`) | `gpt-4o` |
+| Amazon Bedrock | `--provider bedrock` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (optional `AWS_SESSION_TOKEN`); region via `AWS_REGION` / `AWS_DEFAULT_REGION` or `--region`. Any credential source that boto3's default chain picks up (IAM role, `~/.aws/credentials`, SSO) also works. Requires `pip install boto3`. | `anthropic.claude-opus-4-20250514-v1:0` |
+| Ollama (local) | `--provider ollama` | No key. Endpoint via `OLLAMA_HOST` or `--ollama-host` (defaults to `http://localhost:11434`). Use a tool-capable model (e.g. `llama3.1`, `qwen2.5`). | `llama3.1` |
+
+Examples:
+
+```shell
+# Anthropic (default)
+export ANTHROPIC_API_KEY=...
+coz suggest-points src/
+
+# OpenAI
+export OPENAI_API_KEY=...
+coz suggest-points --provider openai --model gpt-4o src/
+
+# Amazon Bedrock — uses the boto3 credential chain
+export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_REGION=us-west-2
+coz suggest-points --provider bedrock \
+                   --model anthropic.claude-opus-4-20250514-v1:0 src/
+
+# Ollama on a local server (no API key)
+coz suggest-points --provider ollama --model llama3.1 src/
+```
+
+You can also pass `--api-key <key>` inline for Anthropic or OpenAI instead of exporting an env var, and `--model <id>` to select a specific model on any provider. See `coz suggest-points --help` for the full option list (`--include`, `--exclude`, `--max-points`, `--region`, `--ollama-host`, etc.).
+
 ### Specifying Progress Points on the Command Line
 Coz has command line options to specify progress points when profiling the application instead of modifying its source. This feature is currently disabled because it did not work particularly well. Adding support for better command line-specified progress points is planned in the near future.
 
