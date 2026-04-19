@@ -62,14 +62,19 @@ coz run --- ./toy/toy
    - `progress_point.h`: Throughput and latency point tracking
    - **Platform-specific sampling**:
      - `perf.cpp/h`: Linux implementation using perf_event_open syscall
-     - `perf_macos.cpp/h`: macOS implementation using kperf private framework
+     - `perf_macos.cpp/h`: macOS implementation using kperf private framework (Mach thread suspend + register read)
+   - **macOS-specific**:
+     - `mac_interpose.cpp/h`: `DYLD_INTERPOSE` wrappers for pthread/mutex/cond/rwlock/exit/signal functions. On macOS, `dlsym` returns the interposed version, so internal coz calls must go through `coz_orig_*` originals bound via `__asm("_name")`.
+     - `macho_support.cpp/h`: Mach-O binary inspection
+     - `lief_loader.cpp/h`: dSYM bundle lookup for debug info
    - `inspect.cpp/h`: DWARF debug info parsing using libelfin (supports DWARF 2-5). Source filtering obeys `COZ_SOURCE_SCOPE` (defaults to `%`) and the optional `COZ_FILTER_SYSTEM=1` env to drop `/usr/include`, `/usr/lib`, etc. Keep those flags in mind before hard-coding additional filters.
-   - `real.cpp/h`: Wrapper functions to capture real pthread/libc functions
+   - `path_filter.h`: Filters out Rust stdlib and dependency paths from profiling by default.
+   - `real.cpp/h`: Wrapper functions to capture real pthread/libc functions (Linux-only wrappers guarded by `#ifndef __APPLE__`; macOS uses `mac_interpose.cpp`).
    - `libcoz.cpp`: Library initialization and exported symbols
 
 2. **coz script** (`coz`): Python 3 command-line wrapper
-   - Handles `coz run` and `coz plot` commands
-   - Sets up LD_PRELOAD to inject libcoz.so
+   - Handles `coz run`, `coz plot`, and `coz suggest-points` subcommands
+   - Sets up LD_PRELOAD (Linux) / DYLD_INSERT_LIBRARIES (macOS) to inject libcoz.so
    - Manages profiler environment variables
    - `coz plot` serves a local HTTP server with API endpoints:
      - `/llm-config`: Returns env var availability for LLM providers
@@ -77,6 +82,7 @@ coz run --- ./toy/toy
      - `/optimize`: Streaming AI optimization suggestions (POST, ndjson)
      - `/source-snippet`: Source code context for viewer panels
    - Bedrock endpoints use `converse_stream` API (model-agnostic) with inference profile fallback
+   - `coz suggest-points` runs an LLM tool-use agent (Anthropic / OpenAI / Bedrock / Ollama) that reads source via scoped `list_files`/`read_file`/`grep` tools and proposes `COZ_PROGRESS_NAMED` / `COZ_BEGIN` / `COZ_END` insertions. Each proposal includes rationale + unified diff; nothing is written without confirmation. Files already containing Coz macros are skipped, `#include "coz.h"` is auto-inserted, and originals are backed up to `*.coz.bak`. Entry points: `_coz_suggest_points` (~line 2192 of `coz`); subcommand parser at `_suggest_parser` (~line 2374). Flags include `--dry-run`, `--apply`, `--kind {throughput,latency,both}`, `--hint`, `--provider`, `--model`, `--include`, `--exclude`, `--max-points`.
 
 3. **include/coz.h**: Instrumentation macros for target programs
    - `COZ_PROGRESS` / `COZ_PROGRESS_NAMED`: Throughput progress points
@@ -258,6 +264,27 @@ void handle_transaction() {
 }
 ```
 
+### Suggesting Progress Points with an LLM
+
+When working in an unfamiliar codebase, use `coz suggest-points` to get AI-proposed placements:
+
+```bash
+# Default (Anthropic) — explore src/ and prompt per proposal
+export ANTHROPIC_API_KEY=...
+coz suggest-points src/
+
+# Show diffs only, no writes
+coz suggest-points --dry-run src/
+
+# Apply every accepted proposal without prompting
+coz suggest-points --apply src/
+
+# Only latency pairs (COZ_BEGIN/COZ_END), with a domain hint
+coz suggest-points --kind latency --hint "HTTP server" src/
+```
+
+Providers: `--provider {anthropic,openai,bedrock,ollama}`. Each uses the same tool-use loop; results vary by how well the chosen model follows tool-use instructions. Agent tools (`list_files`, `read_file`, `grep`) are scoped to the paths passed on the command line. Files already containing Coz macros are skipped. Accepted proposals insert the macro (matching surrounding indentation), add `#include "coz.h"` if missing, and back up the original to `*.coz.bak`. Latency points are only applied in matched `BEGIN`/`END` pairs.
+
 ### Rust Support
 
 Coz has Rust bindings in `rust/`:
@@ -342,8 +369,12 @@ The compiled JavaScript files are in `js/` and committed to the repo.
 - macOS 10.10+ (kperf framework availability)
 - Requires elevated privileges or SIP adjustments for kperf access
 - Build dependencies: cmake, pkg-config (libelfin fetched automatically)
+- Debug info lives in `.dSYM` bundles (not embedded); looked up via `lief_loader.cpp`
+- Library injection: `DYLD_INSERT_LIBRARIES` + `COZ_BINARY_SCOPE=MAIN` (the `coz` script sets this automatically)
+- Wall-clock `SIGPROF` timer (fires even on blocked threads) → `is_blocked` check in signal handler skips delays for blocked threads
+- `nanosleep` has ~1ms granularity; overshoot is tracked in `g_experiment_overshoot` and subtracted from experiment duration
 - **Important**: Uses private kperf API which may change without notice
-- Cannot be used in App Store applications due to private API usage
+- Cannot be distributed via Mac App Store due to private API usage
 
 ## Dependencies
 
