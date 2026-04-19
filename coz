@@ -1340,7 +1340,931 @@ Based on the causal profiling data, suggest specific optimizations for the targe
     except (KeyboardInterrupt, EOFError):
       pass
     print('\nShutting down server...')
-  
+
+
+######### `coz suggest-points` subcommand #########
+
+_SUGGEST_DEFAULT_INCLUDES = ['*.c', '*.cc', '*.cpp', '*.cxx',
+                             '*.h', '*.hh', '*.hpp', '*.hxx',
+                             '*.rs']
+_SUGGEST_DEFAULT_EXCLUDES = ['*/build/*', '*/cmake-build-*/*',
+                             '*/target/*', '*/third_party/*',
+                             '*/node_modules/*', '*/.git/*',
+                             '*/vendor/*', '*/dist/*']
+_SUGGEST_MAX_LIST_ENTRIES = 400
+_SUGGEST_MAX_READ_BYTES = 60 * 1024
+_SUGGEST_MAX_GREP_HITS = 80
+_SUGGEST_MAX_ITERATIONS = 20
+
+_SUGGEST_SYSTEM_PROMPT = """You are Coz's progress-point planning agent.
+
+Coz is a causal profiler. For it to produce useful results, the target program must contain progress points that mark "one unit of work has been completed." Your job is to read the user's source code and propose good locations.
+
+Progress-point kinds:
+- THROUGHPUT (`COZ_PROGRESS_NAMED("name")`): placed where one work-unit has just completed (e.g. just after a request served, a frame rendered, a batch flushed, an iteration of a main loop). Pick a short, descriptive name.
+- LATENCY (paired `COZ_BEGIN("name")` + `COZ_END("name")`): placed at the entry and exit of an individual transaction whose per-request latency you want to measure. Both sides must lie on the same logical request path and share a pair_name.
+
+Guidelines:
+1. Prefer low-frequency, semantically meaningful points. Avoid placing inside tight inner loops that execute millions of times per second.
+2. Avoid error-only paths and avoid places that would double-count (e.g. inside both a helper and its caller).
+3. Before proposing, actually read the code around the target. Your rationale must cite what you saw.
+4. Quality over quantity: when unsure, propose fewer, higher-confidence points.
+5. Do NOT propose points inside vendored / third-party directories.
+
+Workflow:
+- Explore with `list_files` and `grep`.
+- Read candidate files with `read_file`.
+- For each good location, call `propose_point` once. For latency, call it twice with matching pair_name.
+- When done, stop calling tools. Do not reply with narrative text; the set of `propose_point` calls IS the output.
+"""
+
+_SUGGEST_TOOLS = [
+  {
+    'name': 'list_files',
+    'description': 'List source files in scope, optionally under a subdirectory. Use to get an overview.',
+    'input_schema': {
+      'type': 'object',
+      'properties': {
+        'directory': {'type': 'string',
+                      'description': 'Path relative to cwd, or "." for the full scope.'},
+        'glob': {'type': 'string',
+                 'description': 'Optional filename glob (e.g. "*.c") to filter results.'}
+      },
+      'required': ['directory']
+    }
+  },
+  {
+    'name': 'read_file',
+    'description': 'Read lines from a file in scope. Output is prefixed with line numbers.',
+    'input_schema': {
+      'type': 'object',
+      'properties': {
+        'path': {'type': 'string'},
+        'start_line': {'type': 'integer', 'description': '1-based, default 1.'},
+        'end_line': {'type': 'integer', 'description': '1-based inclusive, default end of file.'}
+      },
+      'required': ['path']
+    }
+  },
+  {
+    'name': 'grep',
+    'description': 'Search the source tree with a Python regex. Returns path:line: text.',
+    'input_schema': {
+      'type': 'object',
+      'properties': {
+        'pattern': {'type': 'string'},
+        'glob': {'type': 'string', 'description': 'Optional filename glob.'}
+      },
+      'required': ['pattern']
+    }
+  },
+  {
+    'name': 'propose_point',
+    'description': ('Emit a single progress-point proposal. Call once per proposal. '
+                    'For latency, call twice (kind="begin" and kind="end") with the same pair_name.'),
+    'input_schema': {
+      'type': 'object',
+      'properties': {
+        'kind': {'type': 'string', 'enum': ['throughput', 'begin', 'end']},
+        'file': {'type': 'string', 'description': 'Path as returned by the other tools.'},
+        'line': {'type': 'integer',
+                 'description': 'Line number; macro is inserted BEFORE this line.'},
+        'name': {'type': 'string',
+                 'description': 'Short name for throughput points (e.g. "request_complete").'},
+        'pair_name': {'type': 'string',
+                      'description': 'Shared name for a BEGIN/END latency pair.'},
+        'rationale': {'type': 'string',
+                      'description': 'One or two sentences, citing what you saw in the code.'}
+      },
+      'required': ['kind', 'file', 'line', 'rationale']
+    }
+  }
+]
+
+def _suggest_walk(roots, includes, excludes):
+  """Return sorted list of source files, applying include/exclude globs."""
+  import fnmatch
+  results = set()
+
+  def is_excluded(path):
+    return any(fnmatch.fnmatch(path, ex) for ex in excludes)
+
+  def is_included(path):
+    base = os.path.basename(path)
+    return any(fnmatch.fnmatch(path, pat) or fnmatch.fnmatch(base, pat) for pat in includes)
+
+  for root in roots:
+    root = os.path.normpath(root)
+    if os.path.isfile(root):
+      if not is_excluded(root):
+        results.add(root)
+      continue
+    if not os.path.isdir(root):
+      continue
+    for dirpath, dirnames, filenames in os.walk(root):
+      dirnames[:] = [d for d in dirnames
+                     if not d.startswith('.')
+                     and not is_excluded(os.path.join(dirpath, d))]
+      for fn in filenames:
+        p = os.path.normpath(os.path.join(dirpath, fn))
+        if is_included(p) and not is_excluded(p):
+          results.add(p)
+  return sorted(results)
+
+def _suggest_tool_handler(proposals, files, kind_filter, max_points, verbose):
+  """Return a callable `handle(name, input)` that executes an agent tool call."""
+  import fnmatch, re
+  files_set = set(files)
+
+  def resolve_path(p):
+    # Accept absolute or relative paths; map to the canonical in-scope version.
+    candidates = [p, os.path.normpath(p), os.path.abspath(p)]
+    for c in candidates:
+      if c in files_set:
+        return c
+      # also try matching by tail
+    for f in files_set:
+      if f.endswith('/' + p) or f.endswith(os.sep + p):
+        return f
+    return None
+
+  def handle_list(input_):
+    directory = input_.get('directory', '.')
+    glob_pat = input_.get('glob', '')
+    directory = os.path.normpath(directory)
+    matches = []
+    for f in files:
+      if directory == '.' or f == directory or f.startswith(directory + os.sep):
+        if glob_pat and not fnmatch.fnmatch(os.path.basename(f), glob_pat):
+          continue
+        matches.append(f)
+        if len(matches) >= _SUGGEST_MAX_LIST_ENTRIES:
+          matches.append(f'... ({len(files) - _SUGGEST_MAX_LIST_ENTRIES}+ more, truncated)')
+          break
+    return '\n'.join(matches) if matches else '(no files)'
+
+  def handle_read(input_):
+    path = input_.get('path', '')
+    resolved = resolve_path(path)
+    if not resolved:
+      return f'ERROR: {path} not in scope'
+    start = max(1, int(input_.get('start_line', 1)))
+    end = int(input_.get('end_line', 10_000_000))
+    try:
+      with open(resolved, 'r', errors='replace') as fh:
+        lines = fh.readlines()
+    except OSError as e:
+      return f'ERROR: {e}'
+    end = min(len(lines), end)
+    out = [f'# {resolved} ({len(lines)} lines total)']
+    total = 0
+    for i in range(start - 1, end):
+      line = f'{i+1:6d}: {lines[i].rstrip()}'
+      total += len(line) + 1
+      if total > _SUGGEST_MAX_READ_BYTES:
+        out.append(f'... (truncated at line {i+1})')
+        break
+      out.append(line)
+    return '\n'.join(out)
+
+  def handle_grep(input_):
+    pattern = input_.get('pattern', '')
+    glob_pat = input_.get('glob', '')
+    try:
+      rx = re.compile(pattern)
+    except re.error as e:
+      return f'ERROR: invalid regex: {e}'
+    hits = []
+    for path in files:
+      if glob_pat and not fnmatch.fnmatch(os.path.basename(path), glob_pat):
+        continue
+      try:
+        with open(path, 'r', errors='replace') as fh:
+          for i, line in enumerate(fh, 1):
+            if rx.search(line):
+              snippet = line.rstrip()
+              if len(snippet) > 200:
+                snippet = snippet[:200] + '...'
+              hits.append(f'{path}:{i}: {snippet}')
+              if len(hits) >= _SUGGEST_MAX_GREP_HITS:
+                hits.append(f'... (truncated at {_SUGGEST_MAX_GREP_HITS} hits)')
+                return '\n'.join(hits)
+      except OSError:
+        continue
+    return '\n'.join(hits) if hits else '(no matches)'
+
+  def handle_propose(input_):
+    kind = input_.get('kind', '')
+    if kind not in ('throughput', 'begin', 'end'):
+      return f'ERROR: unknown kind {kind!r}'
+    if kind_filter == 'throughput' and kind != 'throughput':
+      return f'IGNORED: --kind=throughput excludes {kind}'
+    if kind_filter == 'latency' and kind == 'throughput':
+      return 'IGNORED: --kind=latency excludes throughput'
+    if len(proposals) >= max_points * 2:  # pairs count as two slots
+      return f'IGNORED: proposal cap reached'
+    path = input_.get('file', '')
+    resolved = resolve_path(path)
+    if not resolved:
+      return f'ERROR: file {path!r} not in scope; use list_files first'
+    line_num = int(input_.get('line', 0))
+    if line_num < 1:
+      return 'ERROR: line must be >= 1'
+    name = input_.get('name', '').strip()
+    pair_name = input_.get('pair_name', '').strip()
+    rationale = input_.get('rationale', '').strip()
+    if kind in ('begin', 'end') and not pair_name:
+      return 'ERROR: latency points require pair_name'
+    if kind == 'throughput' and not name:
+      # Accept but note — we'll treat as anonymous
+      name = ''
+    proposals.append({
+      'kind': kind,
+      'file': resolved,
+      'line': line_num,
+      'name': name,
+      'pair_name': pair_name,
+      'rationale': rationale,
+    })
+    label = name or pair_name or '(anonymous)'
+    return f'PROPOSED: {kind} "{label}" at {resolved}:{line_num}'
+
+  dispatchers = {
+    'list_files': handle_list,
+    'read_file': handle_read,
+    'grep': handle_grep,
+    'propose_point': handle_propose,
+  }
+
+  def handle(name, input_):
+    fn = dispatchers.get(name)
+    if not fn:
+      return f'ERROR: unknown tool {name!r}'
+    if verbose:
+      keys = ', '.join(f'{k}={_suggest_short(v)}' for k, v in sorted(input_.items()))
+      sys.stderr.write(f'[agent] {name}({keys})\n')
+    return fn(input_)
+
+  return handle
+
+def _suggest_short(v):
+  s = str(v)
+  if len(s) > 60:
+    s = s[:57] + '...'
+  return repr(s) if ' ' in s else s
+
+def _anthropic_tool_request(key, model, system, messages, tools, max_tokens=4096):
+  """One non-streaming Anthropic messages API request with tools."""
+  import json as json_mod
+  import urllib.request, urllib.error
+  body = json_mod.dumps({
+    'model': model,
+    'max_tokens': max_tokens,
+    'system': system,
+    'messages': messages,
+    'tools': tools,
+  }).encode('utf-8')
+  req = urllib.request.Request(
+    'https://api.anthropic.com/v1/messages',
+    data=body,
+    headers={
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+    }
+  )
+  try:
+    with urllib.request.urlopen(req, timeout=180) as resp:
+      return json_mod.loads(resp.read().decode('utf-8'))
+  except urllib.error.HTTPError as e:
+    body = e.read().decode('utf-8', errors='replace')
+    raise RuntimeError(f'Anthropic API {e.code}: {body[:400]}')
+
+def _suggest_run_anthropic_agent(key, model, system_prompt, user_prompt, tools, handle_tool, verbose):
+  """Drive a multi-turn tool-use loop until the model stops calling tools."""
+  messages = [{'role': 'user', 'content': user_prompt}]
+  for iteration in range(_SUGGEST_MAX_ITERATIONS):
+    resp = _anthropic_tool_request(key, model, system_prompt, messages, tools)
+    content = resp.get('content', [])
+    messages.append({'role': 'assistant', 'content': content})
+    tool_uses = [b for b in content if isinstance(b, dict) and b.get('type') == 'tool_use']
+    if not tool_uses:
+      return
+    tool_results = []
+    for tu in tool_uses:
+      name = tu.get('name', '')
+      input_ = tu.get('input', {}) or {}
+      tu_id = tu.get('id', '')
+      try:
+        result = handle_tool(name, input_)
+      except Exception as e:
+        result = f'ERROR: {e}'
+      tool_results.append({
+        'type': 'tool_result',
+        'tool_use_id': tu_id,
+        'content': str(result),
+      })
+    messages.append({'role': 'user', 'content': tool_results})
+  if verbose:
+    sys.stderr.write(f'[agent] reached max iterations ({_SUGGEST_MAX_ITERATIONS})\n')
+
+def _openai_tool_schema(tools):
+  """Convert Anthropic-shaped tool specs to OpenAI function-calling shape."""
+  return [
+    {
+      'type': 'function',
+      'function': {
+        'name': t['name'],
+        'description': t.get('description', ''),
+        'parameters': t.get('input_schema', {'type': 'object', 'properties': {}}),
+      },
+    }
+    for t in tools
+  ]
+
+def _openai_tool_request(key, model, system, messages, tools, max_tokens=4096):
+  """One non-streaming OpenAI chat completions request with tool calls."""
+  import json as json_mod
+  import urllib.request, urllib.error
+  body = json_mod.dumps({
+    'model': model,
+    'max_tokens': max_tokens,
+    'messages': [{'role': 'system', 'content': system}] + messages,
+    'tools': _openai_tool_schema(tools),
+    'tool_choice': 'auto',
+  }).encode('utf-8')
+  req = urllib.request.Request(
+    'https://api.openai.com/v1/chat/completions',
+    data=body,
+    headers={
+      'Content-Type': 'application/json',
+      'Authorization': f'Bearer {key}',
+    }
+  )
+  try:
+    with urllib.request.urlopen(req, timeout=180) as resp:
+      return json_mod.loads(resp.read().decode('utf-8'))
+  except urllib.error.HTTPError as e:
+    body = e.read().decode('utf-8', errors='replace')
+    raise RuntimeError(f'OpenAI API {e.code}: {body[:400]}')
+
+def _suggest_run_openai_agent(key, model, system_prompt, user_prompt, tools, handle_tool, verbose):
+  """Drive an OpenAI tool-calling loop. Chat completions with tools=[...]."""
+  import json as json_mod
+  messages = [{'role': 'user', 'content': user_prompt}]
+  for iteration in range(_SUGGEST_MAX_ITERATIONS):
+    resp = _openai_tool_request(key, model, system_prompt, messages, tools)
+    choices = resp.get('choices') or []
+    if not choices:
+      return
+    msg = choices[0].get('message', {}) or {}
+    tool_calls = msg.get('tool_calls') or []
+    # Persist assistant turn (OpenAI requires content key, even if null).
+    messages.append({
+      'role': 'assistant',
+      'content': msg.get('content'),
+      'tool_calls': tool_calls,
+    } if tool_calls else {'role': 'assistant', 'content': msg.get('content', '')})
+    if not tool_calls:
+      return
+    for tc in tool_calls:
+      fn = tc.get('function', {}) or {}
+      name = fn.get('name', '')
+      raw_args = fn.get('arguments', '{}')
+      try:
+        input_ = json_mod.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
+      except json_mod.JSONDecodeError:
+        input_ = {}
+      try:
+        result = handle_tool(name, input_)
+      except Exception as e:
+        result = f'ERROR: {e}'
+      messages.append({
+        'role': 'tool',
+        'tool_call_id': tc.get('id', ''),
+        'content': str(result),
+      })
+  if verbose:
+    sys.stderr.write(f'[agent] reached max iterations ({_SUGGEST_MAX_ITERATIONS})\n')
+
+def _bedrock_tool_schema(tools):
+  """Convert tool specs to the Bedrock Converse toolConfig shape."""
+  return {
+    'tools': [
+      {
+        'toolSpec': {
+          'name': t['name'],
+          'description': t.get('description', ''),
+          'inputSchema': {'json': t.get('input_schema', {'type': 'object', 'properties': {}})},
+        }
+      }
+      for t in tools
+    ]
+  }
+
+def _suggest_run_bedrock_agent(region, model, aws_creds, system_prompt, user_prompt,
+                               tools, handle_tool, verbose):
+  """Drive a tool-use loop against Amazon Bedrock using the Converse API."""
+  try:
+    import boto3
+    from botocore.exceptions import ClientError, NoCredentialsError, BotoCoreError
+  except ImportError:
+    raise RuntimeError('boto3 is required for Amazon Bedrock. Install with: pip install boto3')
+  client_kwargs = {'region_name': region}
+  if aws_creds:
+    if aws_creds.get('aws_access_key_id') and aws_creds.get('aws_secret_access_key'):
+      client_kwargs['aws_access_key_id'] = aws_creds['aws_access_key_id']
+      client_kwargs['aws_secret_access_key'] = aws_creds['aws_secret_access_key']
+      if aws_creds.get('aws_session_token'):
+        client_kwargs['aws_session_token'] = aws_creds['aws_session_token']
+  client = boto3.client('bedrock-runtime', **client_kwargs)
+  tool_config = _bedrock_tool_schema(tools)
+  messages = [{'role': 'user', 'content': [{'text': user_prompt}]}]
+
+  def _converse(model_id):
+    return client.converse(
+      modelId=model_id,
+      system=[{'text': system_prompt}],
+      messages=messages,
+      toolConfig=tool_config,
+      inferenceConfig={'maxTokens': 4096},
+    )
+
+  current_model = model
+  inference_profile_tried = False
+  for iteration in range(_SUGGEST_MAX_ITERATIONS):
+    try:
+      resp = _converse(current_model)
+    except NoCredentialsError:
+      raise RuntimeError('Bedrock: no AWS credentials found. Set AWS_ACCESS_KEY_ID + '
+                         'AWS_SECRET_ACCESS_KEY or configure the AWS credential chain.')
+    except ClientError as e:
+      if ('inference profile' in str(e).lower()
+          and not inference_profile_tried
+          and '.' not in current_model.split('.')[0]):
+        prefix = region.split('-')[0] if region else 'us'
+        current_model = prefix + '.' + current_model
+        inference_profile_tried = True
+        try:
+          resp = _converse(current_model)
+        except (ClientError, BotoCoreError) as e2:
+          raise RuntimeError(f'Bedrock API: {e2}')
+      else:
+        raise RuntimeError(f'Bedrock API: {e}')
+    except BotoCoreError as e:
+      raise RuntimeError(f'Bedrock: {e}')
+    out_msg = resp.get('output', {}).get('message', {}) or {}
+    content = out_msg.get('content', []) or []
+    messages.append({'role': 'assistant', 'content': content})
+    tool_uses = [b.get('toolUse') for b in content
+                 if isinstance(b, dict) and 'toolUse' in b]
+    if not tool_uses:
+      return
+    result_blocks = []
+    for tu in tool_uses:
+      name = tu.get('name', '')
+      input_ = tu.get('input', {}) or {}
+      tu_id = tu.get('toolUseId', '')
+      try:
+        result = handle_tool(name, input_)
+      except Exception as e:
+        result = f'ERROR: {e}'
+      result_blocks.append({
+        'toolResult': {
+          'toolUseId': tu_id,
+          'content': [{'text': str(result)}],
+        }
+      })
+    messages.append({'role': 'user', 'content': result_blocks})
+  if verbose:
+    sys.stderr.write(f'[agent] reached max iterations ({_SUGGEST_MAX_ITERATIONS})\n')
+
+def _ollama_tool_request(host, model, messages, tools):
+  """One non-streaming Ollama /api/chat request with tools."""
+  import json as json_mod
+  import urllib.request, urllib.error
+  body = json_mod.dumps({
+    'model': model,
+    'stream': False,
+    'messages': messages,
+    'tools': _openai_tool_schema(tools),
+  }).encode('utf-8')
+  url = host.rstrip('/') + '/api/chat'
+  req = urllib.request.Request(
+    url,
+    data=body,
+    headers={'Content-Type': 'application/json'},
+  )
+  try:
+    with urllib.request.urlopen(req, timeout=300) as resp:
+      return json_mod.loads(resp.read().decode('utf-8'))
+  except urllib.error.HTTPError as e:
+    body = e.read().decode('utf-8', errors='replace')
+    raise RuntimeError(f'Ollama API {e.code}: {body[:400]}')
+  except urllib.error.URLError as e:
+    raise RuntimeError(f'Ollama connection failed at {host}: {e.reason}')
+
+def _suggest_run_ollama_agent(host, model, system_prompt, user_prompt, tools,
+                              handle_tool, verbose):
+  """Drive a tool-use loop against a local Ollama server. Requires a tool-capable model."""
+  import json as json_mod
+  messages = [
+    {'role': 'system', 'content': system_prompt},
+    {'role': 'user', 'content': user_prompt},
+  ]
+  for iteration in range(_SUGGEST_MAX_ITERATIONS):
+    resp = _ollama_tool_request(host, model, messages, tools)
+    msg = resp.get('message', {}) or {}
+    tool_calls = msg.get('tool_calls') or []
+    messages.append({
+      'role': 'assistant',
+      'content': msg.get('content', ''),
+      'tool_calls': tool_calls,
+    })
+    if not tool_calls:
+      return
+    for tc in tool_calls:
+      fn = tc.get('function', {}) or {}
+      name = fn.get('name', '')
+      raw_args = fn.get('arguments', {})
+      if isinstance(raw_args, str):
+        try:
+          input_ = json_mod.loads(raw_args)
+        except json_mod.JSONDecodeError:
+          input_ = {}
+      else:
+        input_ = raw_args or {}
+      try:
+        result = handle_tool(name, input_)
+      except Exception as e:
+        result = f'ERROR: {e}'
+      messages.append({'role': 'tool', 'content': str(result)})
+  if verbose:
+    sys.stderr.write(f'[agent] reached max iterations ({_SUGGEST_MAX_ITERATIONS})\n')
+
+def _suggest_already_instrumented(path):
+  """Return True if the file already has coz macros we'd place."""
+  try:
+    with open(path, 'r', errors='replace') as f:
+      src = f.read()
+  except OSError:
+    return False
+  return ('COZ_PROGRESS' in src or 'COZ_BEGIN' in src or 'COZ_END' in src
+          or 'coz::progress!' in src or 'coz::begin!' in src or 'coz::end!' in src)
+
+def _suggest_validate_proposals(proposals):
+  """Pair up latency points, drop invalid proposals. Returns (valid, warnings)."""
+  warnings = []
+  valid = []
+  begins = {}
+  ends = {}
+  for p in proposals:
+    if not os.path.exists(p['file']):
+      warnings.append(f'{p["file"]}:{p["line"]}: file missing, skipped')
+      continue
+    try:
+      with open(p['file'], 'r', errors='replace') as f:
+        n_lines = sum(1 for _ in f)
+    except OSError as e:
+      warnings.append(f'{p["file"]}: {e}, skipped')
+      continue
+    if p['line'] < 1 or p['line'] > n_lines + 1:
+      warnings.append(f'{p["file"]}:{p["line"]}: line out of range (file has {n_lines} lines), skipped')
+      continue
+    if _suggest_already_instrumented(p['file']):
+      label = p.get('name') or p.get('pair_name') or '(anonymous)'
+      warnings.append(f'{p["file"]} already has coz macros; "{label}" skipped (edit manually if needed)')
+      continue
+    if p['kind'] == 'begin':
+      if p['pair_name'] in begins:
+        warnings.append(f'duplicate BEGIN for pair "{p["pair_name"]}", keeping first')
+      else:
+        begins[p['pair_name']] = p
+    elif p['kind'] == 'end':
+      if p['pair_name'] in ends:
+        warnings.append(f'duplicate END for pair "{p["pair_name"]}", keeping first')
+      else:
+        ends[p['pair_name']] = p
+    elif p['kind'] == 'throughput':
+      valid.append(p)
+  for pname, b in begins.items():
+    e = ends.get(pname)
+    if not e:
+      warnings.append(f'BEGIN "{pname}" has no matching END; pair skipped')
+      continue
+    if b['file'] != e['file'] and os.path.dirname(b['file']) != os.path.dirname(e['file']):
+      warnings.append(f'latency pair "{pname}" spans unrelated files; review manually')
+    valid.append(b)
+    valid.append(e)
+  for pname in ends:
+    if pname not in begins:
+      warnings.append(f'END "{pname}" has no matching BEGIN; skipped')
+  return valid, warnings
+
+def _suggest_macro_text(p, indent):
+  rust = p['file'].endswith('.rs')
+  kind = p['kind']
+  if kind == 'throughput':
+    name = p.get('name', '')
+    if rust:
+      body = f'coz::progress!("{name}");' if name else 'coz::progress!();'
+    else:
+      body = f'COZ_PROGRESS_NAMED("{name}");' if name else 'COZ_PROGRESS;'
+  elif kind == 'begin':
+    name = p['pair_name']
+    body = f'coz::begin!("{name}");' if rust else f'COZ_BEGIN("{name}");'
+  elif kind == 'end':
+    name = p['pair_name']
+    body = f'coz::end!("{name}");' if rust else f'COZ_END("{name}");'
+  else:
+    body = f'// unknown kind {kind}'
+  return indent + body + '\n'
+
+def _suggest_include_line(path):
+  if path.endswith('.rs'):
+    return 'use coz;\n'
+  return '#include "coz.h"\n'
+
+def _suggest_has_include(lines, path):
+  if path.endswith('.rs'):
+    return any('use coz' in l and not l.lstrip().startswith('//') for l in lines)
+  return any('coz.h' in l and '#include' in l for l in lines)
+
+def _suggest_find_include_spot(lines, path):
+  rust = path.endswith('.rs')
+  last_match = -1
+  for i, line in enumerate(lines):
+    s = line.strip()
+    if rust:
+      if s.startswith('use ') and s.endswith(';'):
+        last_match = i
+    else:
+      if s.startswith('#include'):
+        last_match = i
+    # Don't scan past first function definition or substantial code
+    if last_match >= 0 and s and not (s.startswith('#') or s.startswith('//')
+                                       or s.startswith('/*') or s.startswith('*')
+                                       or (rust and (s.startswith('use ') or s.startswith('#!')))):
+      break
+  if last_match >= 0:
+    return last_match + 1
+  # Skip initial comments / blank lines / preprocessor guards
+  for i, line in enumerate(lines):
+    s = line.strip()
+    if not s:
+      continue
+    if s.startswith('//') or s.startswith('/*') or s.startswith('*'):
+      continue
+    if not rust and (s.startswith('#ifndef') or s.startswith('#define') or s.startswith('#pragma')):
+      continue
+    return i
+  return len(lines)
+
+def _suggest_indent_at(lines, idx):
+  """Choose an indent for a line inserted at position idx (pushes lines[idx] down).
+  Picks the deeper indent between the preceding and following non-blank lines, so
+  insertions just before a closing brace still sit inside the block."""
+  def indent_of(s):
+    return s[:len(s) - len(s.lstrip())] if s.strip() else None
+  before = None
+  for i in range(idx - 1, -1, -1):
+    v = indent_of(lines[i])
+    if v is not None:
+      before = v
+      break
+  after = None
+  for i in range(idx, len(lines)):
+    v = indent_of(lines[i])
+    if v is not None:
+      after = v
+      break
+  if before is not None and after is not None:
+    return before if len(before) >= len(after) else after
+  return before or after or ''
+
+def _suggest_simulate(path, props):
+  """Return the list of lines after applying all proposals for this file."""
+  with open(path, 'r', errors='replace') as f:
+    lines = f.readlines()
+  needs_include = not _suggest_has_include(lines, path)
+  # Apply bottom-up so earlier inserts don't shift later targets
+  for p in sorted(props, key=lambda p: p['line'], reverse=True):
+    idx = max(0, min(p['line'] - 1, len(lines)))
+    indent = _suggest_indent_at(lines, idx)
+    lines.insert(idx, _suggest_macro_text(p, indent))
+  if needs_include:
+    insert_at = _suggest_find_include_spot(lines, path)
+    lines.insert(insert_at, _suggest_include_line(path))
+  return lines
+
+def _suggest_diff_for_file(path, props):
+  import difflib
+  with open(path, 'r', errors='replace') as f:
+    orig = f.readlines()
+  new = _suggest_simulate(path, props)
+  return ''.join(difflib.unified_diff(orig, new,
+                                      fromfile=path,
+                                      tofile=path + ' (patched)', n=3))
+
+def _suggest_apply(proposals, make_backup=True):
+  """Write all proposals to disk, grouping by file."""
+  by_file = {}
+  for p in proposals:
+    by_file.setdefault(p['file'], []).append(p)
+  for path, props in by_file.items():
+    with open(path, 'r', errors='replace') as f:
+      orig = f.readlines()
+    if make_backup:
+      bak = path + '.coz.bak'
+      if not os.path.exists(bak):
+        with open(bak, 'w') as fb:
+          fb.writelines(orig)
+    new = _suggest_simulate(path, props)
+    with open(path, 'w') as f:
+      f.writelines(new)
+
+def _suggest_enforce_pairs(selected, proposals):
+  """If latency pairs were partially selected, drop the unpaired half."""
+  begins = {p['pair_name'] for p in selected if p['kind'] == 'begin'}
+  ends = {p['pair_name'] for p in selected if p['kind'] == 'end'}
+  complete = begins & ends
+  result = []
+  for p in selected:
+    if p['kind'] in ('begin', 'end'):
+      if p['pair_name'] in complete:
+        result.append(p)
+      else:
+        sys.stderr.write(f'  dropping unpaired {p["kind"]} "{p["pair_name"]}"\n')
+    else:
+      result.append(p)
+  return result
+
+def _suggest_present_and_apply(proposals, dry_run, auto_apply):
+  if not proposals:
+    sys.stderr.write('\nNo progress points proposed.\n')
+    return
+  by_file = {}
+  for p in proposals:
+    by_file.setdefault(p['file'], []).append(p)
+  print(f'\n== {len(proposals)} proposal(s) across {len(by_file)} file(s) ==\n')
+  for idx, p in enumerate(proposals, 1):
+    label = p.get('name') or p.get('pair_name') or '(anonymous)'
+    print(f'[{idx}] {p["kind"].upper():10s} "{label}"  {p["file"]}:{p["line"]}')
+    for rline in (p.get('rationale') or '').splitlines() or ['(no rationale)']:
+      print(f'     {rline}')
+    print()
+  print('--- Unified diff ---')
+  for path, props in by_file.items():
+    diff = _suggest_diff_for_file(path, props)
+    if diff:
+      print(diff)
+    else:
+      print(f'(no-op diff for {path})')
+  if dry_run:
+    print('\n(--dry-run: no changes applied)')
+    return
+  if auto_apply:
+    _suggest_apply(proposals)
+    print(f'\nApplied {len(proposals)} proposal(s). Backups at *.coz.bak.')
+    return
+  while True:
+    try:
+      choice = input('\nApply? [y]es all / [n]o / [s]elect / [q]uit: ').strip().lower()
+    except (EOFError, KeyboardInterrupt):
+      print('\nAborted.')
+      return
+    if choice in ('y', 'yes'):
+      _suggest_apply(proposals)
+      print(f'Applied {len(proposals)} proposal(s). Backups at *.coz.bak.')
+      return
+    if choice in ('n', 'no'):
+      print('No changes applied.')
+      return
+    if choice in ('q', 'quit', ''):
+      print('Aborted.')
+      return
+    if choice in ('s', 'select'):
+      selected = []
+      aborted = False
+      for idx, p in enumerate(proposals, 1):
+        label = p.get('name') or p.get('pair_name') or '(anonymous)'
+        try:
+          ans = input(f'  [{idx}/{len(proposals)}] {p["kind"]} "{label}" {p["file"]}:{p["line"]} [y/n/q]: ').strip().lower()
+        except (EOFError, KeyboardInterrupt):
+          print('\nAborted.')
+          return
+        if ans == 'q':
+          aborted = True
+          break
+        if ans == 'y':
+          selected.append(p)
+      if aborted:
+        print('Aborted.')
+        return
+      selected = _suggest_enforce_pairs(selected, proposals)
+      if selected:
+        _suggest_apply(selected)
+        print(f'Applied {len(selected)} proposal(s). Backups at *.coz.bak.')
+      else:
+        print('No changes applied.')
+      return
+
+def _suggest_user_prompt(roots, files, hint, kind, max_points):
+  parts = [
+    f'Scope roots: {", ".join(roots)}',
+    f'{len(files)} file(s) in scope after include/exclude filtering.',
+    f'Requested kinds: {kind}',
+    f'Propose up to {max_points} progress point(s) (a latency pair counts as one).',
+  ]
+  if hint:
+    parts.append(f'Domain hint from the user: {hint}')
+  parts.append('')
+  parts.append('Start by calling list_files with directory=".", then explore. Place points where a unit of work completes.')
+  return '\n'.join(parts)
+
+_SUGGEST_DEFAULT_MODELS = {
+  'anthropic': 'claude-opus-4-7',
+  'openai': 'gpt-4o',
+  'bedrock': 'anthropic.claude-opus-4-20250514-v1:0',
+  'ollama': 'llama3.1',
+}
+
+def _coz_suggest_points(args):
+  if not args.path:
+    sys.stderr.write('error: specify at least one source path\n')
+    args.parser.print_help()
+    sys.exit(1)
+
+  provider = args.provider
+  model = args.model or _SUGGEST_DEFAULT_MODELS.get(provider)
+
+  # Per-provider credential / endpoint resolution.
+  if provider == 'anthropic':
+    key = args.api_key or os.environ.get('ANTHROPIC_API_KEY', '')
+    if not key:
+      sys.stderr.write('error: no Anthropic API key. Set ANTHROPIC_API_KEY or pass --api-key.\n')
+      sys.exit(1)
+  elif provider == 'openai':
+    key = args.api_key or os.environ.get('OPENAI_API_KEY', '')
+    if not key:
+      sys.stderr.write('error: no OpenAI API key. Set OPENAI_API_KEY or pass --api-key.\n')
+      sys.exit(1)
+  elif provider == 'bedrock':
+    region = args.region or os.environ.get('AWS_REGION') or os.environ.get('AWS_DEFAULT_REGION') or 'us-east-1'
+    access = os.environ.get('AWS_ACCESS_KEY_ID', '')
+    secret = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+    # Don't gate on creds; boto3's default chain (IAM role, ~/.aws/credentials) may still work.
+    aws_creds = {
+      'aws_access_key_id': access or None,
+      'aws_secret_access_key': secret or None,
+      'aws_session_token': os.environ.get('AWS_SESSION_TOKEN') or None,
+    } if (access and secret) else None
+  elif provider == 'ollama':
+    host = args.ollama_host or os.environ.get('OLLAMA_HOST') or 'http://localhost:11434'
+  else:
+    sys.stderr.write(f'error: unknown --provider {provider!r}\n')
+    sys.exit(1)
+
+  includes = args.include or list(_SUGGEST_DEFAULT_INCLUDES)
+  excludes = list(_SUGGEST_DEFAULT_EXCLUDES) + (args.exclude or [])
+  files = _suggest_walk(args.path, includes, excludes)
+  if not files:
+    sys.stderr.write('error: no source files matched include/exclude under given paths\n')
+    sys.exit(1)
+  if args.verbose:
+    sys.stderr.write(f'[suggest-points] provider={provider} model={model} scope={len(files)} file(s)\n')
+
+  kind = args.kind
+  max_points = args.max_points
+  proposals = []
+  handle_tool = _suggest_tool_handler(proposals, files, kind, max_points, args.verbose)
+  user_prompt = _suggest_user_prompt(args.path, files, args.hint, kind, max_points)
+
+  try:
+    if provider == 'anthropic':
+      _suggest_run_anthropic_agent(key, model, _SUGGEST_SYSTEM_PROMPT, user_prompt,
+                                   _SUGGEST_TOOLS, handle_tool, args.verbose)
+    elif provider == 'openai':
+      _suggest_run_openai_agent(key, model, _SUGGEST_SYSTEM_PROMPT, user_prompt,
+                                _SUGGEST_TOOLS, handle_tool, args.verbose)
+    elif provider == 'bedrock':
+      _suggest_run_bedrock_agent(region, model, aws_creds, _SUGGEST_SYSTEM_PROMPT, user_prompt,
+                                 _SUGGEST_TOOLS, handle_tool, args.verbose)
+    elif provider == 'ollama':
+      _suggest_run_ollama_agent(host, model, _SUGGEST_SYSTEM_PROMPT, user_prompt,
+                                _SUGGEST_TOOLS, handle_tool, args.verbose)
+  except KeyboardInterrupt:
+    sys.stderr.write('\ninterrupted\n')
+    sys.exit(130)
+  except RuntimeError as e:
+    sys.stderr.write(f'error: {e}\n')
+    sys.exit(1)
+
+  valid, warnings = _suggest_validate_proposals(proposals)
+  for w in warnings:
+    sys.stderr.write(f'[warning] {w}\n')
+  _suggest_present_and_apply(valid, args.dry_run, args.apply)
+
 
 # Special format handler for line reference arguments
 def line_ref(val):
@@ -1444,6 +2368,52 @@ _plot_parser.add_argument('--json', '-j',
 
 # Use defaults to recover handler function and parser object from parser output
 _plot_parser.set_defaults(func=_coz_plot, parser=_plot_parser)
+
+######### Build the parser for the `coz suggest-points` subcommand #########
+_suggest_parser = _subparsers.add_parser(
+  'suggest-points',
+  help='Use an LLM agent to propose COZ_PROGRESS / COZ_BEGIN / COZ_END placements.',
+  description='Analyze a source tree with an LLM agent and propose progress-point '
+              'placements. Proposals are shown as unified diffs and applied only '
+              'after your confirmation.')
+_suggest_parser.add_argument('path', nargs='+',
+                             help='Source tree(s) or file(s) to analyze.')
+_suggest_parser.add_argument('--provider', default='anthropic',
+                             choices=['anthropic', 'openai', 'bedrock', 'ollama'],
+                             help='LLM provider (default: anthropic).')
+_suggest_parser.add_argument('--model', default=None,
+                             help='Model ID (defaults to a current model for the chosen provider).')
+_suggest_parser.add_argument('--api-key', default=None,
+                             help='API key for anthropic/openai; '
+                                  'otherwise read from ANTHROPIC_API_KEY / OPENAI_API_KEY.')
+_suggest_parser.add_argument('--region', default=None,
+                             help='AWS region for --provider=bedrock (default: $AWS_REGION or us-east-1).')
+_suggest_parser.add_argument('--ollama-host', default=None,
+                             metavar='<url>',
+                             help='Ollama server URL for --provider=ollama '
+                                  '(default: $OLLAMA_HOST or http://localhost:11434).')
+_suggest_parser.add_argument('--include', action='append', default=[],
+                             metavar='<glob>',
+                             help='Filename globs to include (repeatable). Defaults cover C/C++/Rust.')
+_suggest_parser.add_argument('--exclude', action='append', default=[],
+                             metavar='<glob>',
+                             help='Path globs to exclude (repeatable). Adds to defaults like build/, target/.')
+_suggest_parser.add_argument('--kind', choices=['throughput', 'latency', 'both'],
+                             default='both',
+                             help='What kinds of progress points to propose (default: both).')
+_suggest_parser.add_argument('--max-points', type=int, default=5,
+                             metavar='<n>',
+                             help='Cap on number of proposals (default: 5).')
+_suggest_parser.add_argument('--hint', default=None,
+                             metavar='<text>',
+                             help='Free-form hint about what "a unit of work" means in this program.')
+_suggest_parser.add_argument('--apply', action='store_true',
+                             help='Apply all proposals without confirmation.')
+_suggest_parser.add_argument('--dry-run', action='store_true',
+                             help='Show diffs but never apply.')
+_suggest_parser.add_argument('--verbose', '-v', action='store_true',
+                             help='Log each tool call the agent makes.')
+_suggest_parser.set_defaults(func=_coz_suggest_points, parser=_suggest_parser)
 
 if __name__ == "__main__":
   run_command_line()
