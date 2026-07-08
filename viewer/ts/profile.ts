@@ -1300,11 +1300,30 @@ class Profile {
         return '<strong>Progress Point:</strong> ' + name + '<br>' +
               '<strong>Line Speedup:</strong> ' + percentFormat(d.speedup) + '<br>' +
               '<strong>Progress Speedup:</strong> ' + percentFormat(d.progress_speedup);
-      })
-      .direction(function (d: Measurement) {
-        if (d.speedup > 0.8) return 'w';
-        else return 'n';
       });
+
+    // Choose a tooltip direction from the point's actual screen position so it
+    // is never clipped by the top edge of the viewport (see issue #282). The
+    // static .direction() callback only sees the datum, so we compute it here
+    // in the mouseover handler where `this` is the hovered circle.
+    let tip_direction = function (node: Element, d: any) {
+      let rect = node.getBoundingClientRect();
+      // Roughly the height of the 3-line tooltip plus padding/arrow.
+      let tip_margin = 80;
+      if (rect.top < tip_margin) {
+        // Near the top: drop the tooltip below the point instead of above.
+        return 's';
+      } else if (d.speedup > 0.8) {
+        // Near the right edge: place the tooltip to the left.
+        return 'w';
+      }
+      return 'n';
+    };
+    let tip_offset = function (dir: string) {
+      if (dir === 's') return [5, 0];
+      if (dir === 'w') return [0, -5];
+      return [-5, 0];
+    };
 
     /****** Add or update divs to hold each plot ******/
     let plot_div_sel = container.selectAll('div.plot')
@@ -1696,6 +1715,8 @@ class Profile {
               .attr('cy', function(d) { return yscale(d.progress_speedup); })
               .on('mouseover', function(d) {
                 d3.select(this).classed('highlight', true);
+                let dir = tip_direction(this, d);
+                tip.direction(dir).offset(tip_offset(dir));
                 tip.show(d, this);
               })
               .on('mouseout', function() {
