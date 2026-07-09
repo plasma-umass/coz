@@ -277,7 +277,11 @@ jobs:
     - name: Run unit tests
       run: |
         cd build
-        ctest --output-on-failure -j$(sysctl -n hw.ncpu)
+        # Exclude test_run_kmeans: it profiles kmeans live, which needs the
+        # private kperf framework that the hosted runners may not grant access
+        # to (it is exercised as a best-effort smoke test below instead). The
+        # remaining tests are host-side filter tests that need no sampling.
+        ctest --output-on-failure -j$(sysctl -n hw.ncpu) -E test_run_kmeans
         echo "Unit tests passed"
 
     # Live profiling on macOS uses the private kperf framework, which needs
