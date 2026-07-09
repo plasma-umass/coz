@@ -277,25 +277,18 @@ jobs:
     - name: Run unit tests
       run: |
         cd build
-        # Exclude test_run_kmeans: it profiles kmeans live, which needs the
-        # private kperf framework that the hosted runners may not grant access
-        # to (it is exercised as a best-effort smoke test below instead). The
-        # remaining tests are host-side filter tests that need no sampling.
-        ctest --output-on-failure -j$(sysctl -n hw.ncpu) -E test_run_kmeans
+        # Includes test_run_kmeans, which profiles kmeans live via kperf and so
+        # also validates that macOS sampling actually collects samples.
+        ctest --output-on-failure -j$(sysctl -n hw.ncpu)
         echo "Unit tests passed"
 
-    # Live profiling on macOS uses the private kperf framework, which needs
-    # privileges that the hosted runners may not grant. Run the toy benchmark
-    # as a best-effort smoke test so a regression is visible in the logs, but
-    # do not fail the job if kperf is unavailable in the CI sandbox.
-    - name: Smoke-test coz run (best effort)
-      continue-on-error: true
+    - name: Run toy benchmark with coz
       run: |
         cd build
         gtimeout 30 ../coz run -o profile.jsonl --- ./benchmarks/toy/toy || true
-        if [ -s profile.jsonl ]; then
-          echo "Profile created:"
-          cat profile.jsonl
-        else
-          echo "No profile produced (kperf likely unavailable in CI sandbox)"
+        if [ ! -s profile.jsonl ]; then
+          echo "ERROR: profile.jsonl was not created"
+          exit 1
         fi
+        echo "Profile created:"
+        cat profile.jsonl
