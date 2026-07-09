@@ -7,6 +7,7 @@
 
 #ifdef __APPLE__
 
+#include <dispatch/dispatch.h>
 #include <mach/mach.h>
 #include <pthread.h>
 #include <semaphore.h>
@@ -73,6 +74,15 @@ extern kern_return_t orig_semaphore_signal_all(semaphore_t) __asm("_semaphore_si
 extern int orig_sem_wait(sem_t*) __asm("_sem_wait");
 extern int orig_sem_trywait(sem_t*) __asm("_sem_trywait");
 extern int orig_sem_post(sem_t*) __asm("_sem_post");
+// libdispatch's own entry points. Interposing Mach's semaphore_wait *should*
+// catch DispatchSemaphore, and does on some macOS versions -- but a call from
+// libdispatch to libsystem_kernel can be bound inside the dyld shared cache,
+// where DYLD_INTERPOSE never sees it. dispatch_semaphore_wait is a public
+// symbol the application binds through normally, so it is the reliable seam.
+extern long orig_dispatch_semaphore_wait(dispatch_semaphore_t, dispatch_time_t)
+    __asm("_dispatch_semaphore_wait");
+extern long orig_dispatch_semaphore_signal(dispatch_semaphore_t)
+    __asm("_dispatch_semaphore_signal");
 
 // ============================================================================
 // DYLD Interposition macro
@@ -251,24 +261,52 @@ DYLD_INTERPOSE(coz__Exit, _Exit);
 // is not.) POSIX semaphores are wrapped too, for portability with the Linux
 // wrappers in libcoz.cpp.
 // ============================================================================
+// dispatch_semaphore_wait bottoms out in semaphore_wait, and both are
+// interposed, so a single wait would call pre_block twice and post_block twice.
+// Only the outermost block counts.
+static thread_local int t_block_depth = 0;
+
+static inline void coz_block_enter() {
+  if (t_block_depth++ == 0) coz_pre_block();
+}
+
+static inline void coz_block_exit(bool woken_by_another_thread) {
+  if (--t_block_depth == 0) coz_post_block(woken_by_another_thread);
+}
+
 kern_return_t coz_semaphore_wait(semaphore_t sema) {
   if (!coz_initialized()) return orig_semaphore_wait(sema);
-  coz_pre_block();
+  coz_block_enter();
   kern_return_t result = orig_semaphore_wait(sema);
-  coz_post_block(true);
+  coz_block_exit(true);
   return result;
 }
 DYLD_INTERPOSE(coz_semaphore_wait, semaphore_wait);
 
 kern_return_t coz_semaphore_timedwait(semaphore_t sema, mach_timespec_t wait_time) {
   if (!coz_initialized()) return orig_semaphore_timedwait(sema, wait_time);
-  coz_pre_block();
+  coz_block_enter();
   kern_return_t result = orig_semaphore_timedwait(sema, wait_time);
   // A timeout means nobody handed us the semaphore, so we own our delays.
-  coz_post_block(result == KERN_SUCCESS);
+  coz_block_exit(result == KERN_SUCCESS);
   return result;
 }
 DYLD_INTERPOSE(coz_semaphore_timedwait, semaphore_timedwait);
+
+long coz_dispatch_semaphore_wait(dispatch_semaphore_t sema, dispatch_time_t timeout) {
+  if (!coz_initialized()) return orig_dispatch_semaphore_wait(sema, timeout);
+  coz_block_enter();
+  long result = orig_dispatch_semaphore_wait(sema, timeout);
+  coz_block_exit(result == 0);
+  return result;
+}
+DYLD_INTERPOSE(coz_dispatch_semaphore_wait, dispatch_semaphore_wait);
+
+long coz_dispatch_semaphore_signal(dispatch_semaphore_t sema) {
+  if (coz_initialized()) coz_catch_up();
+  return orig_dispatch_semaphore_signal(sema);
+}
+DYLD_INTERPOSE(coz_dispatch_semaphore_signal, dispatch_semaphore_signal);
 
 kern_return_t coz_semaphore_signal(semaphore_t sema) {
   if (coz_initialized()) coz_catch_up();
@@ -284,9 +322,9 @@ DYLD_INTERPOSE(coz_semaphore_signal_all, semaphore_signal_all);
 
 int coz_sem_wait(sem_t* sem) {
   if (!coz_initialized()) return orig_sem_wait(sem);
-  coz_pre_block();
+  coz_block_enter();
   int result = orig_sem_wait(sem);
-  coz_post_block(true);
+  coz_block_exit(true);
   return result;
 }
 DYLD_INTERPOSE(coz_sem_wait, sem_wait);
