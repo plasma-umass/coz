@@ -237,3 +237,61 @@ jobs:
           build/profile.jsonl
           build/lock_test_profile.jsonl
         retention-days: 7
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        # cmake is preinstalled on the runner; make sure pkg-config and sqlite
+        # (needed to configure the benchmark tree) are available. coreutils
+        # provides gtimeout, since macOS has no GNU `timeout`.
+        brew install pkg-config sqlite coreutils || true
+
+    - name: Build coz
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        make -j$(sysctl -n hw.ncpu)
+
+    - name: Build benchmarks
+      run: |
+        cd build
+        cmake .. -DBUILD_BENCHMARKS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        make -j$(sysctl -n hw.ncpu) toy lock_test kmeans
+
+    - name: Verify build artifacts
+      run: |
+        # On macOS the injectable library keeps the .so suffix (see
+        # libcoz/CMakeLists.txt) so it can be used with DYLD_INSERT_LIBRARIES.
+        test -f build/libcoz/libcoz.so
+        test -x build/benchmarks/toy/toy
+        test -x build/benchmarks/lock_test/lock_test
+        test -x build/benchmarks/kmeans/kmeans
+        echo "Build artifacts verified"
+
+    - name: Run unit tests
+      run: |
+        cd build
+        ctest --output-on-failure -j$(sysctl -n hw.ncpu)
+        echo "Unit tests passed"
+
+    # Live profiling on macOS uses the private kperf framework, which needs
+    # privileges that the hosted runners may not grant. Run the toy benchmark
+    # as a best-effort smoke test so a regression is visible in the logs, but
+    # do not fail the job if kperf is unavailable in the CI sandbox.
+    - name: Smoke-test coz run (best effort)
+      continue-on-error: true
+      run: |
+        cd build
+        gtimeout 30 ../coz run -o profile.jsonl --- ./benchmarks/toy/toy || true
+        if [ -s profile.jsonl ]; then
+          echo "Profile created:"
+          cat profile.jsonl
+        else
+          echo "No profile produced (kperf likely unavailable in CI sandbox)"
+        fi
