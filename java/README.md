@@ -123,12 +123,26 @@ C2. `verbose=1` prints the mean time-to-safepoint so you can check:
 
 If that number is in the milliseconds, your profile is not trustworthy.
 
-**Sampling is safepoint-biased.** A sample lands on the last safepoint poll the
-thread passed, not on the instruction it was executing. In a hot loop with a poll
-per strip, that is close enough to attribute the loop. In a loop with no poll at
-all, every sample lands on the line *after* the loop. This is the price of using
-documented JVMTI instead of `AsyncGetCallTrace`; it is the same reason most
-Java sampling profilers report method-level rather than line-level truth.
+**Sampling is safepoint-biased, so this is not line-level attribution.** A
+sample lands on the last safepoint poll the thread passed, not on the instruction
+it was executing. Measured on `example/Toy.java` under HotSpot C2:
+
+| line | source | samples |
+|---|---|---|
+| 47 | `for (int i = 0; i < ITERATIONS; i++) {` | **1666** |
+| 48 | `acc = xorshift(acc);` — the actual work | **0** |
+
+Every sample landed on the loop header, where the strip-mined back-edge poll
+sits, and none on the line doing the work. Read a coz-java profile as pointing at
+*the loop or method* that matters, not the statement. (The 1666:944 split between
+the two loops also misses their true 2:1 work ratio by about 12%.)
+
+This is the price of using documented JVMTI instead of `AsyncGetCallTrace`, which
+walks the stack from a signal handler and does not need a safepoint.
+`AsyncGetCallTrace` is exported from `libjvm` on HotSpot and GraalVM, but it is
+undocumented, appears in no specification, is absent from non-HotSpot VMs, and
+must be driven from per-thread CPU timers that macOS does not provide. Making it
+an opt-in sampler is the obvious next step; it is not the safe default.
 
 **Compile with `-g`.** Without line tables the agent cannot map a bytecode index
 to a line, and the class is silently skipped. `javac -g` is enough.
