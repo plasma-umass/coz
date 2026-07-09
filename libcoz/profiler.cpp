@@ -111,10 +111,19 @@ void profiler::startup(const string& outfile,
   // Set up the sampling signal handler.
   // On macOS, use the __asm-bound original sigaction to bypass our own
   // DYLD interposition which blocks setting handlers for coz's signals.
+  // SA_ONSTACK runs the handler on the thread's alternate signal stack when it
+  // has one. Managed runtimes give each thread a small, movable stack and set
+  // up an altstack precisely so that foreign signal handlers stay off it -- Go
+  // documents this as a requirement for any non-Go handler, and without it a Go
+  // program crashes once coz samples a thread that is running a goroutine.
+  // (Go only trips this when cgo is in play: an `iscgo` runtime creates its Ms
+  // with pthread_create, which coz interposes and gives a perf event.)
+  // Threads with no altstack ignore the flag and use the normal stack, so this
+  // is inert for ordinary C/C++ programs.
   struct sigaction sa;
   memset(&sa, 0, sizeof(sa));
   sa.sa_sigaction = profiler::samples_ready;
-  sa.sa_flags = SA_SIGINFO;
+  sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
 #ifdef __APPLE__
   coz_orig_sigaction(SampleSignal, &sa, nullptr);
 #else
@@ -124,7 +133,7 @@ void profiler::startup(const string& outfile,
   // Set up handlers for errors
   memset(&sa, 0, sizeof(sa));
   sa.sa_sigaction = on_error;
-  sa.sa_flags = SA_SIGINFO;
+  sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
 
 #ifdef __APPLE__
   coz_orig_sigaction(SIGSEGV, &sa, nullptr);
