@@ -69,8 +69,9 @@ Known caveats so far to generate a report that collects information are:
   that your program is compiled with at least line-table information (`debug =
   1`) to ensure you get the best experience using `coz`.
 
-* Currently `coz` only works on Linux, and while this crate should compile on
-  all platforms it only actually does something on Linux.
+* `coz` works on Linux and macOS. This crate compiles on all platforms, but
+  only does something when the `libcoz` runtime is injected (which is what
+  `coz run` does).
 
 ## Examples
 
