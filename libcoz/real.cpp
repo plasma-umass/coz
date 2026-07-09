@@ -9,6 +9,7 @@
 #include "ccutil/log.h"
 
 #include <dlfcn.h>
+#include <semaphore.h>
 
 #include <dlfcn.h>
 #include <stdint.h>
@@ -293,6 +294,36 @@ static int resolve_pthread_rwlock_unlock(pthread_rwlock_t* rwlock) throw() {
   else return 0;  // Silently elide synchronization during linking
 }
 
+#ifndef __APPLE__
+// POSIX semaphores. glibc exports these from libc, so RTLD_NEXT finds the real
+// ones. Failing to resolve must not silently skip the wait -- unlike a lock,
+// eliding sem_wait would change the program's semantics -- so fall back to
+// returning an error the caller can see.
+static int resolve_sem_wait(sem_t* sem) throw() {
+  GET_SYMBOL(sem_wait);
+  if(real_sem_wait) return real_sem_wait(sem);
+  else return -1;
+}
+
+static int resolve_sem_trywait(sem_t* sem) throw() {
+  GET_SYMBOL(sem_trywait);
+  if(real_sem_trywait) return real_sem_trywait(sem);
+  else return -1;
+}
+
+static int resolve_sem_timedwait(sem_t* sem, const struct timespec* abstime) throw() {
+  GET_SYMBOL(sem_timedwait);
+  if(real_sem_timedwait) return real_sem_timedwait(sem, abstime);
+  else return -1;
+}
+
+static int resolve_sem_post(sem_t* sem) throw() {
+  GET_SYMBOL(sem_post);
+  if(real_sem_post) return real_sem_post(sem);
+  else return -1;
+}
+#endif
+
 #define DEFINE_WRAPPER(name) decltype(::name)* name = &resolve_##name;
 
 /**
@@ -352,4 +383,11 @@ namespace real {
   DEFINE_WRAPPER(pthread_rwlock_timedwrlock);
 #endif
   DEFINE_WRAPPER(pthread_rwlock_unlock);
+
+#ifndef __APPLE__
+  DEFINE_WRAPPER(sem_wait);
+  DEFINE_WRAPPER(sem_trywait);
+  DEFINE_WRAPPER(sem_timedwait);
+  DEFINE_WRAPPER(sem_post);
+#endif
 }
