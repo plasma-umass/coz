@@ -292,3 +292,48 @@ jobs:
         fi
         echo "Profile created:"
         cat profile.jsonl
+
+  lang-rust:
+    name: Rust bindings (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake pkg-config
+        echo 1 | sudo tee /proc/sys/kernel/perf_event_paranoid
+
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: brew install pkg-config coreutils || true
+
+    - name: Build coz
+      run: |
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        cmake --build build -j3
+        test -f build/libcoz/libcoz.so
+
+    - name: Check the crate on both platforms
+      working-directory: rust
+      run: |
+        cargo build --release --examples
+        cargo test --release
+
+    - name: Profile the Rust toy under coz
+      run: |
+        # `timeout` is GNU-only; coreutils provides gtimeout on macOS.
+        TIMEOUT=timeout
+        command -v gtimeout >/dev/null && TIMEOUT=gtimeout
+        $TIMEOUT 180 ./coz run -o profile.jsonl --- ./rust/target/release/examples/toy || true
+        test -s profile.jsonl
+
+    - name: Validate the Rust profile
+      run: python3 .github/scripts/check_profile.py profile.jsonl toy.rs
