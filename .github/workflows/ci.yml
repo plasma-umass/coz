@@ -455,3 +455,58 @@ jobs:
 
     - name: Validate the Java profile
       run: python3 .github/scripts/check_profile.py profile.jsonl Toy.java
+
+  lang-swift:
+    name: Swift bindings (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake pkg-config
+        echo 1 | sudo tee /proc/sys/kernel/perf_event_paranoid
+
+    - name: Install Swift (Linux)
+      if: runner.os == 'Linux'
+      uses: swift-actions/setup-swift@v2
+      with:
+        swift-version: '6.1'
+
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: brew install pkg-config coreutils || true
+
+    - name: Build coz
+      run: |
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        cmake --build build -j3
+        test -f build/libcoz/libcoz.so || test -f build/libcoz/libcoz.dylib
+
+    - name: Test the package
+      working-directory: swift
+      run: |
+        swift test
+        # The library must stay clean under Swift 6 strict concurrency.
+        swift build -Xswiftc -swift-version -Xswiftc 6
+
+    - name: Build the Swift toy
+      working-directory: swift
+      run: swift build -c release -Xswiftc -g
+
+    - name: Profile the Swift toy under coz
+      run: |
+        TIMEOUT=timeout
+        command -v gtimeout >/dev/null && TIMEOUT=gtimeout
+        $TIMEOUT 180 ./coz run -o profile.jsonl --- ./swift/.build/release/CozToy || true
+        test -s profile.jsonl
+
+    - name: Validate the Swift profile
+      run: python3 .github/scripts/check_profile.py profile.jsonl main.swift
