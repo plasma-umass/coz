@@ -322,7 +322,7 @@ jobs:
       run: |
         cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
         cmake --build build -j3
-        test -f build/libcoz/libcoz.so
+        test -f build/libcoz/libcoz.so || test -f build/libcoz/libcoz.dylib
 
     - name: Check the crate on both platforms
       working-directory: rust
@@ -371,7 +371,7 @@ jobs:
       run: |
         cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
         cmake --build build -j3
-        test -f build/libcoz/libcoz.so
+        test -f build/libcoz/libcoz.so || test -f build/libcoz/libcoz.dylib
 
     - name: Vet, format and test
       working-directory: go
