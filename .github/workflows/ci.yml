@@ -335,7 +335,9 @@ jobs:
         # `timeout` is GNU-only; coreutils provides gtimeout on macOS.
         TIMEOUT=timeout
         command -v gtimeout >/dev/null && TIMEOUT=gtimeout
-        $TIMEOUT 180 ./coz run -o profile.jsonl --- ./rust/target/release/examples/toy || true
+        # rust/examples/toy runs 4.4e9 loop iterations; a 2-core runner needs
+        # more than 180s of it to complete enough experiments.
+        $TIMEOUT 300 ./coz run -o profile.jsonl --- ./rust/target/release/examples/toy || true
         test -s profile.jsonl
 
     - name: Validate the Rust profile

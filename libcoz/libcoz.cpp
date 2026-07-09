@@ -21,6 +21,8 @@
 #include <unordered_set>
 
 #include "inspect.h"
+#include <sys/mman.h>
+
 #include "profiler.h"
 #include "progress_point.h"
 #include "real.h"
@@ -370,6 +372,32 @@ extern "C" void coz_remove_coz_signals(sigset_t* set) {
 }
 #endif
 
+
+#ifndef __APPLE__
+/// The smallest alternate signal stack coz's SIGPROF handler can run on.
+/// Matches Go's 32 KiB, so Go's own stack is never replaced.
+static const size_t CozMinAltStackSize = 32 * 1024;
+
+/// A per-thread replacement signal stack, allocated once and reused. It is
+/// deliberately never unmapped: the kernel may still be using it as this
+/// thread's alternate stack, and the thread is about to die anyway.
+static stack_t* coz_alt_stack() {
+  static thread_local stack_t storage;
+  static thread_local bool ready = false;
+
+  if(!ready) {
+    void* mem = mmap(NULL, CozMinAltStackSize, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    if(mem == MAP_FAILED) return NULL;
+    storage.ss_sp = mem;
+    storage.ss_size = CozMinAltStackSize;
+    storage.ss_flags = 0;
+    ready = true;
+  }
+  return &storage;
+}
+#endif
+
 extern "C" {
 // On macOS, all wrappers are in mac_interpose.cpp using DYLD interposition
 #ifndef __APPLE__
@@ -422,6 +450,40 @@ extern "C" {
   int pthread_mutex_unlock(pthread_mutex_t* mutex) {
     if(initialized) profiler::get_instance().catch_up();
     return real::pthread_mutex_unlock(mutex);
+  }
+
+  /**
+   * Enforce a floor on the alternate signal stack.
+   *
+   * coz's SIGPROF handler runs with SA_ONSTACK, which Go requires: it creates
+   * its Ms with pthread_create when cgo is in play, so coz samples threads that
+   * are running goroutine stacks, and those are small and movable.
+   *
+   * But SA_ONSTACK means the handler runs on whatever alternate stack the
+   * program installed, and process_samples() needs more room than some runtimes
+   * provide. Rust's std gives each thread exactly SIGSTKSZ = 8192 bytes. On
+   * x86_64 the signal frame and the dynamic linker's xsavec trampoline eat much
+   * of that, and the handler overruns it: every Rust program under coz died with
+   * SIGSEGV inside process_samples, and the crash reporter could not even print,
+   * because fprintf's lazy PLT resolution faulted on the same exhausted stack.
+   * aarch64 has a smaller signal frame and did not trip it.
+   *
+   * So when a program asks for a stack smaller than coz needs, give it a bigger
+   * one. Go already asks for 32 KiB, at or above this floor, so its own stack is
+   * left exactly as it set it up -- which matters, because the Go runtime checks
+   * that a signal arrived on the gsignal stack it knows about.
+   */
+  int sigaltstack(const stack_t* ss, stack_t* old_ss) {
+    if(ss != NULL && (ss->ss_flags & SS_DISABLE) == 0 && ss->ss_size < CozMinAltStackSize) {
+      stack_t* mine = coz_alt_stack();
+      if(mine != NULL) {
+        stack_t enlarged = *ss;
+        enlarged.ss_sp = mine->ss_sp;
+        enlarged.ss_size = mine->ss_size;
+        return real::sigaltstack(&enlarged, old_ss);
+      }
+    }
+    return real::sigaltstack(ss, old_ss);
   }
 
   /// Skip any delays added while waiting on a condition variable
