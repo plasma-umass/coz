@@ -330,15 +330,58 @@ jobs:
         cargo build --release --examples
         cargo test --release
 
+    - name: DIAGNOSE (temporary)
+      if: runner.os == 'Linux'
+      run: |
+        set -x
+        nproc
+        cat /proc/sys/kernel/perf_event_paranoid
+        . /etc/os-release && echo "$PRETTY_NAME"
+        rustc --version
+
+        echo "=== is _coz_get_counter exported? ==="
+        nm -D build/libcoz/libcoz.so | grep -E ' _coz_(get_counter|add_delays)$' || echo "NOT EXPORTED"
+
+        echo "=== does the toy have DWARF? ==="
+        readelf -S ./rust/target/release/examples/toy | grep -oE '\.z?debug_(info|line)' | sort -u
+
+        echo "=== probe: can Rust see _coz_get_counter under coz? ==="
+        mkdir -p /tmp/probe/src
+        cat > /tmp/probe/Cargo.toml <<'TOML'
+        [package]
+        name = "probe"
+        version = "0.1.0"
+        edition = "2021"
+        [dependencies]
+        libc = "0.2"
+        [profile.release]
+        debug = 1
+        TOML
+        cat > /tmp/probe/src/main.rs <<'RS'
+        use std::ffi::CStr;
+        fn look(n: &[u8]) -> *mut libc::c_void {
+            unsafe { libc::dlsym(libc::RTLD_DEFAULT, CStr::from_bytes_with_nul(n).unwrap().as_ptr()) }
+        }
+        fn main() {
+            println!("PROBE _coz_get_counter = {:?}", look(b"_coz_get_counter\0"));
+            println!("PROBE _coz_add_delays  = {:?}", look(b"_coz_add_delays\0"));
+        }
+        RS
+        (cd /tmp/probe && cargo build --release --quiet)
+        ./coz run -o /tmp/probe.jsonl --- /tmp/probe/target/release/probe 2>&1 | grep PROBE || echo "probe produced no output"
+
+        echo "=== verbose coz run on the toy (first 40 lines) ==="
+        timeout 60 ./coz run --verbose -o /tmp/v.jsonl --- ./rust/target/release/examples/toy 2>&1 | head -40 || true
+        echo "=== how many source files in scope? ==="
+        timeout 60 ./coz run --verbose -o /tmp/v2.jsonl --- ./rust/target/release/examples/toy 2>&1 | grep -c 'Included source file' || true
+
     - name: Profile the Rust toy under coz
       run: |
-        # `timeout` is GNU-only; coreutils provides gtimeout on macOS.
         TIMEOUT=timeout
         command -v gtimeout >/dev/null && TIMEOUT=gtimeout
-        # rust/examples/toy runs 4.4e9 loop iterations; a 2-core runner needs
-        # more than 180s of it to complete enough experiments.
         $TIMEOUT 300 ./coz run -o profile.jsonl --- ./rust/target/release/examples/toy || true
         test -s profile.jsonl
+        echo "=== profile head ==="; head -5 profile.jsonl
 
     - name: Validate the Rust profile
       run: python3 .github/scripts/check_profile.py profile.jsonl toy.rs
