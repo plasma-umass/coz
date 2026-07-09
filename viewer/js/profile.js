@@ -1163,22 +1163,16 @@ class Profile {
                 '<strong>Line Speedup:</strong> ' + percentFormat(d.speedup) + '<br>' +
                 '<strong>Progress Speedup:</strong> ' + percentFormat(d.progress_speedup);
         });
-        // Choose a tooltip direction from the point's actual screen position so it
-        // is never clipped by the top edge of the viewport (see issue #282). The
-        // static .direction() callback only sees the datum, so we compute it here
-        // in the mouseover handler where `this` is the hovered circle.
-        let tip_direction = function (node, d) {
-            let rect = node.getBoundingClientRect();
-            // Roughly the height of the 3-line tooltip plus padding/arrow.
-            let tip_margin = 80;
-            if (rect.top < tip_margin) {
-                // Near the top: drop the tooltip below the point instead of above.
-                return 's';
-            }
-            else if (d.speedup > 0.8) {
-                // Near the right edge: place the tooltip to the left.
+        // Choose a tooltip direction from the point's position so it is not clipped
+        // by the edges of the viewport (see issue #282). The static .direction()
+        // callback only sees the datum, so we compute it in the mouseover handler
+        // where `this` is the hovered circle. This is only an initial guess; after
+        // the tooltip is rendered we measure its real box and flip it if it still
+        // overflows the top (see show_tip below), which avoids guessing its height.
+        let tip_direction = function (d) {
+            // Near the right edge: place the tooltip to the left so it isn't clipped.
+            if (d.speedup > 0.8)
                 return 'w';
-            }
             return 'n';
         };
         let tip_offset = function (dir) {
@@ -1187,6 +1181,32 @@ class Profile {
             if (dir === 'w')
                 return [0, -5];
             return [-5, 0];
+        };
+        // The currently-visible tip node (d3-tip appends one div per tip instance;
+        // pick the one that is actually shown rather than any stale leftovers).
+        let active_tip_node = function () {
+            let nodes = document.querySelectorAll('.d3-tip');
+            for (let i = nodes.length - 1; i >= 0; i--) {
+                let el = nodes[i];
+                if (el.style.opacity === '1')
+                    return el;
+            }
+            return null;
+        };
+        // Show the tooltip, then correct for any remaining top-edge clipping by
+        // measuring the rendered tooltip (its real height) and flipping it below
+        // the point when the 'north' placement overflows the top of the viewport.
+        let show_tip = function (d, target) {
+            let dir = tip_direction(d);
+            tip.direction(dir).offset(tip_offset(dir));
+            tip.show(d, target);
+            if (dir === 'n') {
+                let node = active_tip_node();
+                if (node && node.getBoundingClientRect().top < 0) {
+                    tip.direction('s').offset(tip_offset('s'));
+                    tip.show(d, target);
+                }
+            }
         };
         /****** Add or update divs to hold each plot ******/
         let plot_div_sel = container.selectAll('div.plot')
@@ -1553,9 +1573,7 @@ class Profile {
             .attr('cy', function (d) { return yscale(d.progress_speedup); })
             .on('mouseover', function (d) {
             d3.select(this).classed('highlight', true);
-            let dir = tip_direction(this, d);
-            tip.direction(dir).offset(tip_offset(dir));
-            tip.show(d, this);
+            show_tip(d, this);
         })
             .on('mouseout', function () {
             d3.select(this).classed('highlight', false);
