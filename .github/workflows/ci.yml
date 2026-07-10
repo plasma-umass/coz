@@ -333,47 +333,43 @@ jobs:
     - name: DIAGNOSE (temporary)
       if: runner.os == 'Linux'
       run: |
-        set -x
-        nproc
-        cat /proc/sys/kernel/perf_event_paranoid
-        . /etc/os-release && echo "$PRETTY_NAME"
-        rustc --version
+        sudo apt-get install -y -qq strace >/dev/null
 
-        echo "=== is _coz_get_counter exported? ==="
-        nm -D build/libcoz/libcoz.so | grep -E ' _coz_(get_counter|add_delays)$' || echo "NOT EXPORTED"
+        echo "##### 1. C toy in THIS job (control: is the environment sane?)"
+        g++ -g -O2 -c benchmarks/toy/toy.cpp -Iinclude -o /tmp/t.o
+        g++ -g /tmp/t.o -o /tmp/ctoy -ldl -lpthread
+        timeout 150 ./coz run -o /tmp/c.jsonl --- /tmp/ctoy >/dev/null 2>&1 || true
+        python3 -c "
+import json,collections
+t=collections.Counter()
+for l in open('/tmp/c.jsonl'):
+    l=l.strip()
+    if l: t[json.loads(l)['type']]+=1
+print('  C toy record types:', dict(t))
+" || echo "  C toy: no profile"
 
-        echo "=== does the toy have DWARF? ==="
-        readelf -S ./rust/target/release/examples/toy | grep -oE '\.z?debug_(info|line)' | sort -u
+        echo "##### 2. does perf_event_open succeed for the Rust toy?"
+        strace -f -qq -e trace=perf_event_open -o /tmp/st.txt           ./coz run -o /tmp/s.jsonl --- ./rust/target/release/examples/toy >/dev/null 2>&1 || true
+        echo "  perf_event_open calls: $(grep -c perf_event_open /tmp/st.txt || echo 0)"
+        echo "  failures:"; grep perf_event_open /tmp/st.txt | grep -E '= -1' | head -3 | sed 's/^/    /' || echo "    none"
+        grep perf_event_open /tmp/st.txt | head -2 | sed 's/^/    sample: /'
 
-        echo "=== probe: can Rust see _coz_get_counter under coz? ==="
-        mkdir -p /tmp/probe/src
-        cat > /tmp/probe/Cargo.toml <<'TOML'
-        [package]
-        name = "probe"
-        version = "0.1.0"
-        edition = "2021"
-        [dependencies]
-        libc = "0.2"
-        [profile.release]
-        debug = 1
-        TOML
-        cat > /tmp/probe/src/main.rs <<'RS'
-        use std::ffi::CStr;
-        fn look(n: &[u8]) -> *mut libc::c_void {
-            unsafe { libc::dlsym(libc::RTLD_DEFAULT, CStr::from_bytes_with_nul(n).unwrap().as_ptr()) }
-        }
-        fn main() {
-            println!("PROBE _coz_get_counter = {:?}", look(b"_coz_get_counter\0"));
-            println!("PROBE _coz_add_delays  = {:?}", look(b"_coz_add_delays\0"));
-        }
-        RS
-        (cd /tmp/probe && cargo build --release --quiet)
-        ./coz run -o /tmp/probe.jsonl --- /tmp/probe/target/release/probe 2>&1 | grep PROBE || echo "probe produced no output"
+        echo "##### 3. profiler lifecycle (verbose, no head/SIGPIPE)"
+        timeout 120 ./coz run --verbose -o /tmp/v.jsonl --- ./rust/target/release/examples/toy >/tmp/v.txt 2>&1 || true
+        grep -aE 'Profiler thread|Registered thread|Starting sampling|startup complete' /tmp/v.txt | head -8 | sed 's/^/  /'
+        echo "  verbose profile record types:"
+        python3 -c "
+import json,collections
+t=collections.Counter()
+for l in open('/tmp/v.jsonl'):
+    l=l.strip()
+    if l: t[json.loads(l)['type']]+=1
+print('   ', dict(t))
+" || echo "    none"
 
-        echo "=== verbose coz run on the toy (first 40 lines) ==="
-        timeout 60 ./coz run --verbose -o /tmp/v.jsonl --- ./rust/target/release/examples/toy 2>&1 | head -40 || true
-        echo "=== how many source files in scope? ==="
-        timeout 60 ./coz run --verbose -o /tmp/v2.jsonl --- ./rust/target/release/examples/toy 2>&1 | grep -c 'Included source file' || true
+        echo "##### 4. same, but C toy under strace for comparison"
+        strace -f -qq -e trace=perf_event_open -o /tmp/st2.txt           ./coz run -o /tmp/c2.jsonl --- /tmp/ctoy >/dev/null 2>&1 || true
+        echo "  C toy perf_event_open calls: $(grep -c perf_event_open /tmp/st2.txt || echo 0)"
 
     - name: Profile the Rust toy under coz
       run: |
