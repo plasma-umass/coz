@@ -368,10 +368,27 @@ void profiler::profiler_thread(spinlock& l) {
     // in global_delay (to prevent feedback loops). Subtract it from duration
     // to correct for this systematic bias.
     size_t overshoot = g_experiment_overshoot.load(std::memory_order_relaxed);
-    size_t duration = elapsed - experiment_delay - overshoot;
+    size_t subtracted = experiment_delay + overshoot;
 #else
-    size_t duration = elapsed - experiment_delay;
+    size_t subtracted = experiment_delay;
 #endif
+
+    // These are unsigned, and the delay accounting is not exact: threads credit
+    // _global_delay from their own local counters, so at a large speedup the
+    // delay attributed to an experiment can slightly exceed the wall time it
+    // ran for. Subtracting then wraps to ~2^64, and a single such experiment
+    // drags a whole line's regression to nonsense (observed: one row of
+    // duration=2^64-142271 turned a slope of +1.09 into -2.3e10).
+    //
+    // Don't emit that experiment -- a non-positive effective runtime carries no
+    // information. Note we must not `continue` here: the code below still has to
+    // clear _next_line and _experiment_active, or the experiment never ends.
+    const bool delay_exceeded_elapsed = (subtracted >= elapsed);
+    if(delay_exceeded_elapsed) {
+      WARNING << "Skipping experiment: inserted delay (" << subtracted
+              << "ns) exceeded elapsed time (" << elapsed << "ns)";
+    }
+    size_t duration = delay_exceeded_elapsed ? 0 : elapsed - subtracted;
     size_t selected_samples = selected->get_samples() - starting_samples;
 
     // Keep a running count of the minimum delta over all progress points
@@ -392,7 +409,7 @@ void profiler::profiler_thread(spinlock& l) {
     // Only emit experiment data when we have enough progress point visits.
     // Low-delta experiments (e.g., from warmup, end-of-benchmark, or boundary
     // effects) have unreliable throughput measurements that corrupt the baseline.
-    if(min_delta >= ExperimentTargetDelta) {
+    if(min_delta >= ExperimentTargetDelta && !delay_exceeded_elapsed) {
       if(_json_output) {
         output << "{\"type\":\"experiment\",\"selected\":\"" << line_to_json_string(selected) << "\","
                << "\"speedup\":" << speedup << ","
@@ -751,6 +768,19 @@ void profiler::process_samples(thread_state* state) {
  */
 void profiler::process_all_samples() {
   size_t delay_size = _delay_size.load();
+#ifdef __APPLE__
+  // The delay-to-speedup relationship assumes each sample stands for
+  // SamplePeriod of thread runtime. On slow hosts (virtualized CI runners)
+  // the sampler's real cadence is several times that, and inserting delays
+  // sized for the nominal period dilutes the virtual speedup by the same
+  // factor: at 95% requested speedup a 10x-slow sampler measures ~20%
+  // improvement instead of ~95%. Scale each sample's delay by the measured
+  // round interval so a sample pays for the runtime it actually represents.
+  size_t effective_period = macos_effective_sample_period_ns();
+  if(delay_size > 0 && effective_period > SamplePeriod) {
+    delay_size = delay_size * effective_period / SamplePeriod;
+  }
+#endif
   bool experiment_active = _experiment_active.load();
   bool needs_signal = false;
   size_t samples_processed = 0;

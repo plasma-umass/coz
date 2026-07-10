@@ -9,6 +9,7 @@
 #define CAUSAL_RUNTIME_REAL_H
 
 #include <pthread.h>
+#include <semaphore.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -71,6 +72,18 @@ namespace real {
   DECLARE_WRAPPER(pthread_rwlock_timedwrlock);
 #endif
   DECLARE_WRAPPER(pthread_rwlock_unlock);
+
+#ifndef __APPLE__
+  // POSIX semaphores. glibc implements these on top of futex(2) with an inline
+  // syscall, so the futex itself cannot be interposed -- but sem_wait and
+  // friends are ordinary exported libc symbols, and that is the seam one layer
+  // up. Catching them covers anything built on POSIX semaphores, including
+  // swift-corelibs-libdispatch's DispatchSemaphore.
+  DECLARE_WRAPPER(sem_wait);
+  DECLARE_WRAPPER(sem_trywait);
+  DECLARE_WRAPPER(sem_timedwait);
+  DECLARE_WRAPPER(sem_post);
+#endif
 };
 
 #endif

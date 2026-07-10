@@ -42,7 +42,7 @@ jobs:
       run: |
         cd build
         cmake .. -DBUILD_BENCHMARKS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
-        make -j$(nproc) toy lock_test kmeans
+        make -j$(nproc) toy lock_test kmeans sem_toy
 
     - name: Verify build artifacts
       run: |
@@ -50,6 +50,7 @@ jobs:
         test -x build/benchmarks/toy/toy
         test -x build/benchmarks/lock_test/lock_test
         test -x build/benchmarks/kmeans/kmeans
+        test -x build/benchmarks/sem_toy/sem_toy
         echo "Build artifacts verified"
 
     - name: Run unit tests
@@ -232,6 +233,20 @@ jobs:
         print("  - lock_test.cpp:12 (critical section) identified as profiling target")
         VALIDATION_SCRIPT
 
+
+    - name: Run sem_toy (semaphore join) with coz
+      run: |
+        cd build
+        TIMEOUT=timeout
+        command -v gtimeout >/dev/null && TIMEOUT=gtimeout
+        $TIMEOUT 120 ../coz run -o sem_toy_profile.jsonl --- ./benchmarks/sem_toy/sem_toy || true
+        test -s sem_toy_profile.jsonl
+
+    - name: Validate semaphore interposition
+      run: |
+        cd build
+        python3 ../.github/scripts/check_semaphore_speedup.py sem_toy_profile.jsonl
+
     - name: Upload profile artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -265,7 +280,7 @@ jobs:
       run: |
         cd build
         cmake .. -DBUILD_BENCHMARKS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
-        make -j$(sysctl -n hw.ncpu) toy lock_test kmeans
+        make -j$(sysctl -n hw.ncpu) toy lock_test kmeans sem_toy
 
     - name: Verify build artifacts
       run: |
@@ -275,6 +290,7 @@ jobs:
         test -x build/benchmarks/toy/toy
         test -x build/benchmarks/lock_test/lock_test
         test -x build/benchmarks/kmeans/kmeans
+        test -x build/benchmarks/sem_toy/sem_toy
         echo "Build artifacts verified"
 
     - name: Run unit tests
@@ -295,6 +311,17 @@ jobs:
         fi
         echo "Profile created:"
         cat profile.jsonl
+
+    - name: Run sem_toy (semaphore join) with coz
+      run: |
+        cd build
+        gtimeout 120 ../coz run -o sem_toy_profile.jsonl --- ./benchmarks/sem_toy/sem_toy || true
+        test -s sem_toy_profile.jsonl
+
+    - name: Validate semaphore interposition
+      run: |
+        cd build
+        python3 ../.github/scripts/check_semaphore_speedup.py sem_toy_profile.jsonl
 
   lang-rust:
     name: Rust bindings (${{ matrix.os }})

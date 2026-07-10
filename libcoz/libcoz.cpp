@@ -453,6 +453,46 @@ extern "C" {
   }
 
   /**
+   * POSIX semaphores.
+   *
+   * A thread blocked on a semaphore is not running, so it must not be charged
+   * for virtual delays inserted while it slept -- otherwise it pays them all at
+   * once on wake-up, and if it is the thread that visits the progress point,
+   * every line in the profile acquires a negative slope.
+   *
+   * glibc implements sem_wait on futex(2) with an inline syscall, so the futex
+   * cannot be interposed. sem_wait can: it is an ordinary exported libc symbol.
+   * That is the seam, and it covers everything layered on POSIX semaphores,
+   * including swift-corelibs-libdispatch's DispatchSemaphore.
+   */
+  int sem_wait(sem_t* sem) {
+    if(initialized) profiler::get_instance().pre_block();
+    int result = real::sem_wait(sem);
+    // Woken by a sem_post from another thread, so skip the delays.
+    if(initialized) profiler::get_instance().post_block(true);
+    return result;
+  }
+
+  int sem_timedwait(sem_t* sem, const struct timespec* abstime) {
+    if(initialized) profiler::get_instance().pre_block();
+    int result = real::sem_timedwait(sem, abstime);
+    // On timeout nobody handed us the semaphore, so we own our delays.
+    if(initialized) profiler::get_instance().post_block(result == 0);
+    return result;
+  }
+
+  /// Never blocks, so there is nothing to skip.
+  int sem_trywait(sem_t* sem) {
+    return real::sem_trywait(sem);
+  }
+
+  /// May unblock another thread, so pay outstanding delays before it runs.
+  int sem_post(sem_t* sem) {
+    if(initialized) profiler::get_instance().catch_up();
+    return real::sem_post(sem);
+  }
+
+  /**
    * Enforce a floor on the alternate signal stack.
    *
    * coz's SIGPROF handler runs with SA_ONSTACK, which Go requires: it creates
