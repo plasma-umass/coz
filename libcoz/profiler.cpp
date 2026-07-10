@@ -768,6 +768,19 @@ void profiler::process_samples(thread_state* state) {
  */
 void profiler::process_all_samples() {
   size_t delay_size = _delay_size.load();
+#ifdef __APPLE__
+  // The delay-to-speedup relationship assumes each sample stands for
+  // SamplePeriod of thread runtime. On slow hosts (virtualized CI runners)
+  // the sampler's real cadence is several times that, and inserting delays
+  // sized for the nominal period dilutes the virtual speedup by the same
+  // factor: at 95% requested speedup a 10x-slow sampler measures ~20%
+  // improvement instead of ~95%. Scale each sample's delay by the measured
+  // round interval so a sample pays for the runtime it actually represents.
+  size_t effective_period = macos_effective_sample_period_ns();
+  if(delay_size > 0 && effective_period > SamplePeriod) {
+    delay_size = delay_size * effective_period / SamplePeriod;
+  }
+#endif
   bool experiment_active = _experiment_active.load();
   bool needs_signal = false;
   size_t samples_processed = 0;

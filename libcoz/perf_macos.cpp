@@ -86,6 +86,22 @@ static std::atomic<bool> g_sampling_active{false};
 static mach_port_t g_sampling_thread_port = MACH_PORT_NULL;
 static uint64_t g_sample_period_ns = 1000000; // 1ms default
 
+// EMA of the time between sampling rounds. 0 until two rounds have run.
+static std::atomic<uint64_t> g_effective_period_ns{0};
+
+static uint64_t mach_ticks_to_ns(uint64_t ticks) {
+  static mach_timebase_info_data_t timebase = {0, 0};
+  if (timebase.denom == 0) mach_timebase_info(&timebase);
+  return ticks * timebase.numer / timebase.denom;
+}
+
+uint64_t macos_effective_sample_period_ns() {
+  uint64_t eff = g_effective_period_ns.load(std::memory_order_relaxed);
+  if (eff < g_sample_period_ns) return g_sample_period_ns;
+  uint64_t cap = g_sample_period_ns * 100;
+  return eff > cap ? cap : eff;
+}
+
 // Ports of coz-internal threads that the sampling thread must never suspend.
 static spinlock& get_internal_lock() {
   static spinlock lock;
@@ -213,7 +229,18 @@ static void* sampling_thread_func(void* arg) {
   sleep_time.tv_sec = g_sample_period_ns / 1000000000;
   sleep_time.tv_nsec = g_sample_period_ns % 1000000000;
 
+  uint64_t prev_round_ns = 0;
   while (g_sampling_active.load(std::memory_order_relaxed)) {
+    // Measure the real cadence: on slow hosts a round takes far longer than
+    // the nominal period, and every sample then represents that much runtime.
+    uint64_t now_ns = mach_ticks_to_ns(mach_absolute_time());
+    if (prev_round_ns != 0) {
+      uint64_t interval = now_ns - prev_round_ns;
+      uint64_t old = g_effective_period_ns.load(std::memory_order_relaxed);
+      g_effective_period_ns.store(old ? (old * 7 + interval) / 8 : interval,
+                                  std::memory_order_relaxed);
+    }
+    prev_round_ns = now_ns;
     sample_all_threads();
     nanosleep(&sleep_time, nullptr);
   }

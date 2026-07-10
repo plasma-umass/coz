@@ -198,5 +198,13 @@ mach_port_t macos_get_sampling_thread_port();
 /// profiler thread).
 void macos_register_internal_thread(mach_port_t port);
 
+/// The sampling thread's measured time between rounds, in nanoseconds.
+/// On virtualized hosts (e.g. CI runners) the suspend/read-PC/resume Mach
+/// calls make a round take several times the nominal sample period, and each
+/// sample then stands for that much thread runtime. Never less than the
+/// nominal period; capped to keep a stall (debugger, SIGSTOP) from turning
+/// into an enormous delay.
+uint64_t macos_effective_sample_period_ns();
+
 #endif // __APPLE__
 #endif // CAUSAL_RUNTIME_PERF_MACOS_H
