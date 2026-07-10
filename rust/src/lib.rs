@@ -159,7 +159,7 @@ impl Counter {
                 mem::size_of::<libc::size_t>()
             );
             counter.count.fetch_add(1, Relaxed);
-            coz_add_delays();
+            check_delays();
         }
     }
 
@@ -207,6 +207,7 @@ type GetCounterFn = unsafe extern "C" fn(libc::c_int, *const libc::c_char) -> *m
 /// The type of `_coz_add_delays` as defined in `include/coz.h`
 ///
 /// `typedef void (*coz_add_delays_t)(void);`
+#[cfg(target_os = "macos")]
 type AddDelaysFn = unsafe extern "C" fn();
 
 fn coz_get_counter(ty: libc::c_int, name: &CStr) -> Option<*mut coz_counter_t> {
@@ -231,11 +232,24 @@ fn coz_get_counter(ty: libc::c_int, name: &CStr) -> Option<*mut coz_counter_t> {
     func.map(|f| unsafe { f(ty, name.as_ptr()) })
 }
 
-/// Calls `_coz_add_delays()` from libcoz.
+/// Check whether this thread owes the profiler any virtual delays.
 ///
-/// This must be called after every counter increment to allow the profiler to
-/// inject virtual delays for causal profiling experiments. Without this call,
-/// the profiler cannot detect progress points and will report 0 experiments.
+/// This mirrors the `_COZ_CHECK_DELAYS` macro in `include/coz.h`. On macOS
+/// per-thread sampling timers are unavailable, so worker threads only discover
+/// their delay debt at progress points and must call `_coz_add_delays()` here.
+/// On Linux the SIGPROF handler already applies delays via `process_samples()`,
+/// so calling `_coz_add_delays()` again at every progress point would apply
+/// them twice and collapse throughput under high concurrency.
+#[cfg(target_os = "macos")]
+fn check_delays() {
+    coz_add_delays();
+}
+
+#[cfg(not(target_os = "macos"))]
+fn check_delays() {}
+
+/// Calls `_coz_add_delays()` from libcoz.
+#[cfg(target_os = "macos")]
 fn coz_add_delays() {
     static ADD_DELAYS: LazyLock<Option<AddDelaysFn>> = LazyLock::new(|| {
         let name = CStr::from_bytes_with_nul(b"_coz_add_delays\0").unwrap();

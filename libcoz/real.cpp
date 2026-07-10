@@ -322,6 +322,12 @@ static int resolve_sem_post(sem_t* sem) throw() {
   if(real_sem_post) return real_sem_post(sem);
   else return -1;
 }
+
+static int resolve_sigaltstack(const stack_t* ss, stack_t* old_ss) throw() {
+  GET_SYMBOL(sigaltstack);
+  if(real_sigaltstack) return real_sigaltstack(ss, old_ss);
+  else return -1;
+}
 #endif
 
 #define DEFINE_WRAPPER(name) decltype(::name)* name = &resolve_##name;
@@ -341,6 +347,9 @@ namespace real {
   DEFINE_WRAPPER(kill);
   DEFINE_WRAPPER(sigprocmask);
   DEFINE_WRAPPER(sigwait);
+#ifndef __APPLE__
+  DEFINE_WRAPPER(sigaltstack);
+#endif
 #ifndef __APPLE__
   DEFINE_WRAPPER(sigwaitinfo);
   DEFINE_WRAPPER(sigtimedwait);

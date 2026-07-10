@@ -28,6 +28,9 @@ namespace real {
   DECLARE_WRAPPER(sigprocmask);
   DECLARE_WRAPPER(sigwait);
 #ifndef __APPLE__
+  DECLARE_WRAPPER(sigaltstack);
+#endif
+#ifndef __APPLE__
   DECLARE_WRAPPER(sigwaitinfo);
   DECLARE_WRAPPER(sigtimedwait);
 #endif

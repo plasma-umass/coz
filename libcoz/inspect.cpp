@@ -5,6 +5,12 @@
  * directory of this distribution and at http://github.com/plasma-umass/coz.
  */
 
+#ifndef __APPLE__
+#include <link.h>
+#include <limits.h>
+#include <unistd.h>
+#endif
+
 #include "inspect.h"
 
 #include "lief_loader.h"
@@ -119,47 +125,57 @@ unordered_map<string, uintptr_t> get_loaded_files() {
   return result;
 }
 #else
-unordered_map<string, uintptr_t> get_loaded_files() {
-  unordered_map<string, uintptr_t> result;
+/// Resolve the main executable's path, since dl_iterate_phdr reports it as "".
+static string main_executable_path() {
+  char buffer[PATH_MAX];
+  ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer) - 1);
+  if(len <= 0) return string();
+  buffer[len] = '\0';
+  return string(buffer);
+}
 
-  ifstream maps("/proc/self/maps");
-  while(maps.good() && !maps.eof()) {
-    uintptr_t base, limit;
-    char perms[5];
-    size_t offset;
-    size_t dev_major, dev_minor;
-    uintptr_t inode;
-    string path;
+static int collect_loaded_file(struct dl_phdr_info* info, size_t, void* data) {
+  auto* result = static_cast<unordered_map<string, uintptr_t>*>(data);
 
-    // Skip over whitespace
-    maps >> skipws;
+  string path = (info->dlpi_name != nullptr && info->dlpi_name[0] != '\0')
+                    ? string(info->dlpi_name)
+                    : main_executable_path();
 
-    // Read in "<base>-<limit> <perms> <offset> <dev_major>:<dev_minor> <inode>"
-    maps >> std::hex >> base;
-    if(maps.get() != '-') break;
-    maps >> std::hex >> limit;
+  // The vDSO and other synthetic objects have no file to read DWARF from.
+  if(path.empty() || path[0] != '/') return 0;
 
-    if(maps.get() != ' ') break;
-    maps.get(perms, 5);
-
-    maps >> std::hex >> offset;
-    maps >> std::hex >> dev_major;
-    if(maps.get() != ':') break;
-    maps >> std::hex >> dev_minor;
-    maps >> std::dec >> inode;
-
-    // Skip over spaces and tabs
-    while(maps.peek() == ' ' || maps.peek() == '\t') { maps.ignore(1); }
-
-    // Read out the mapped file's path
-    getline(maps, path);
-
-    // If this is an executable mapping of an absolute path, include it
-    if(perms[2] == 'x' && path[0] == '/') {
-      result[path] = base - offset;
+  // Only objects with executable code can contain a sampled program counter.
+  bool has_executable_segment = false;
+  for(int i = 0; i < info->dlpi_phnum; i++) {
+    const ElfW(Phdr)& phdr = info->dlpi_phdr[i];
+    if(phdr.p_type == PT_LOAD && (phdr.p_flags & PF_X)) {
+      has_executable_segment = true;
+      break;
     }
   }
+  if(!has_executable_segment) return 0;
 
+  // dlpi_addr *is* the load bias: the value to add to a virtual address from
+  // the object's headers to get the address it actually lives at.
+  (*result)[path] = static_cast<uintptr_t>(info->dlpi_addr);
+  return 0;
+}
+
+/// Map each loaded object's path to its load bias.
+///
+/// This used to parse /proc/self/maps and take `base - offset` of the first
+/// executable mapping. That only equals the load bias when the executable
+/// PT_LOAD segment satisfies p_vaddr == p_offset. It usually does for a simple
+/// C program, so the bug hid for years -- but rustc's output has, for example,
+/// p_offset=0x14f80 against p_vaddr=0x15f80, and the bias came out 0x1000 too
+/// large. Every line range was then shifted by a page: most samples still landed
+/// inside *some* line, so coz reported plausible-looking profiles attributed to
+/// the wrong source lines, and on some layouts nothing matched at all.
+///
+/// dl_iterate_phdr reports the bias directly, which is what it is for.
+unordered_map<string, uintptr_t> get_loaded_files() {
+  unordered_map<string, uintptr_t> result;
+  dl_iterate_phdr(collect_loaded_file, &result);
   return result;
 }
 #endif

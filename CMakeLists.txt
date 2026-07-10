@@ -164,6 +164,14 @@ endif()
 
 add_subdirectory(libcoz)
 
+# The JVMTI agent is independent of libcoz: JIT-compiled Java frames carry no
+# DWARF, so it does its own sampling and virtual speedup. Off by default because
+# it needs a JDK.
+option(BUILD_JAVA_AGENT "Build the coz JVMTI agent for profiling Java" OFF)
+if(BUILD_JAVA_AGENT)
+    add_subdirectory(java)
+endif()
+
 option(BUILD_BENCHMARKS "Build benchmarks" OFF)
 if(BUILD_BENCHMARKS)
     if(NOT CMAKE_BUILD_TYPE)
