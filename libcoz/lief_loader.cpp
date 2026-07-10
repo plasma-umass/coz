@@ -7,6 +7,8 @@
 
 #include "lief_loader.h"
 
+#include <zlib.h>
+
 #include <LIEF/LIEF.hpp>
 #include <dwarf++.hh>
 
@@ -47,12 +49,71 @@ struct section_view {
  * LIEF-based implementation of dwarf::loader.
  * Extracts DWARF sections from ELF or Mach-O binaries.
  */
+/// Storage for sections we had to inflate. section_view is a non-owning view,
+/// so the bytes must outlive it; the loader keeps this alive.
+using owned_buffers = std::vector<std::vector<uint8_t>>;
+
+/// Inflate a zlib stream of known output size.
+static bool inflate_zlib(const uint8_t* src, size_t src_size, size_t dest_size,
+                         std::vector<uint8_t>* out) {
+  out->resize(dest_size);
+  uLongf produced = static_cast<uLongf>(dest_size);
+  const int rc = uncompress(out->data(), &produced, src, static_cast<uLong>(src_size));
+  if (rc != Z_OK || produced != dest_size) {
+    out->clear();
+    return false;
+  }
+  return true;
+}
+
+/// Decompress a `.zdebug_*` / `__zdebug_*` section.
+///
+/// Layout: the 4 bytes "ZLIB", then the uncompressed size as a big-endian
+/// 64-bit integer, then the zlib stream.
+static bool inflate_zdebug(const uint8_t* data, size_t size, std::vector<uint8_t>* out) {
+  const size_t kHeader = 12;
+  if (size < kHeader || std::memcmp(data, "ZLIB", 4) != 0) return false;
+
+  uint64_t dest_size = 0;
+  for (int i = 0; i < 8; i++) {
+    dest_size = (dest_size << 8) | data[4 + i];
+  }
+  return inflate_zlib(data + kHeader, size - kHeader, static_cast<size_t>(dest_size), out);
+}
+
+/// Decompress an ELF section carrying SHF_COMPRESSED.
+///
+/// Layout: an Elf64_Chdr {ch_type, ch_reserved, ch_size, ch_addralign}, then the
+/// stream. ch_type 1 is ELFCOMPRESS_ZLIB; 2 is ZSTD, which we do not handle.
+static bool inflate_shf_compressed(const uint8_t* data, size_t size, bool is_64bit,
+                                   std::vector<uint8_t>* out) {
+  // 32-bit: ch_type(4) ch_size(4) ch_addralign(4). 64-bit adds 4 bytes of padding.
+  const size_t kHeader = is_64bit ? 24 : 12;
+  if (size < kHeader) return false;
+
+  uint32_t ch_type = 0;
+  std::memcpy(&ch_type, data, sizeof(ch_type));
+  if (ch_type != 1 /* ELFCOMPRESS_ZLIB */) return false;
+
+  uint64_t dest_size = 0;
+  if (is_64bit) {
+    std::memcpy(&dest_size, data + 8, sizeof(dest_size));
+  } else {
+    uint32_t narrow = 0;
+    std::memcpy(&narrow, data + 4, sizeof(narrow));
+    dest_size = narrow;
+  }
+  return inflate_zlib(data + kHeader, size - kHeader, static_cast<size_t>(dest_size), out);
+}
+
 class lief_dwarf_loader : public dwarf::loader {
 public:
   lief_dwarf_loader(std::unique_ptr<LIEF::Binary> binary,
-                    std::map<dwarf::section_type, section_view> sections)
+                    std::map<dwarf::section_type, section_view> sections,
+                    owned_buffers inflated = {})
       : _binary(std::move(binary)),
-        _sections(std::move(sections)) {}
+        _sections(std::move(sections)),
+        _inflated(std::move(inflated)) {}
 
   const void* load(dwarf::section_type section, size_t* size_out) override {
     auto it = _sections.find(section);
@@ -64,8 +125,9 @@ public:
   }
 
 private:
-  std::unique_ptr<LIEF::Binary> _binary;  // Owns the memory
+  std::unique_ptr<LIEF::Binary> _binary;  // Owns the mapped section bytes
   std::map<dwarf::section_type, section_view> _sections;
+  owned_buffers _inflated;  // Owns the bytes of any section we had to inflate
 };
 
 /**
@@ -74,13 +136,19 @@ private:
  * Supports DWARF 2-5 section types as provided by plasma-umass/libelfin.
  */
 bool section_name_to_type(const std::string& name, dwarf::section_type* out) {
-  // ELF uses .debug_*, Mach-O uses __debug_*
+  // ELF uses .debug_*, Mach-O uses __debug_*. The `z` variants hold the same
+  // section, zlib-compressed: Go's linker emits them by default, and so does
+  // GNU ld with --compress-debug-sections=zlib-gnu.
   const char* suffix = nullptr;
 
   if (name.compare(0, 7, ".debug_") == 0) {
     suffix = name.c_str() + 7;
   } else if (name.compare(0, 8, "__debug_") == 0) {
     suffix = name.c_str() + 8;
+  } else if (name.compare(0, 8, ".zdebug_") == 0) {
+    suffix = name.c_str() + 8;
+  } else if (name.compare(0, 9, "__zdebug_") == 0) {
+    suffix = name.c_str() + 9;
   } else {
     return false;
   }
@@ -129,16 +197,38 @@ bool section_name_to_type(const std::string& name, dwarf::section_type* out) {
 /**
  * Extract DWARF sections from a LIEF ELF binary.
  */
-std::map<dwarf::section_type, section_view> extract_elf_sections(LIEF::ELF::Binary* elf) {
+std::map<dwarf::section_type, section_view> extract_elf_sections(LIEF::ELF::Binary* elf,
+                                                                 owned_buffers* inflated) {
   std::map<dwarf::section_type, section_view> result;
+  const bool is_64bit = (elf->type() == LIEF::ELF::Header::CLASS::ELF64);
 
   for (const auto& section : elf->sections()) {
     dwarf::section_type type;
-    if (section_name_to_type(section.name(), &type)) {
-      auto content = section.content();
-      if (!content.empty()) {
-        result[type] = section_view{content.data(), content.size()};
+    if (!section_name_to_type(section.name(), &type)) continue;
+
+    auto content = section.content();
+    if (content.empty()) continue;
+
+    const std::string& name = section.name();
+    const bool zdebug = name.compare(0, 8, ".zdebug_") == 0;
+    const bool shf_compressed =
+        section.has(LIEF::ELF::Section::FLAGS::COMPRESSED);
+
+    if (zdebug || shf_compressed) {
+      std::vector<uint8_t> out;
+      const bool ok = zdebug
+          ? inflate_zdebug(content.data(), content.size(), &out)
+          : inflate_shf_compressed(content.data(), content.size(), is_64bit, &out);
+      if (!ok) {
+        // ZSTD, or a stream we could not read. Skipping the section is better
+        // than handing libelfin compressed bytes, which it would misparse.
+        continue;
       }
+      inflated->push_back(std::move(out));
+      const std::vector<uint8_t>& kept = inflated->back();
+      result[type] = section_view{kept.data(), kept.size()};
+    } else {
+      result[type] = section_view{content.data(), content.size()};
     }
   }
 
@@ -149,7 +239,8 @@ std::map<dwarf::section_type, section_view> extract_elf_sections(LIEF::ELF::Bina
 /**
  * Extract DWARF sections from a LIEF Mach-O binary.
  */
-std::map<dwarf::section_type, section_view> extract_macho_sections(LIEF::MachO::Binary* macho) {
+std::map<dwarf::section_type, section_view> extract_macho_sections(LIEF::MachO::Binary* macho,
+                                                                   owned_buffers* inflated) {
   std::map<dwarf::section_type, section_view> result;
 
 #if LIEF_LOADER_DEBUG
@@ -170,6 +261,15 @@ std::map<dwarf::section_type, section_view> extract_macho_sections(LIEF::MachO::
     if (section_name_to_type(section.name(), &type)) {
       auto content = section.content();
       if (!content.empty()) {
+        // Go's linker compresses Mach-O DWARF as __zdebug_* by default.
+        if (section.name().compare(0, 9, "__zdebug_") == 0) {
+          std::vector<uint8_t> out;
+          if (!inflate_zdebug(content.data(), content.size(), &out)) continue;
+          inflated->push_back(std::move(out));
+          const std::vector<uint8_t>& kept = inflated->back();
+          result[type] = section_view{kept.data(), kept.size()};
+          continue;
+        }
         result[type] = section_view{content.data(), content.size()};
 #if LIEF_LOADER_DEBUG
         std::cerr << "[lief_loader]   -> Mapped to type, content size=" << content.size() << std::endl;
@@ -189,13 +289,14 @@ std::map<dwarf::section_type, section_view> extract_macho_sections(LIEF::MachO::
 /**
  * Extract DWARF sections from any LIEF binary.
  */
-std::map<dwarf::section_type, section_view> extract_sections(LIEF::Binary* binary) {
+std::map<dwarf::section_type, section_view> extract_sections(LIEF::Binary* binary,
+                                                             owned_buffers* inflated) {
   if (auto* elf = dynamic_cast<LIEF::ELF::Binary*>(binary)) {
-    return extract_elf_sections(elf);
+    return extract_elf_sections(elf, inflated);
   }
 #ifdef __APPLE__
   if (auto* macho = dynamic_cast<LIEF::MachO::Binary*>(binary)) {
-    return extract_macho_sections(macho);
+    return extract_macho_sections(macho, inflated);
   }
 #endif
   return {};
@@ -499,8 +600,9 @@ std::shared_ptr<dwarf::loader> load(const std::string& path) {
 #endif
 
   std::map<dwarf::section_type, section_view> sections;
+  owned_buffers inflated;
   try {
-    sections = extract_sections(binary.get());
+    sections = extract_sections(binary.get(), &inflated);
   } catch (const std::exception& e) {
 #if LIEF_LOADER_DEBUG
     std::cerr << "[lief_loader] Exception extracting sections: " << e.what() << std::endl;
@@ -521,7 +623,8 @@ std::shared_ptr<dwarf::loader> load(const std::string& path) {
 #if LIEF_LOADER_DEBUG
     std::cerr << "[lief_loader] Found embedded debug info" << std::endl;
 #endif
-    return std::make_shared<lief_dwarf_loader>(std::move(binary), std::move(sections));
+    return std::make_shared<lief_dwarf_loader>(std::move(binary), std::move(sections),
+                                               std::move(inflated));
   }
 
 #ifdef __APPLE__
@@ -551,12 +654,14 @@ std::shared_ptr<dwarf::loader> load(const std::string& path) {
 #if LIEF_LOADER_DEBUG
       std::cerr << "[lief_loader] dSYM parsed successfully" << std::endl;
 #endif
-      auto dsym_sections = extract_sections(dsym_binary.get());
+      owned_buffers dsym_inflated;
+      auto dsym_sections = extract_sections(dsym_binary.get(), &dsym_inflated);
       if (has_debug_info(dsym_sections)) {
 #if LIEF_LOADER_DEBUG
         std::cerr << "[lief_loader] Found debug info in dSYM" << std::endl;
 #endif
-        return std::make_shared<lief_dwarf_loader>(std::move(dsym_binary), std::move(dsym_sections));
+        return std::make_shared<lief_dwarf_loader>(std::move(dsym_binary), std::move(dsym_sections),
+                                                   std::move(dsym_inflated));
       }
     }
   }
@@ -570,9 +675,11 @@ std::shared_ptr<dwarf::loader> load(const std::string& path) {
     if (!debug_path.empty()) {
       auto debug_binary = LIEF::Parser::parse(debug_path);
       if (debug_binary) {
-        auto debug_sections = extract_sections(debug_binary.get());
+        owned_buffers debug_inflated;
+        auto debug_sections = extract_sections(debug_binary.get(), &debug_inflated);
         if (has_debug_info(debug_sections)) {
-          return std::make_shared<lief_dwarf_loader>(std::move(debug_binary), std::move(debug_sections));
+          return std::make_shared<lief_dwarf_loader>(std::move(debug_binary), std::move(debug_sections),
+                                                     std::move(debug_inflated));
         }
       }
     }
