@@ -223,7 +223,11 @@ public:
 
   /// Only allow one instance of the profiler, and never run the destructor
   static profiler& get_instance() {
-    static char buf[sizeof(profiler)];
+    // alignas is required, not decorative: a bare `char buf[]` has alignment 1,
+    // so placement-newing a profiler into it can leave the std::atomic members
+    // under-aligned. x86 tolerates that; aarch64 raises SIGBUS on the first
+    // atomic store in the constructor.
+    alignas(profiler) static char buf[sizeof(profiler)];
     static profiler* p = new(buf) profiler();
     return *p;
   }

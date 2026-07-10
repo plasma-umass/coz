@@ -49,10 +49,12 @@ extern int orig_pthread_rwlock_unlock(pthread_rwlock_t*) __asm("_pthread_rwlock_
 extern void orig_libc_exit(int) __asm("_exit");
 extern void orig_libc__exit(int) __asm("__exit");
 extern void orig_libc__Exit(int) __asm("__Exit");
-// signal: complex return type, declare as function pointer
+// signal: returns a function pointer. Must be declared as a *function* bound to
+// the `_signal` symbol, not a function-pointer *variable* -- a variable would
+// alias the first bytes of signal()'s code and calling it would branch into
+// whatever those instruction bytes decode to as an address.
 typedef void (*sig_handler_fn)(int);
-typedef sig_handler_fn (*signal_fn_t)(int, sig_handler_fn);
-extern signal_fn_t orig_signal_fn __asm("_signal");
+extern sig_handler_fn orig_signal_fn(int, sig_handler_fn) __asm("_signal");
 extern int orig_sigaction(int, const struct sigaction*, struct sigaction*) __asm("_sigaction");
 extern int orig_sigprocmask(int, const sigset_t*, sigset_t*) __asm("_sigprocmask");
 extern int orig_pthread_sigmask(int, const sigset_t*, sigset_t*) __asm("_pthread_sigmask");

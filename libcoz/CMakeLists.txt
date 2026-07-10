@@ -41,11 +41,14 @@ target_include_directories(coz
     PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>)
+# Go's linker and GNU ld emit zlib-compressed DWARF; lief_loader inflates it.
+find_package(ZLIB REQUIRED)
+
 # Platform-specific libraries
 if(APPLE)
-    target_link_libraries(coz PRIVATE ${CMAKE_DL_LIBS} Threads::Threads libelfin::libelfin LIEF::LIEF)
+    target_link_libraries(coz PRIVATE ZLIB::ZLIB ${CMAKE_DL_LIBS} Threads::Threads libelfin::libelfin LIEF::LIEF)
 else()
-    target_link_libraries(coz PRIVATE ${CMAKE_DL_LIBS} rt Threads::Threads libelfin::libelfin LIEF::LIEF)
+    target_link_libraries(coz PRIVATE ZLIB::ZLIB ${CMAKE_DL_LIBS} rt Threads::Threads libelfin::libelfin LIEF::LIEF)
 endif()
 
 add_library(coz-instrumentation INTERFACE)
