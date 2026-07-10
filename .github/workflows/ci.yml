@@ -333,30 +333,18 @@ jobs:
     - name: DIAGNOSE (temporary)
       if: runner.os == 'Linux'
       run: |
-        sudo apt-get install -y -qq strace >/dev/null
-        COUNT='import json,collections,sys; t=collections.Counter(json.loads(l)["type"] for l in open(sys.argv[1]) if l.strip()); print("   ", dict(t))'
+        echo "##### rust toy: where do the samples go?"
+        COZ_DEBUG_SAMPLES=1 timeout 120 ./coz run -o /tmp/r.jsonl --- ./rust/target/release/examples/toy 2>&1 | grep coz-dbg || echo "  (no coz-dbg line)"
 
-        echo "##### 1. C toy in THIS job (control: is the environment sane?)"
+        echo "##### C toy, same instrumentation, for comparison"
         g++ -g -O2 -c benchmarks/toy/toy.cpp -Iinclude -o /tmp/t.o
         g++ -g /tmp/t.o -o /tmp/ctoy -ldl -lpthread
-        timeout 150 ./coz run -o /tmp/c.jsonl --- /tmp/ctoy >/dev/null 2>&1 || true
-        python3 -c "$COUNT" /tmp/c.jsonl || echo "    C toy: no profile"
+        COZ_DEBUG_SAMPLES=1 timeout 120 ./coz run -o /tmp/c.jsonl --- /tmp/ctoy 2>&1 | grep coz-dbg || echo "  (no coz-dbg line)"
 
-        echo "##### 2. does perf_event_open succeed for the Rust toy?"
-        strace -f -qq -e trace=perf_event_open -o /tmp/st.txt ./coz run -o /tmp/s.jsonl --- ./rust/target/release/examples/toy >/dev/null 2>&1 || true
-        echo "  perf_event_open calls: $(grep -c perf_event_open /tmp/st.txt || true)"
-        echo "  failing calls:"; grep perf_event_open /tmp/st.txt | grep -E '= -1' | head -3 | sed 's/^/    /' || true
-        echo "  first call:"; grep perf_event_open /tmp/st.txt | head -1 | sed 's/^/    /' || true
-        python3 -c "$COUNT" /tmp/s.jsonl || echo "    no profile"
-
-        echo "##### 3. profiler lifecycle (verbose, captured to a file)"
-        timeout 120 ./coz run --verbose -o /tmp/v.jsonl --- ./rust/target/release/examples/toy >/tmp/v.txt 2>&1 || true
-        grep -aE 'Profiler thread|Registered thread|Starting sampling|startup complete' /tmp/v.txt | head -8 | sed 's/^/  /' || true
-        python3 -c "$COUNT" /tmp/v.jsonl || echo "    no profile"
-
-        echo "##### 4. C toy under strace, for comparison"
-        strace -f -qq -e trace=perf_event_open -o /tmp/st2.txt ./coz run -o /tmp/c2.jsonl --- /tmp/ctoy >/dev/null 2>&1 || true
-        echo "  C toy perf_event_open calls: $(grep -c perf_event_open /tmp/st2.txt || true)"
+        echo "##### is toy.rs actually in scope?"
+        timeout 30 ./coz run --verbose -o /tmp/v.jsonl --- /bin/true 2>&1 | head -2 || true
+        timeout 60 ./coz run --verbose -o /tmp/v2.jsonl --- ./rust/target/release/examples/toy 2>/tmp/v2.txt >/dev/null || true
+        grep -a 'Included source file' /tmp/v2.txt | grep -aE 'toy.rs|rust/src/lib.rs' | sed 's/^/  /' || echo "  toy.rs NOT in scope"
 
     - name: Profile the Rust toy under coz
       run: |

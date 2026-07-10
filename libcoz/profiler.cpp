@@ -52,6 +52,13 @@
 
 using namespace std;
 
+// TEMPORARY diagnostics for the rust-on-linux CI failure.
+static std::atomic<size_t> g_dbg_sigprof{0};
+static std::atomic<size_t> g_dbg_no_state{0};
+static std::atomic<size_t> g_dbg_records{0};
+static std::atomic<size_t> g_dbg_samples{0};
+static std::atomic<size_t> g_dbg_matched{0};
+
 // Diagnostic counters for delay application (macOS debugging)
 #ifdef __APPLE__
 static std::atomic<size_t> g_delays_applied{0};
@@ -511,6 +518,12 @@ void profiler::log_samples(ofstream& output, size_t start_time) {
  */
 void profiler::shutdown() {
   if(_shutdown_run.test_and_set() == false) {
+    if(getenv("COZ_DEBUG_SAMPLES")) {
+      fprintf(stderr,
+              "[coz-dbg] sigprof=%zu no_state=%zu perf_records=%zu samples=%zu matched=%zu\n",
+              g_dbg_sigprof.load(), g_dbg_no_state.load(), g_dbg_records.load(),
+              g_dbg_samples.load(), g_dbg_matched.load());
+    }
 #ifdef __APPLE__
     // Stop the macOS sampling thread first so no more samples are produced
     // and no more pthread_kill() calls happen from apply_pending_delays()
@@ -718,10 +731,13 @@ void profiler::add_delays(thread_state* state) {
 
 void profiler::process_samples(thread_state* state) {
   for(perf_event::record r : state->sampler) {
+    g_dbg_records.fetch_add(1, std::memory_order_relaxed);
     if(r.is_sample()) {
+      g_dbg_samples.fetch_add(1, std::memory_order_relaxed);
       // Find and match the line that contains this sample
       std::pair<line*, bool> sampled_line = match_line(r);
       if(sampled_line.first) {
+        g_dbg_matched.fetch_add(1, std::memory_order_relaxed);
         sampled_line.first->add_sample();
       }
 
@@ -855,8 +871,10 @@ void* profiler::start_profiler_thread(void* arg) {
 }
 
 void profiler::samples_ready(int signum, siginfo_t* info, void* p) {
+  g_dbg_sigprof.fetch_add(1, std::memory_order_relaxed);
   thread_state* state = get_instance().get_thread_state();
   if (!state) {
+    g_dbg_no_state.fetch_add(1, std::memory_order_relaxed);
     return;
   }
   if (state->check_in_use()) {
