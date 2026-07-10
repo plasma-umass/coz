@@ -333,18 +333,27 @@ jobs:
     - name: DIAGNOSE (temporary)
       if: runner.os == 'Linux'
       run: |
-        echo "##### rust toy: where do the samples go?"
-        COZ_DEBUG_SAMPLES=1 timeout 120 ./coz run -o /tmp/r.jsonl --- ./rust/target/release/examples/toy 2>&1 | grep coz-dbg || echo "  (no coz-dbg line)"
-
-        echo "##### C toy, same instrumentation, for comparison"
         g++ -g -O2 -c benchmarks/toy/toy.cpp -Iinclude -o /tmp/t.o
         g++ -g /tmp/t.o -o /tmp/ctoy -ldl -lpthread
-        COZ_DEBUG_SAMPLES=1 timeout 120 ./coz run -o /tmp/c.jsonl --- /tmp/ctoy 2>&1 | grep coz-dbg || echo "  (no coz-dbg line)"
+        RTOY=./rust/target/release/examples/toy
 
-        echo "##### is toy.rs actually in scope?"
-        timeout 30 ./coz run --verbose -o /tmp/v.jsonl --- /bin/true 2>&1 | head -2 || true
-        timeout 60 ./coz run --verbose -o /tmp/v2.jsonl --- ./rust/target/release/examples/toy 2>/tmp/v2.txt >/dev/null || true
-        grep -a 'Included source file' /tmp/v2.txt | grep -aE 'toy.rs|rust/src/lib.rs' | sed 's/^/  /' || echo "  toy.rs NOT in scope"
+        echo "##### ELF type (EXEC = non-PIE, DYN = PIE)"
+        echo -n "  rust toy: "; readelf -h $RTOY | awk '/Type:/{print $2, $3}'
+        echo -n "  C toy:    "; readelf -h /tmp/ctoy | awk '/Type:/{print $2, $3}'
+
+        echo "##### DWARF version of the first CU"
+        echo -n "  rust toy: "; readelf --debug-dump=info $RTOY 2>/dev/null | grep -m1 -i 'Version:' | tr -s ' '
+        echo -n "  C toy:    "; readelf --debug-dump=info /tmp/ctoy 2>/dev/null | grep -m1 -i 'Version:' | tr -s ' '
+
+        echo "##### rustc"
+        rustc --version; rustc --print cfg 2>/dev/null | grep -i relocation || true
+
+        echo "##### DWARF sections present in the rust toy"
+        readelf -SW $RTOY | awk '$2 ~ /debug/ {print "  ", $2, $6}' | head -10
+
+        echo "##### sample/match counters"
+        COZ_DEBUG_SAMPLES=1 timeout 100 ./coz run -o /tmp/r.jsonl --- $RTOY 2>&1 | grep coz-dbg | sed 's/^/  rust: /' || true
+        COZ_DEBUG_SAMPLES=1 timeout 100 ./coz run -o /tmp/c.jsonl --- /tmp/ctoy 2>&1 | grep coz-dbg | sed 's/^/  C:    /' || true
 
     - name: Profile the Rust toy under coz
       run: |
