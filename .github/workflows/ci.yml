@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [master]
 
+permissions:
+  contents: read
+
 jobs:
   build-linux:
     runs-on: ubuntu-latest
@@ -292,3 +295,108 @@ jobs:
         fi
         echo "Profile created:"
         cat profile.jsonl
+
+  lang-rust:
+    name: Rust bindings (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake pkg-config
+        echo 1 | sudo tee /proc/sys/kernel/perf_event_paranoid
+
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: brew install pkg-config coreutils || true
+
+    - name: Build coz
+      run: |
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        cmake --build build -j3
+        test -f build/libcoz/libcoz.so || test -f build/libcoz/libcoz.dylib
+
+    - name: Check the crate on both platforms
+      working-directory: rust
+      run: |
+        cargo build --release --examples
+        cargo test --release
+
+    - name: Profile the Rust toy under coz
+      run: |
+        # `timeout` is GNU-only; coreutils provides gtimeout on macOS.
+        TIMEOUT=timeout
+        command -v gtimeout >/dev/null && TIMEOUT=gtimeout
+        # rust/examples/toy runs ~9e6 work units of 10k iterations each across
+        # two threads (~1-2 minutes on a 2-core runner); the timeout is a
+        # safety net since experiments are written to the profile as they run.
+        $TIMEOUT 300 ./coz run -o profile.jsonl --- ./rust/target/release/examples/toy || true
+        test -s profile.jsonl
+
+    - name: Validate the Rust profile
+      run: python3 .github/scripts/check_profile.py profile.jsonl toy.rs
+
+  lang-go:
+    name: Go bindings (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version: '1.26'
+
+    - name: Install dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake pkg-config
+        echo 1 | sudo tee /proc/sys/kernel/perf_event_paranoid
+
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: brew install pkg-config coreutils || true
+
+    - name: Build coz
+      run: |
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        cmake --build build -j3
+        test -f build/libcoz/libcoz.so || test -f build/libcoz/libcoz.dylib
+
+    - name: Vet, format and test
+      working-directory: go
+      run: |
+        test -z "$(gofmt -l .)" || { echo "gofmt found unformatted files:"; gofmt -l .; exit 1; }
+        go vet ./...
+        go test -race ./...
+        # The package must also build with cgo off, degrading to no-ops.
+        CGO_ENABLED=0 go build ./...
+
+    - name: Build the Go toy
+      working-directory: go
+      run: |
+        # coz cannot read Go's compressed DWARF (.zdebug_* / __zdebug_*).
+        go build -ldflags=-compressdwarf=false -o "$RUNNER_TEMP/gotoy" ./example
+
+    - name: Profile the Go toy under coz
+      run: |
+        TIMEOUT=timeout
+        command -v gtimeout >/dev/null && TIMEOUT=gtimeout
+        $TIMEOUT 180 ./coz run -o profile.jsonl --- "$RUNNER_TEMP/gotoy" || true
+        test -s profile.jsonl
+
+    - name: Validate the Go profile
+      run: python3 .github/scripts/check_profile.py profile.jsonl toy.go

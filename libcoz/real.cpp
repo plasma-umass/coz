@@ -293,6 +293,14 @@ static int resolve_pthread_rwlock_unlock(pthread_rwlock_t* rwlock) throw() {
   else return 0;  // Silently elide synchronization during linking
 }
 
+#ifndef __APPLE__
+static int resolve_sigaltstack(const stack_t* ss, stack_t* old_ss) throw() {
+  GET_SYMBOL(sigaltstack);
+  if(real_sigaltstack) return real_sigaltstack(ss, old_ss);
+  else return -1;
+}
+#endif
+
 #define DEFINE_WRAPPER(name) decltype(::name)* name = &resolve_##name;
 
 /**
@@ -310,6 +318,9 @@ namespace real {
   DEFINE_WRAPPER(kill);
   DEFINE_WRAPPER(sigprocmask);
   DEFINE_WRAPPER(sigwait);
+#ifndef __APPLE__
+  DEFINE_WRAPPER(sigaltstack);
+#endif
 #ifndef __APPLE__
   DEFINE_WRAPPER(sigwaitinfo);
   DEFINE_WRAPPER(sigtimedwait);
