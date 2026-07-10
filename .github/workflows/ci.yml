@@ -400,3 +400,58 @@ jobs:
 
     - name: Validate the Go profile
       run: python3 .github/scripts/check_profile.py profile.jsonl toy.go
+
+  lang-java:
+    name: Java agent (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # Temurin, not GraalVM: the agent samples at safepoints, and the Graal JIT
+    # leaves hot counted loops without a safepoint poll, pushing the mean
+    # time-to-safepoint from ~100us to ~100ms. See java/README.md.
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
+
+    - name: Install dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake pkg-config
+
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: brew install pkg-config coreutils || true
+
+    - name: Build the agent and coz.jar
+      run: |
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_JAVA_AGENT=ON
+        cmake --build build --target cozjava coz-jar -j3
+        test -f build/java/libcozjava.so
+        test -f build/java/coz.jar
+
+    - name: Build the Java toy
+      working-directory: java
+      run: |
+        mkdir -p "$RUNNER_TEMP/classes"
+        # -g keeps the line tables the agent reads through GetLineNumberTable.
+        javac -g -cp ../build/java/coz.jar -d "$RUNNER_TEMP/classes" example/Toy.java
+
+    - name: Profile the Java toy under the agent
+      run: |
+        TIMEOUT=timeout
+        command -v gtimeout >/dev/null && TIMEOUT=gtimeout
+        $TIMEOUT 240 java \
+          -agentpath:"$PWD/build/java/libcozjava.so=output=$PWD/profile.jsonl,scope=example,verbose=1" \
+          -cp "$RUNNER_TEMP/classes:$PWD/build/java/coz.jar" example.Toy || true
+        test -s profile.jsonl
+
+    - name: Validate the Java profile
+      run: python3 .github/scripts/check_profile.py profile.jsonl Toy.java
