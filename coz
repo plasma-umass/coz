@@ -2272,7 +2272,7 @@ def line_ref(val):
     (filename, line) = val.rsplit(':', 1)
     line = int(line)
     return filename + ':' + str(line)
-  except:
+  except Exception:
     msg = "Invalid line reference %r. The format is <source file>:<line number>." % val
     raise argparse.ArgumentTypeError(msg)
 
