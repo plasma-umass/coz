@@ -129,6 +129,7 @@ The viewer includes an AI assistant that analyzes causal profiling results and s
 Supported LLM providers:
 - **Anthropic** (Claude) — set `ANTHROPIC_API_KEY`
 - **OpenAI** (GPT-4o, o3, etc.) — set `OPENAI_API_KEY`
+- **OrcaRouter** — set `ORCAROUTER_API_KEY`
 - **Amazon Bedrock** — set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
 - **Ollama** — local models, no API key required
 
@@ -179,6 +180,7 @@ The agent has read-only tools (`list_files`, `read_file`, `grep`) scoped to the 
 | --- | --- | --- | --- |
 | Anthropic (Claude) | `--provider anthropic` *(default)* | `ANTHROPIC_API_KEY` (or `--api-key`) | `claude-opus-4-7` |
 | OpenAI (GPT-4o, o3, …) | `--provider openai` | `OPENAI_API_KEY` (or `--api-key`) | `gpt-4o` |
+| OrcaRouter | `--provider orcarouter` | `ORCAROUTER_API_KEY` (or `--api-key`) | `openai/gpt-4o-mini` |
 | Amazon Bedrock | `--provider bedrock` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (optional `AWS_SESSION_TOKEN`); region via `AWS_REGION` / `AWS_DEFAULT_REGION` or `--region`. Any credential source that boto3's default chain picks up (IAM role, `~/.aws/credentials`, SSO) also works. Requires `pip install boto3`. | `anthropic.claude-opus-4-20250514-v1:0` |
 | Ollama (local) | `--provider ollama` | No key. Endpoint via `OLLAMA_HOST` or `--ollama-host` (defaults to `http://localhost:11434`). Use a tool-capable model (e.g. `llama3.1`, `qwen2.5`). | `llama3.1` |
 
@@ -193,6 +195,10 @@ coz suggest-points src/
 export OPENAI_API_KEY=...
 coz suggest-points --provider openai --model gpt-4o src/
 
+# OrcaRouter — OpenAI-compatible gateway; model ids are namespaced (e.g. openai/gpt-4o-mini, orcarouter/auto)
+export ORCAROUTER_API_KEY=...
+coz suggest-points --provider orcarouter --model openai/gpt-4o-mini src/
+
 # Amazon Bedrock — uses the boto3 credential chain
 export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_REGION=us-west-2
 coz suggest-points --provider bedrock \
@@ -202,7 +208,7 @@ coz suggest-points --provider bedrock \
 coz suggest-points --provider ollama --model llama3.1 src/
 ```
 
-You can also pass `--api-key <key>` inline for Anthropic or OpenAI instead of exporting an env var, and `--model <id>` to select a specific model on any provider. See `coz suggest-points --help` for the full option list (`--include`, `--exclude`, `--max-points`, `--region`, `--ollama-host`, etc.).
+You can also pass `--api-key <key>` inline for Anthropic, OpenAI, or OrcaRouter instead of exporting an env var, and `--model <id>` to select a specific model on any provider. See `coz suggest-points --help` for the full option list (`--include`, `--exclude`, `--max-points`, `--region`, `--ollama-host`, etc.).
 
 ### Specifying Progress Points on the Command Line
 Coz has command line options to specify progress points when profiling the application instead of modifying its source. This feature is currently disabled because it did not work particularly well. Adding support for better command line-specified progress points is planned in the near future.

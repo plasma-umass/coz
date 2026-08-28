@@ -363,6 +363,7 @@ $('#ai-model-refresh').on('click', function() {
   _force_model_refresh = true;
   if (provider === 'anthropic') _anthropic_models_fetched = false;
   else if (provider === 'openai') _openai_models_fetched = false;
+  else if (provider === 'orcarouter') _orcarouter_models_fetched = false;
   else if (provider === 'bedrock') _bedrock_models_fetched = false;
   else if (provider === 'ollama') _ollama_models_fetched = false;
   populateModelDropdown();
@@ -405,6 +406,9 @@ $('#ai-api-key').on('change', function() {
   } else if (provider === 'openai') {
     _openai_models_fetched = false;
     _provider_models['openai'] = [];
+  } else if (provider === 'orcarouter') {
+    _orcarouter_models_fetched = false;
+    _provider_models['orcarouter'] = [];
   }
   populateModelDropdown();
   saveLLMSettings();

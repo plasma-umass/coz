@@ -659,6 +659,7 @@ def _coz_plot(args):
   llm_config = {
     'anthropic_key_set': bool(os.environ.get('ANTHROPIC_API_KEY', '')),
     'openai_key_set': bool(os.environ.get('OPENAI_API_KEY', '')),
+    'orcarouter_key_set': bool(os.environ.get('ORCAROUTER_API_KEY', '')),
     'ollama_host': os.environ.get('OLLAMA_HOST', 'http://localhost:11434'),
     'bedrock_available': _bedrock_available,
     'bedrock_region': os.environ.get('AWS_REGION', os.environ.get('AWS_DEFAULT_REGION', '')),
@@ -666,6 +667,7 @@ def _coz_plot(args):
     # Actual key values for pre-populating UI fields
     'anthropic_key': os.environ.get('ANTHROPIC_API_KEY', ''),
     'openai_key': os.environ.get('OPENAI_API_KEY', ''),
+    'orcarouter_key': os.environ.get('ORCAROUTER_API_KEY', ''),
     'aws_access_key': os.environ.get('AWS_ACCESS_KEY_ID', ''),
     'aws_secret_key': os.environ.get('AWS_SECRET_ACCESS_KEY', ''),
     'aws_session_token': os.environ.get('AWS_SESSION_TOKEN', ''),
@@ -856,6 +858,52 @@ def _coz_plot(args):
             available_ids = {m.get('id', '') for m in data.get('data', [])}
             models = []
             for model_id in sorted(known_good):
+              if model_id in available_ids:
+                models.append({'value': model_id, 'label': model_id})
+            result = json_mod.dumps({'models': models})
+          except Exception as e:
+            result = json_mod.dumps({'models': [], 'error': str(e)})
+        content = result.encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(content))
+        self.end_headers()
+        self.wfile.write(content)
+        return
+
+      # Serve available OrcaRouter models
+      if self.path.startswith('/orcarouter-models'):
+        import json as json_mod
+        import urllib.request
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        api_key = params.get('api_key', [''])[0] or os.environ.get('ORCAROUTER_API_KEY', '')
+        if not api_key:
+          result = json_mod.dumps({'models': [], 'error': 'No API key'})
+        else:
+          try:
+            req = urllib.request.Request(
+              'https://api.orcarouter.ai/v1/models',
+              headers={
+                'Authorization': f'Bearer {api_key}',
+                'Accept': 'application/json'
+              }
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+              data = json_mod.loads(resp.read())
+            # Models we know work with the OpenAI-compatible chat completions endpoint
+            known_good = {
+              'orcarouter/auto',
+              'openai/gpt-5.5', 'openai/gpt-4o', 'openai/gpt-4o-mini',
+              'anthropic/claude-opus-5', 'anthropic/claude-sonnet-5',
+              'anthropic/claude-haiku-4.5',
+              'google/gemini-3.5-flash', 'google/gemini-3.6-flash',
+              'qwen/qwen3.7-max', 'deepseek/deepseek-v4-pro',
+            }
+            available_ids = {m.get('id', '') for m in data.get('data', [])}
+            models = []
+            for model_id in known_good:
               if model_id in available_ids:
                 models.append({'value': model_id, 'label': model_id})
             result = json_mod.dumps({'models': models})
@@ -1107,6 +1155,12 @@ Based on the causal profiling data, suggest specific optimizations for the targe
               raise ValueError('No OpenAI API key provided. Set OPENAI_API_KEY env var or enter key in sidebar.')
             for chunk in _stream_openai(key, model or 'gpt-4o', system_prompt, user_prompt):
               send_chunk({'chunk': chunk})
+          elif provider == 'orcarouter':
+            key = api_key or os.environ.get('ORCAROUTER_API_KEY', '')
+            if not key:
+              raise ValueError('No OrcaRouter API key provided. Set ORCAROUTER_API_KEY env var or enter key in sidebar.')
+            for chunk in _stream_orcarouter(key, model or 'openai/gpt-4o-mini', system_prompt, user_prompt):
+              send_chunk({'chunk': chunk})
           elif provider == 'bedrock':
             region = req.get('bedrock_region', '') or os.environ.get('AWS_REGION', '') or os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
             aws_creds = {
@@ -1196,6 +1250,45 @@ Based on the causal profiling data, suggest specific optimizations for the targe
       headers={
         'Content-Type': 'application/json',
         'Authorization': f'Bearer {key}'
+      }
+    )
+    with urllib.request.urlopen(req, timeout=180) as resp:
+      for raw_line in resp:
+        line = raw_line.decode('utf-8').strip()
+        if line.startswith('data: '):
+          data_str = line[6:]
+          if data_str == '[DONE]':
+            break
+          try:
+            event = json_mod.loads(data_str)
+            text = event.get('choices', [{}])[0].get('delta', {}).get('content', '')
+            if text:
+              yield text
+          except (json_mod.JSONDecodeError, IndexError):
+            pass
+
+  def _stream_orcarouter(key, model, system, user):
+    """Stream text chunks from the OrcaRouter OpenAI-compatible API."""
+    import json as json_mod
+    import urllib.request
+    req_body = json_mod.dumps({
+      'model': model,
+      'max_tokens': 4096,
+      'stream': True,
+      'messages': [
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': user}
+      ]
+    }).encode('utf-8')
+    req = urllib.request.Request(
+      'https://api.orcarouter.ai/v1/chat/completions',
+      data=req_body,
+      headers={
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {key}',
+        # Attribution so the gateway can credit Coz traffic
+        'HTTP-Referer': 'https://github.com/plasma-umass/coz',
+        'X-Title': 'coz',
       }
     )
     with urllib.request.urlopen(req, timeout=180) as resp:
@@ -1747,6 +1840,83 @@ def _suggest_run_openai_agent(key, model, system_prompt, user_prompt, tools, han
   if verbose:
     sys.stderr.write(f'[agent] reached max iterations ({_SUGGEST_MAX_ITERATIONS})\n')
 
+def _orcarouter_tool_request(key, model, system, messages, tools, max_tokens=4096):
+  """One non-streaming OrcaRouter chat completions request with tool calls.
+
+  OrcaRouter exposes an OpenAI-compatible /v1/chat/completions endpoint, so the
+  request shape mirrors the OpenAI provider. Model ids are namespaced
+  (e.g. ``orcarouter/auto`` or ``openai/gpt-4o-mini``).
+  """
+  import json as json_mod
+  import urllib.request, urllib.error
+  body = json_mod.dumps({
+    'model': model,
+    'max_tokens': max_tokens,
+    'messages': [{'role': 'system', 'content': system}] + messages,
+    'tools': _openai_tool_schema(tools),
+    'tool_choice': 'auto',
+  }).encode('utf-8')
+  req = urllib.request.Request(
+    'https://api.orcarouter.ai/v1/chat/completions',
+    data=body,
+    headers={
+      'Content-Type': 'application/json',
+      'Authorization': f'Bearer {key}',
+      # Attribution so the gateway can credit Coz traffic
+      'HTTP-Referer': 'https://github.com/plasma-umass/coz',
+      'X-Title': 'coz',
+    }
+  )
+  try:
+    with urllib.request.urlopen(req, timeout=180) as resp:
+      return json_mod.loads(resp.read().decode('utf-8'))
+  except urllib.error.HTTPError as e:
+    body = e.read().decode('utf-8', errors='replace')
+    raise RuntimeError(f'OrcaRouter API {e.code}: {body[:400]}')
+
+def _suggest_run_orcarouter_agent(key, model, system_prompt, user_prompt, tools, handle_tool, verbose):
+  """Drive an OrcaRouter tool-calling loop.
+
+  OrcaRouter's chat completions endpoint accepts the same OpenAI-style tool
+  calls, so this is the same loop as the OpenAI provider.
+  """
+  import json as json_mod
+  messages = [{'role': 'user', 'content': user_prompt}]
+  for iteration in range(_SUGGEST_MAX_ITERATIONS):
+    resp = _orcarouter_tool_request(key, model, system_prompt, messages, tools)
+    choices = resp.get('choices') or []
+    if not choices:
+      return
+    msg = choices[0].get('message', {}) or {}
+    tool_calls = msg.get('tool_calls') or []
+    # Persist assistant turn (OpenAI requires content key, even if null).
+    messages.append({
+      'role': 'assistant',
+      'content': msg.get('content'),
+      'tool_calls': tool_calls,
+    } if tool_calls else {'role': 'assistant', 'content': msg.get('content', '')})
+    if not tool_calls:
+      return
+    for tc in tool_calls:
+      fn = tc.get('function', {}) or {}
+      name = fn.get('name', '')
+      raw_args = fn.get('arguments', '{}')
+      try:
+        input_ = json_mod.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
+      except json_mod.JSONDecodeError:
+        input_ = {}
+      try:
+        result = handle_tool(name, input_)
+      except Exception as e:
+        result = f'ERROR: {e}'
+      messages.append({
+        'role': 'tool',
+        'tool_call_id': tc.get('id', ''),
+        'content': str(result),
+      })
+  if verbose:
+    sys.stderr.write(f'[agent] reached max iterations ({_SUGGEST_MAX_ITERATIONS})\n')
+
 def _bedrock_tool_schema(tools):
   """Convert tool specs to the Bedrock Converse toolConfig shape."""
   return {
@@ -2185,6 +2355,7 @@ def _suggest_user_prompt(roots, files, hint, kind, max_points):
 _SUGGEST_DEFAULT_MODELS = {
   'anthropic': 'claude-opus-4-7',
   'openai': 'gpt-4o',
+  'orcarouter': 'openai/gpt-4o-mini',
   'bedrock': 'anthropic.claude-opus-4-20250514-v1:0',
   'ollama': 'llama3.1',
 }
@@ -2208,6 +2379,11 @@ def _coz_suggest_points(args):
     key = args.api_key or os.environ.get('OPENAI_API_KEY', '')
     if not key:
       sys.stderr.write('error: no OpenAI API key. Set OPENAI_API_KEY or pass --api-key.\n')
+      sys.exit(1)
+  elif provider == 'orcarouter':
+    key = args.api_key or os.environ.get('ORCAROUTER_API_KEY', '')
+    if not key:
+      sys.stderr.write('error: no OrcaRouter API key. Set ORCAROUTER_API_KEY or pass --api-key.\n')
       sys.exit(1)
   elif provider == 'bedrock':
     region = args.region or os.environ.get('AWS_REGION') or os.environ.get('AWS_DEFAULT_REGION') or 'us-east-1'
@@ -2247,6 +2423,9 @@ def _coz_suggest_points(args):
     elif provider == 'openai':
       _suggest_run_openai_agent(key, model, _SUGGEST_SYSTEM_PROMPT, user_prompt,
                                 _SUGGEST_TOOLS, handle_tool, args.verbose)
+    elif provider == 'orcarouter':
+      _suggest_run_orcarouter_agent(key, model, _SUGGEST_SYSTEM_PROMPT, user_prompt,
+                                    _SUGGEST_TOOLS, handle_tool, args.verbose)
     elif provider == 'bedrock':
       _suggest_run_bedrock_agent(region, model, aws_creds, _SUGGEST_SYSTEM_PROMPT, user_prompt,
                                  _SUGGEST_TOOLS, handle_tool, args.verbose)
@@ -2379,13 +2558,13 @@ _suggest_parser = _subparsers.add_parser(
 _suggest_parser.add_argument('path', nargs='+',
                              help='Source tree(s) or file(s) to analyze.')
 _suggest_parser.add_argument('--provider', default='anthropic',
-                             choices=['anthropic', 'openai', 'bedrock', 'ollama'],
+                             choices=['anthropic', 'openai', 'orcarouter', 'bedrock', 'ollama'],
                              help='LLM provider (default: anthropic).')
 _suggest_parser.add_argument('--model', default=None,
                              help='Model ID (defaults to a current model for the chosen provider).')
 _suggest_parser.add_argument('--api-key', default=None,
-                             help='API key for anthropic/openai; '
-                                  'otherwise read from ANTHROPIC_API_KEY / OPENAI_API_KEY.')
+                             help='API key for anthropic/openai/orcarouter; '
+                                  'otherwise read from ANTHROPIC_API_KEY / OPENAI_API_KEY / ORCAROUTER_API_KEY.')
 _suggest_parser.add_argument('--region', default=None,
                              help='AWS region for --provider=bedrock (default: $AWS_REGION or us-east-1).')
 _suggest_parser.add_argument('--ollama-host', default=None,
