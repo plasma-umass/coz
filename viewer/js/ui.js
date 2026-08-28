@@ -311,6 +311,8 @@ $('#ai-model-refresh').on('click', function () {
         _anthropic_models_fetched = false;
     else if (provider === 'openai')
         _openai_models_fetched = false;
+    else if (provider === 'orcarouter')
+        _orcarouter_models_fetched = false;
     else if (provider === 'bedrock')
         _bedrock_models_fetched = false;
     else if (provider === 'ollama')
@@ -352,6 +354,10 @@ $('#ai-api-key').on('change', function () {
     else if (provider === 'openai') {
         _openai_models_fetched = false;
         _provider_models['openai'] = [];
+    }
+    else if (provider === 'orcarouter') {
+        _orcarouter_models_fetched = false;
+        _provider_models['orcarouter'] = [];
     }
     populateModelDropdown();
     saveLLMSettings();

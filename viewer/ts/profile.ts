@@ -81,9 +81,11 @@ let _optimize_server_available: boolean | null = null;
 interface LLMConfig {
   anthropic_key_set: boolean;
   openai_key_set: boolean;
+  orcarouter_key_set: boolean;
   ollama_host: string;
   anthropic_key?: string;
   openai_key?: string;
+  orcarouter_key?: string;
   aws_access_key?: string;
   aws_secret_key?: string;
   aws_session_token?: string;
@@ -99,6 +101,7 @@ interface LLMSettings {
   provider?: string;
   anthropic_key?: string;
   openai_key?: string;
+  orcarouter_key?: string;
   aws_access_key?: string;
   aws_secret_key?: string;
   aws_session_token?: string;
@@ -134,6 +137,7 @@ function saveLLMSettings(): void {
   let apiKeyEl = document.getElementById('ai-api-key') as HTMLInputElement;
   if (provider === 'anthropic') s.anthropic_key = apiKeyEl ? apiKeyEl.value : '';
   else if (provider === 'openai') s.openai_key = apiKeyEl ? apiKeyEl.value : '';
+  else if (provider === 'orcarouter') s.orcarouter_key = apiKeyEl ? apiKeyEl.value : '';
 
   // Save model per provider
   if (!s.models) s.models = {};
@@ -227,6 +231,11 @@ const _fallback_models: {[key: string]: ModelOption[]} = {
     {value: 'gpt-4o-mini', label: 'gpt-4o-mini'},
     {value: 'o3-mini', label: 'o3-mini'},
   ],
+  'orcarouter': [
+    {value: 'openai/gpt-4o-mini', label: 'openai/gpt-4o-mini'},
+    {value: 'orcarouter/auto', label: 'orcarouter/auto (adaptive routing)'},
+    {value: 'openai/gpt-5.5', label: 'openai/gpt-5.5'},
+  ],
   'bedrock': [
     {value: 'anthropic.claude-opus-4-20250514-v1:0', label: 'Claude Opus 4'},
     {value: 'anthropic.claude-sonnet-4-20250514-v1:0', label: 'Claude Sonnet 4'},
@@ -237,7 +246,7 @@ const _fallback_models: {[key: string]: ModelOption[]} = {
 
 // Dynamically fetched models (populated after API calls)
 const _provider_models: {[key: string]: ModelOption[]} = {
-  'anthropic': [], 'openai': [], 'bedrock': [], 'ollama': []
+  'anthropic': [], 'openai': [], 'orcarouter': [], 'bedrock': [], 'ollama': []
 };
 
 // Cache flags — true means we've done a live fetch this session
@@ -245,6 +254,7 @@ let _ollama_models_fetched = false;
 let _bedrock_models_fetched = false;
 let _anthropic_models_fetched = false;
 let _openai_models_fetched = false;
+let _orcarouter_models_fetched = false;
 
 // localStorage helpers for model cache
 function _getCachedModels(provider: string): ModelOption[] {
@@ -268,6 +278,7 @@ function populateModelDropdown(): void {
 
   if (provider === 'anthropic') { fetchAnthropicModels(modelEl); return; }
   if (provider === 'openai') { fetchOpenAIModels(modelEl); return; }
+  if (provider === 'orcarouter') { fetchOrcaRouterModels(modelEl); return; }
   if (provider === 'bedrock') { fetchBedrockModels(modelEl); return; }
   if (provider === 'ollama') { fetchOllamaModels(modelEl); return; }
 
@@ -300,6 +311,7 @@ function _setFetchedFlag(provider: string, value: boolean): void {
   else if (provider === 'bedrock') _bedrock_models_fetched = value;
   else if (provider === 'anthropic') _anthropic_models_fetched = value;
   else if (provider === 'openai') _openai_models_fetched = value;
+  else if (provider === 'orcarouter') _orcarouter_models_fetched = value;
 }
 
 function _getFetchedFlag(provider: string): boolean {
@@ -307,6 +319,7 @@ function _getFetchedFlag(provider: string): boolean {
   if (provider === 'bedrock') return _bedrock_models_fetched;
   if (provider === 'anthropic') return _anthropic_models_fetched;
   if (provider === 'openai') return _openai_models_fetched;
+  if (provider === 'orcarouter') return _orcarouter_models_fetched;
   return false;
 }
 
@@ -425,6 +438,18 @@ function fetchOpenAIModels(modelEl: HTMLSelectElement): void {
   _fetchModels('openai', url, modelEl, _fallback_models['openai']);
 }
 
+function fetchOrcaRouterModels(modelEl: HTMLSelectElement): void {
+  let key = getApiKey();
+  if (!key && _llm_config) key = _llm_config.orcarouter_key || '';
+  if (!key) {
+    _setModelOptions(modelEl, _fallback_models['orcarouter']);
+    return;
+  }
+  let envKey = _llm_config ? _llm_config.orcarouter_key || '' : '';
+  let url = (key && key !== envKey) ? '/orcarouter-models?api_key=' + encodeURIComponent(key) : '/orcarouter-models';
+  _fetchModels('orcarouter', url, modelEl, _fallback_models['orcarouter']);
+}
+
 function fetchBedrockModels(modelEl: HTMLSelectElement): void {
   // Only pass region — server uses its own AWS env credentials
   let regionEl = document.getElementById('ai-bedrock-region') as HTMLInputElement;
@@ -462,6 +487,8 @@ function updateProviderUI(): void {
     providerEl.value = 'anthropic';
   } else if (_llm_config.openai_key_set) {
     providerEl.value = 'openai';
+  } else if (_llm_config.orcarouter_key_set) {
+    providerEl.value = 'orcarouter';
   }
 
   let provider = providerEl.value;
@@ -473,6 +500,8 @@ function updateProviderUI(): void {
       apiKeyEl.value = saved.anthropic_key || _llm_config.anthropic_key || '';
     } else if (provider === 'openai') {
       apiKeyEl.value = saved.openai_key || _llm_config.openai_key || '';
+    } else if (provider === 'orcarouter') {
+      apiKeyEl.value = saved.orcarouter_key || _llm_config.orcarouter_key || '';
     }
   }
 
@@ -498,7 +527,8 @@ function updateProviderUI(): void {
   // Update status
   if (statusEl) {
     let hasKey = (provider === 'anthropic' && (apiKeyEl && apiKeyEl.value || _llm_config.anthropic_key_set)) ||
-                 (provider === 'openai' && (apiKeyEl && apiKeyEl.value || _llm_config.openai_key_set));
+                 (provider === 'openai' && (apiKeyEl && apiKeyEl.value || _llm_config.openai_key_set)) ||
+                 (provider === 'orcarouter' && (apiKeyEl && apiKeyEl.value || _llm_config.orcarouter_key_set));
     if (hasKey) {
       statusEl.textContent = '(configured)';
       statusEl.className = 'ai-status configured';
@@ -515,7 +545,7 @@ function toggleProviderFields(): void {
   let bedrockGroup = document.getElementById('ai-bedrock-group');
   let statusEl = document.getElementById('ai-key-status') as HTMLSpanElement;
 
-  let needsKey = (provider === 'anthropic' || provider === 'openai');
+  let needsKey = (provider === 'anthropic' || provider === 'openai' || provider === 'orcarouter');
   if (keyGroup) keyGroup.style.display = needsKey ? 'flex' : 'none';
   if (ollamaGroup) ollamaGroup.style.display = provider === 'ollama' ? 'flex' : 'none';
   if (bedrockGroup) bedrockGroup.style.display = provider === 'bedrock' ? 'block' : 'none';
@@ -529,6 +559,8 @@ function toggleProviderFields(): void {
         apiKeyEl.value = saved.anthropic_key || (_llm_config ? _llm_config.anthropic_key || '' : '');
       } else if (provider === 'openai') {
         apiKeyEl.value = saved.openai_key || (_llm_config ? _llm_config.openai_key || '' : '');
+      } else if (provider === 'orcarouter') {
+        apiKeyEl.value = saved.orcarouter_key || (_llm_config ? _llm_config.orcarouter_key || '' : '');
       }
     }
   }
