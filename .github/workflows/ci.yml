@@ -489,7 +489,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # swift-actions/setup-swift@v2 rejects Ubuntu 26.04 (now ubuntu-latest),
+        # so pin the Linux leg to an LTS it supports.
+        os: [ubuntu-24.04, macos-latest]
 
     steps:
     - uses: actions/checkout@v4
