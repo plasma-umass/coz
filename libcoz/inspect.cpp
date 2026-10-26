@@ -702,7 +702,7 @@ shared_ptr<line> memory_map::find_line(uintptr_t addr) {
 }
 
 memory_map& memory_map::get_instance() {
-  static char buf[sizeof(memory_map)];
+  alignas(memory_map) static char buf[sizeof(memory_map)];
   static memory_map* the_instance = new(buf) memory_map();
   return *the_instance;
 }
