@@ -82,7 +82,8 @@ coz run --- ./toy/toy
      - `/optimize`: Streaming AI optimization suggestions (POST, ndjson)
      - `/source-snippet`: Source code context for viewer panels
    - Bedrock endpoints use `converse_stream` API (model-agnostic) with inference profile fallback
-   - `coz suggest-points` runs an LLM tool-use agent (Anthropic / OpenAI / Bedrock / Ollama) that reads source via scoped `list_files`/`read_file`/`grep` tools and proposes `COZ_PROGRESS_NAMED` / `COZ_BEGIN` / `COZ_END` insertions. Each proposal includes rationale + unified diff; nothing is written without confirmation. Files already containing Coz macros are skipped, `#include "coz.h"` is auto-inserted, and originals are backed up to `*.coz.bak`. Entry points: `_coz_suggest_points` (~line 2192 of `coz`); subcommand parser at `_suggest_parser` (~line 2374). Flags include `--dry-run`, `--apply`, `--kind {throughput,latency,both}`, `--hint`, `--provider`, `--model`, `--include`, `--exclude`, `--max-points`.
+   - OpenAI requests use Chat Completions with `max_completion_tokens` (GPT-5 / o-series reject `max_tokens`); the `-pro` models need the Responses API, so they aren't offered
+   - `coz suggest-points` runs an LLM tool-use agent (Anthropic / OpenAI / Bedrock / Ollama) that reads source via scoped `list_files`/`read_file`/`grep` tools and proposes `COZ_PROGRESS_NAMED` / `COZ_BEGIN` / `COZ_END` insertions. Each proposal includes rationale + unified diff; nothing is written without confirmation. Files already containing Coz macros are skipped, `#include "coz.h"` is auto-inserted, and originals are backed up to `*.coz.bak`. Entry points: `_coz_suggest_points` (~line 2361 of `coz`); subcommand parser at `_suggest_parser` (~line 2569). Flags include `--dry-run`, `--apply`, `--kind {throughput,latency,both}`, `--hint`, `--provider`, `--model`, `--include`, `--exclude`, `--max-points`.
 
 3. **include/coz.h**: Instrumentation macros for target programs
    - `COZ_PROGRESS` / `COZ_PROGRESS_NAMED`: Throughput progress points
@@ -285,6 +286,16 @@ coz suggest-points --kind latency --hint "HTTP server" src/
 
 Providers: `--provider {anthropic,openai,bedrock,ollama}`. Each uses the same tool-use loop; results vary by how well the chosen model follows tool-use instructions. Agent tools (`list_files`, `read_file`, `grep`) are scoped to the paths passed on the command line. Files already containing Coz macros are skipped. Accepted proposals insert the macro (matching surrounding indentation), add `#include "coz.h"` if missing, and back up the original to `*.coz.bak`. Latency points are only applied in matched `BEGIN`/`END` pairs.
 
+### AI Model Registry
+
+Providers retire model IDs regularly, so coz keeps them in one place: **`viewer/models.json`**, read by both the viewer (`loadModelRegistry` in `viewer/ts/profile.ts`) and the `coz` script (`_model_registry()`; the "AI model registry" section near `_find_viewer_directory`).
+
+- `providers.<name>.models` / `.default`: curated choices shown when no live list is available, and the defaults for `/optimize` and `coz suggest-points`. Defaults prefer undated aliases (`claude-opus-5-5`, `gpt-5.5`, `global.anthropic.*` Bedrock inference profiles).
+- `retired.<name>`: known-dead IDs → replacements. Saved viewer selections, cached model lists, and `--model` arguments are migrated through it.
+- **Request-time recovery**: providers raise `ModelNotFoundError` (via `_anthropic_error` / `_openai_error` / `_bedrock_error`) for unknown models; `_with_model_recovery` retries with up to two same-family replacements, newest first (`_rank_replacements`; Bedrock ranks from the curated list because it lists models some accounts are refused). `/optimize` then sends `{"model_switched": {from, to}}` so the viewer selects and saves the replacement. `suggest-points` never swaps a model the user named with `--model`; it prints alternatives instead. Ollama models are local and never swapped.
+- **Weekly check**: `scripts/update_models.py` (run by `.github/workflows/update-models.yml`, needs `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / AWS secrets) lists each provider's models and, when a curated model disappears, rewrites `models.json` (replacement + `retired` entry) and opens a PR. It never adds models; newer ones are listed in its report. Run locally with `python3 scripts/update_models.py --dry-run`.
+- `tests/test_models.py` (CI job `model-registry`) checks the registry and fails on model-ID string literals anywhere in `coz`, `viewer/ts`, `viewer/js`, or `viewer/index.htm`. Add or change models only in `models.json`, and keep it in the layout `dump_registry` writes.
+
 ### Rust Support
 
 Coz has Rust bindings in `rust/`:
@@ -343,7 +354,7 @@ Text mode outputs:
 - AI optimization suggestions (click magic wand icon)
   - Streams responses with progress bar, copyable code blocks
   - Supports Anthropic, OpenAI, Amazon Bedrock, and Ollama
-  - Dynamic model fetching with localStorage cache and manual refresh
+  - Dynamic model fetching with localStorage cache and manual refresh; curated fallbacks come from `viewer/models.json` (see "AI Model Registry")
   - Bedrock uses inference profile IDs via `list_inference_profiles` API
   - Settings (provider, keys, model selections, region) persisted in cookies
   - AWS credentials sourced from server env vars (not persisted client-side)

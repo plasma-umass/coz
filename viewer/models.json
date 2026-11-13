@@ -1,0 +1,79 @@
+{
+  "_comment": [
+    "The single place where AI model IDs live, for both the viewer (viewer/ts/profile.ts) and the coz script (coz plot's /optimize endpoint and coz suggest-points).",
+    "Providers retire model IDs regularly. To keep that from breaking coz:",
+    "  * Every model ID coz knows about is defined here and nowhere else (tests/test_models.py enforces this).",
+    "  * 'retired' maps known-dead IDs to replacements; saved viewer selections and --model arguments are migrated through it.",
+    "  * When a provider rejects a model as unknown, the request is retried with a same-family replacement picked from the provider's live list.",
+    "  * scripts/update_models.py (run weekly by .github/workflows/update-models.yml) checks 'models' against each provider and opens a PR when one disappears.",
+    "OpenAI requests use Chat Completions, which the -pro models reject, so they are not listed.",
+    "Bedrock serves current Claude models only through inference profiles; the global. profiles route to any region."
+  ],
+  "providers": {
+    "anthropic": {
+      "default": "claude-opus-5-5",
+      "models": [
+        { "id": "claude-opus-5-5", "label": "Claude Opus 5.5" },
+        { "id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5" },
+        { "id": "claude-haiku-5-5", "label": "Claude Haiku 5.5" },
+        { "id": "claude-fable-5-2", "label": "Claude Fable 5.2" }
+      ]
+    },
+    "openai": {
+      "default": "gpt-5.5",
+      "models": [
+        { "id": "gpt-5.5", "label": "GPT-5.5" },
+        { "id": "gpt-5.4", "label": "GPT-5.4" },
+        { "id": "gpt-5.4-mini", "label": "GPT-5.4 mini" },
+        { "id": "gpt-5.4-nano", "label": "GPT-5.4 nano" },
+        { "id": "gpt-5.2", "label": "GPT-5.2" },
+        { "id": "gpt-5.1", "label": "GPT-5.1" },
+        { "id": "gpt-5", "label": "GPT-5" },
+        { "id": "gpt-5-mini", "label": "GPT-5 mini" },
+        { "id": "gpt-5-nano", "label": "GPT-5 nano" },
+        { "id": "gpt-4.1", "label": "GPT-4.1" },
+        { "id": "gpt-4.1-mini", "label": "GPT-4.1 mini" },
+        { "id": "o3", "label": "o3" }
+      ]
+    },
+    "bedrock": {
+      "default": "global.anthropic.claude-opus-5-5",
+      "models": [
+        { "id": "global.anthropic.claude-opus-5-5", "label": "Claude Opus 5.5" },
+        { "id": "global.anthropic.claude-sonnet-5-5", "label": "Claude Sonnet 5.5" },
+        { "id": "global.anthropic.claude-haiku-5-5", "label": "Claude Haiku 5.5" },
+        { "id": "global.anthropic.claude-sonnet-4-6", "label": "Claude Sonnet 4.6" },
+        { "id": "global.anthropic.claude-opus-4-6-v1", "label": "Claude Opus 4.6" },
+        { "id": "global.anthropic.claude-haiku-4-5-20251001-v1:0", "label": "Claude Haiku 4.5" }
+      ]
+    },
+    "ollama": {
+      "default": "llama3.1",
+      "models": []
+    }
+  },
+  "retired": {
+    "anthropic": {
+      "claude-opus-4-20250514": "claude-opus-5-5",
+      "claude-sonnet-4-20250514": "claude-sonnet-5-5",
+      "claude-haiku-4-20250514": "claude-haiku-5-5",
+      "claude-sonnet-4-5-20250929": "claude-sonnet-5-5",
+      "claude-opus-4-5-20251124": "claude-opus-5-5",
+      "claude-haiku-4-5-20251015": "claude-haiku-5-5"
+    },
+    "openai": {
+      "o3-mini": "gpt-5.4-mini",
+      "o4-mini": "gpt-5.2",
+      "gpt-4.1-nano": "gpt-5.4-nano"
+    },
+    "bedrock": {
+      "anthropic.claude-opus-4-20250514-v1:0": "global.anthropic.claude-opus-5-5",
+      "anthropic.claude-sonnet-4-20250514-v1:0": "global.anthropic.claude-sonnet-5-5",
+      "anthropic.claude-haiku-4-20250514-v1:0": "global.anthropic.claude-haiku-5-5",
+      "us.anthropic.claude-sonnet-4-5-20250929-v1:0": "global.anthropic.claude-sonnet-5-5",
+      "us.anthropic.claude-opus-4-5-20251124-v1:0": "global.anthropic.claude-opus-5-5",
+      "us.anthropic.claude-haiku-4-5-20251015-v1:0": "global.anthropic.claude-haiku-5-5"
+    },
+    "ollama": {}
+  }
+}

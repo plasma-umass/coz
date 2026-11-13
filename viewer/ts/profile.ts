@@ -215,25 +215,58 @@ interface ModelOption {
   label: string;
 }
 
-// Hardcoded fallback models (used when dynamic fetch fails or no API key)
-const _fallback_models: {[key: string]: ModelOption[]} = {
-  'anthropic': [
-    {value: 'claude-opus-4-20250514', label: 'Claude Opus 4'},
-    {value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4'},
-    {value: 'claude-haiku-4-20250514', label: 'Claude Haiku 4'},
-  ],
-  'openai': [
-    {value: 'gpt-4o', label: 'gpt-4o'},
-    {value: 'gpt-4o-mini', label: 'gpt-4o-mini'},
-    {value: 'o3-mini', label: 'o3-mini'},
-  ],
-  'bedrock': [
-    {value: 'anthropic.claude-opus-4-20250514-v1:0', label: 'Claude Opus 4'},
-    {value: 'anthropic.claude-sonnet-4-20250514-v1:0', label: 'Claude Sonnet 4'},
-    {value: 'anthropic.claude-haiku-4-20250514-v1:0', label: 'Claude Haiku 4'},
-  ],
-  'ollama': []
-};
+// The model registry, loaded from models.json: the single place model IDs
+// live (shared with the coz script; tests/test_models.py enforces this).
+// Its curated lists are shown when no live list is available, and its
+// 'retired' table migrates saved selections of models providers have retired.
+interface ModelRegistry {
+  providers: {[provider: string]: {default: string; models: {id: string; label: string}[]}};
+  retired: {[provider: string]: {[id: string]: string}};
+}
+let _model_registry: ModelRegistry = {providers: {}, retired: {}};
+
+function _fallbackModels(provider: string): ModelOption[] {
+  let entry = _model_registry.providers[provider];
+  if (!entry) return [];
+  return entry.models.map(function(m) { return {value: m.id, label: m.label}; });
+}
+
+function _defaultModel(provider: string): string {
+  let entry = _model_registry.providers[provider];
+  return entry ? entry.default : '';
+}
+
+// Map a retired model ID to its replacement (following chains).
+function migrateModel(provider: string, id: string): string {
+  let retired = _model_registry.retired[provider] || {};
+  let seen: {[id: string]: boolean} = {};
+  while (id && retired[id] && !seen[id]) {
+    seen[id] = true;
+    id = retired[id];
+  }
+  return id;
+}
+
+function _isRetired(provider: string, id: string): boolean {
+  let retired = _model_registry.retired[provider] || {};
+  return Object.prototype.hasOwnProperty.call(retired, id);
+}
+
+(function loadModelRegistry() {
+  let xhr = new XMLHttpRequest();
+  xhr.open('GET', 'models.json', true);
+  xhr.onload = function() {
+    if (xhr.status !== 200) return;
+    try {
+      _model_registry = JSON.parse(xhr.responseText);
+    } catch (e) {
+      console.warn('[coz] could not parse models.json:', e);
+      return;
+    }
+    populateModelDropdown();
+  };
+  xhr.send();
+})();
 
 // Dynamically fetched models (populated after API calls)
 const _provider_models: {[key: string]: ModelOption[]} = {
@@ -250,7 +283,12 @@ let _openai_models_fetched = false;
 function _getCachedModels(provider: string): ModelOption[] {
   try {
     let raw = localStorage.getItem('coz-models-' + provider);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      // Drop models retired since the list was cached.
+      return (JSON.parse(raw) as ModelOption[]).filter(function(m) {
+        return !_isRetired(provider, m.value);
+      });
+    }
   } catch (e) {}
   return [];
 }
@@ -271,28 +309,47 @@ function populateModelDropdown(): void {
   if (provider === 'bedrock') { fetchBedrockModels(modelEl); return; }
   if (provider === 'ollama') { fetchOllamaModels(modelEl); return; }
 
-  _setModelOptions(modelEl, _fallback_models[provider] || []);
+  _setModelOptions(modelEl, _fallbackModels(provider));
+}
+
+function _addModelOption(el: HTMLSelectElement, value: string, label: string): void {
+  let opt = document.createElement('option');
+  opt.value = value;
+  opt.textContent = label;
+  el.appendChild(opt);
 }
 
 function _setModelOptions(el: HTMLSelectElement, models: ModelOption[]): void {
   el.innerHTML = '';
   for (let i = 0; i < models.length; i++) {
-    let opt = document.createElement('option');
-    opt.value = models[i].value;
-    opt.textContent = models[i].label;
-    el.appendChild(opt);
+    _addModelOption(el, models[i].value, models[i].label);
   }
-  // Restore saved model selection if available
+  if (models.length === 0) return;
+  // Restore the saved selection (migrated past retired IDs), else the default.
+  // A saved model missing from the list (e.g. picked from a live list that
+  // has since been refreshed) is kept rather than silently replaced.
   let provider = getSelectedProvider();
-  let savedModel = _saved_model_selections[provider];
-  if (savedModel) {
-    for (let i = 0; i < models.length; i++) {
-      if (models[i].value === savedModel) {
-        el.value = savedModel;
-        break;
-      }
-    }
+  let wanted = migrateModel(provider, _saved_model_selections[provider] || '') || _defaultModel(provider);
+  if (!wanted) return;
+  if (!models.some(function(m) { return m.value === wanted; })) {
+    if (!_saved_model_selections[provider]) return;
+    _addModelOption(el, wanted, wanted);
   }
+  el.value = wanted;
+}
+
+// The server replaced a model the provider rejected; select and save the
+// replacement so later requests use it directly.
+function applyModelSwitch(provider: string, model: string): void {
+  _saved_model_selections[provider] = model;
+  let modelEl = document.getElementById('ai-model') as HTMLSelectElement;
+  if (modelEl && getSelectedProvider() === provider) {
+    if (!Array.prototype.some.call(modelEl.options, function(o: HTMLOptionElement) { return o.value === model; })) {
+      _addModelOption(modelEl, model, model);
+    }
+    modelEl.value = model;
+  }
+  saveLLMSettings();
 }
 
 function _setFetchedFlag(provider: string, value: boolean): void {
@@ -376,10 +433,7 @@ function _fetchModels(provider: string, url: string, modelEl: HTMLSelectElement,
     // On non-forced, fallback was already shown; on forced error, add fallbacks below
     if (isForced && fallback.length > 0) {
       for (let i = 0; i < fallback.length; i++) {
-        let opt = document.createElement('option');
-        opt.value = fallback[i].value;
-        opt.textContent = fallback[i].label;
-        modelEl.appendChild(opt);
+        _addModelOption(modelEl, fallback[i].value, fallback[i].label);
       }
     }
   };
@@ -388,10 +442,7 @@ function _fetchModels(provider: string, url: string, modelEl: HTMLSelectElement,
     if (getSelectedProvider() === provider && isForced) {
       modelEl.innerHTML = '<option value="">Network error</option>';
       for (let i = 0; i < fallback.length; i++) {
-        let opt = document.createElement('option');
-        opt.value = fallback[i].value;
-        opt.textContent = fallback[i].label;
-        modelEl.appendChild(opt);
+        _addModelOption(modelEl, fallback[i].value, fallback[i].label);
       }
     }
     _setFetchedFlag(provider, true);
@@ -404,37 +455,37 @@ function fetchAnthropicModels(modelEl: HTMLSelectElement): void {
   let key = getApiKey();
   if (!key && _llm_config) key = _llm_config.anthropic_key || '';
   if (!key) {
-    _setModelOptions(modelEl, _fallback_models['anthropic']);
+    _setModelOptions(modelEl, _fallbackModels('anthropic'));
     return;
   }
   // Server uses its own env var; only pass key if user typed one not in env
   let envKey = _llm_config ? _llm_config.anthropic_key || '' : '';
   let url = (key && key !== envKey) ? '/anthropic-models?api_key=' + encodeURIComponent(key) : '/anthropic-models';
-  _fetchModels('anthropic', url, modelEl, _fallback_models['anthropic']);
+  _fetchModels('anthropic', url, modelEl, _fallbackModels('anthropic'));
 }
 
 function fetchOpenAIModels(modelEl: HTMLSelectElement): void {
   let key = getApiKey();
   if (!key && _llm_config) key = _llm_config.openai_key || '';
   if (!key) {
-    _setModelOptions(modelEl, _fallback_models['openai']);
+    _setModelOptions(modelEl, _fallbackModels('openai'));
     return;
   }
   let envKey = _llm_config ? _llm_config.openai_key || '' : '';
   let url = (key && key !== envKey) ? '/openai-models?api_key=' + encodeURIComponent(key) : '/openai-models';
-  _fetchModels('openai', url, modelEl, _fallback_models['openai']);
+  _fetchModels('openai', url, modelEl, _fallbackModels('openai'));
 }
 
 function fetchBedrockModels(modelEl: HTMLSelectElement): void {
   // Only pass region — server uses its own AWS env credentials
   let regionEl = document.getElementById('ai-bedrock-region') as HTMLInputElement;
   let region = regionEl && regionEl.value ? regionEl.value : '';
-  _fetchModels('bedrock', '/bedrock-models?region=' + encodeURIComponent(region), modelEl, _fallback_models['bedrock']);
+  _fetchModels('bedrock', '/bedrock-models?region=' + encodeURIComponent(region), modelEl, _fallbackModels('bedrock'));
 }
 
 function fetchOllamaModels(modelEl: HTMLSelectElement): void {
   let host = getOllamaHost();
-  _fetchModels('ollama', '/ollama-models?host=' + encodeURIComponent(host), modelEl, _fallback_models['ollama']);
+  _fetchModels('ollama', '/ollama-models?host=' + encodeURIComponent(host), modelEl, _fallbackModels('ollama'));
 }
 
 function getOllamaHost(): string {
@@ -669,11 +720,12 @@ function fetchOptimizationStream(name: string, measurements: Measurement[], call
   let awsSecretKeyEl = document.getElementById('ai-aws-secret-key') as HTMLInputElement;
   let awsSessionTokenEl = document.getElementById('ai-aws-session-token') as HTMLInputElement;
 
+  let provider = getSelectedProvider();
   let bodyStr = JSON.stringify({
     path: filePath,
     line: line,
     speedup_data: speedupData,
-    provider: getSelectedProvider(),
+    provider: provider,
     api_key: getApiKey(),
     model: getModelName(),
     ollama_host: getOllamaHost(),
@@ -735,7 +787,9 @@ function fetchOptimizationStream(name: string, measurements: Measurement[], call
         if (!line) continue;
         try {
           let data = JSON.parse(line);
-          if (data.chunk) {
+          if (data.model_switched) {
+            applyModelSwitch(provider, data.model_switched.to);
+          } else if (data.chunk) {
             fullText += data.chunk;
             callbacks.onChunk(fullText, data.chunk);
           } else if (data.error) {

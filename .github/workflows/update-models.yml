@@ -1,0 +1,77 @@
+name: update AI models
+
+# Providers retire model IDs regularly. Once a week, check coz's curated
+# models (viewer/models.json) against each provider's live model list and, if
+# any have disappeared, open a PR that replaces them and migrates saved
+# selections (see scripts/update_models.py).
+#
+# Providers are checked only when their secrets are set: ANTHROPIC_API_KEY,
+# OPENAI_API_KEY, and AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (needs
+# bedrock:ListInferenceProfiles only). Listing models is free; no prompts are
+# sent.
+#
+# Opening the PR needs "Allow GitHub Actions to create and approve pull
+# requests" (Settings > Actions > General). PRs opened with GITHUB_TOKEN don't
+# trigger other workflows, so close and reopen the PR to run CI on it.
+
+on:
+  schedule:
+    - cron: "23 7 * * 1"  # Mondays, 07:23 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  update-models:
+    if: github.repository == 'plasma-umass/coz'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install boto3 (for Bedrock)
+        run: python -m pip install --quiet boto3
+
+      - name: Check models against the providers
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+        run: |
+          python scripts/update_models.py --report "$RUNNER_TEMP/models-report.md"
+          cat "$RUNNER_TEMP/models-report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Test the updated registry
+        id: changed
+        run: |
+          if git diff --quiet -- viewer/models.json; then
+            echo "models=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "models=true" >> "$GITHUB_OUTPUT"
+          python -m unittest discover -s tests -p 'test_models.py' -v
+
+      - name: Open a pull request
+        if: steps.changed.outputs.models == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: automation/update-models
+          delete-branch: true
+          add-paths: viewer/models.json
+          commit-message: Replace AI models that providers no longer list
+          title: Replace AI models that providers no longer list
+          body-path: ${{ runner.temp }}/models-report.md
