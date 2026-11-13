@@ -170,6 +170,61 @@ class ErrorClassificationTest(unittest.TestCase):
                              coz.ModelNotFoundError)
 
 
+class OllamaErrorTest(unittest.TestCase):
+  HOST = 'http://localhost:11434'
+
+  def http_error(self, code, body):
+    import io
+    import urllib.error
+    return urllib.error.HTTPError(self.HOST + '/api/chat', code, 'error', {}, io.BytesIO(body.encode()))
+
+  def test_not_running(self):
+    import urllib.error
+    error = coz._ollama_error(self.HOST, 'm', urllib.error.URLError(ConnectionRefusedError(61, 'refused')))
+    self.assertIn("isn't running at " + self.HOST, str(error))
+    self.assertIn('ollama serve', str(error))
+    # Also when the refusal isn't wrapped in a URLError.
+    self.assertIn("isn't running", str(coz._ollama_error(self.HOST, 'm', ConnectionRefusedError(61, 'x'))))
+
+  def test_unknown_host(self):
+    import socket
+    import urllib.error
+    error = coz._ollama_error('http://nowhere:1', '', urllib.error.URLError(socket.gaierror(8, 'nodename')))
+    self.assertIn("Can't find the Ollama host http://nowhere:1", str(error))
+
+  def test_model_not_pulled(self):
+    error = coz._ollama_error(self.HOST, 'llama9', self.http_error(404, '{"error": "model \'llama9\' not found"}'))
+    self.assertIn('ollama pull llama9', str(error))
+
+  def test_other_http_errors_keep_the_message(self):
+    error = coz._ollama_error(self.HOST, 'm', self.http_error(500, '{"error": "out of memory"}'))
+    self.assertEqual(str(error), 'Ollama returned HTTP 500: out of memory')
+
+  def test_messages_have_no_angle_brackets(self):
+    # The viewer used to insert errors as HTML; "<urlopen error ...>" vanished.
+    import urllib.error
+    error = coz._ollama_error(self.HOST, 'm', urllib.error.URLError('weird failure'))
+    self.assertNotIn('<', str(error))
+
+  def test_listing_reports_not_running_and_no_models(self):
+    import json as json_mod
+    import urllib.error
+    saved = coz._http_get_json
+    try:
+      def refuse(url, headers, timeout=10):
+        raise urllib.error.URLError(ConnectionRefusedError(61, 'refused'))
+      coz._http_get_json = refuse
+      with self.assertRaisesRegex(RuntimeError, "isn't running"):
+        coz._list_live_models('ollama', host=self.HOST)
+      coz._http_get_json = lambda url, headers, timeout=10: {'models': []}
+      with self.assertRaisesRegex(RuntimeError, 'no models installed.*ollama pull ' + coz._default_model('ollama')):
+        coz._list_live_models('ollama', host=self.HOST)
+      coz._http_get_json = lambda url, headers, timeout=10: {'models': [{'name': 'qwen:latest'}]}
+      self.assertEqual(coz._list_live_models('ollama', host=self.HOST), [{'value': 'qwen:latest', 'label': 'qwen'}])
+    finally:
+      coz._http_get_json = saved
+
+
 class RecoveryTest(unittest.TestCase):
   def setUp(self):
     self.saved_lister = coz._list_live_models

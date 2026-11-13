@@ -771,10 +771,18 @@ def _list_live_models(provider, api_key='', region='', host=''):
     return _list_bedrock_models(region or os.environ.get('AWS_REGION', '')
                                 or os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'))
   if provider == 'ollama':
+    import urllib.error
     host = host or os.environ.get('OLLAMA_HOST') or 'http://localhost:11434'
-    data = _http_get_json(host.rstrip('/') + '/api/tags', {}, timeout=5)
-    return [{'value': m['name'], 'label': m['name'].replace(':latest', '')}
-            for m in data.get('models', []) if m.get('name')]
+    try:
+      data = _http_get_json(host.rstrip('/') + '/api/tags', {}, timeout=5)
+    except (urllib.error.URLError, OSError) as e:
+      raise _ollama_error(host, '', e) from None
+    models = [{'value': m['name'], 'label': m['name'].replace(':latest', '')}
+              for m in data.get('models', []) if m.get('name')]
+    if not models:
+      default = _default_model('ollama')
+      raise RuntimeError(f'Ollama has no models installed. Download one with: ollama pull {default}')
+    return models
   raise ValueError(f'Unknown provider: {provider}')
 
 def _list_bedrock_models(region):
@@ -890,6 +898,31 @@ def _bedrock_error(model, error):
                or 'legacy' in lower))):
     return ModelNotFoundError('bedrock', model, message)
   return RuntimeError(f'Bedrock API: {message}')
+
+def _ollama_error(host, model, error):
+  """Turn a failed Ollama request into an error that says what to do."""
+  import json as json_mod
+  import socket
+  import urllib.error
+  if isinstance(error, urllib.error.HTTPError):
+    body = error.read().decode('utf-8', errors='replace')
+    try:
+      message = json_mod.loads(body).get('error', '') or body
+    except ValueError:
+      message = body
+    if error.code == 404 and model and 'not found' in message.lower():
+      return RuntimeError(f'Ollama doesn\'t have the model "{model}". '
+                          f'Download it with: ollama pull {model}')
+    return RuntimeError(f'Ollama returned HTTP {error.code}: {message[:300]}')
+  reason = getattr(error, 'reason', error)
+  if isinstance(reason, ConnectionRefusedError):
+    return RuntimeError(f'Ollama isn\'t running at {host}. '
+                        'Start it with "ollama serve" (or open the Ollama app).')
+  if isinstance(reason, (socket.timeout, TimeoutError)):
+    return RuntimeError(f'Ollama at {host} didn\'t respond in time.')
+  if isinstance(reason, socket.gaierror):
+    return RuntimeError(f'Can\'t find the Ollama host {host}. Check the Ollama Host setting.')
+  return RuntimeError(f'Can\'t reach Ollama at {host}: {reason}')
 
 def _find_viewer_directory():
   """Find the viewer directory relative to this script's location."""
@@ -1401,7 +1434,11 @@ Based on the causal profiling data, suggest specific optimizations for the targe
       data=req_body,
       headers={'Content-Type': 'application/json'}
     )
-    with urllib.request.urlopen(req, timeout=300) as resp:
+    try:
+      resp = urllib.request.urlopen(req, timeout=300)
+    except OSError as e:  # URLError and HTTPError are OSErrors
+      raise _ollama_error(host, model, e) from None
+    with resp:
       for raw_line in resp:
         line = raw_line.decode('utf-8').strip()
         if not line:
@@ -2034,11 +2071,8 @@ def _ollama_tool_request(host, model, messages, tools):
   try:
     with urllib.request.urlopen(req, timeout=300) as resp:
       return json_mod.loads(resp.read().decode('utf-8'))
-  except urllib.error.HTTPError as e:
-    body = e.read().decode('utf-8', errors='replace')
-    raise RuntimeError(f'Ollama API {e.code}: {body[:400]}')
-  except urllib.error.URLError as e:
-    raise RuntimeError(f'Ollama connection failed at {host}: {e.reason}')
+  except OSError as e:  # URLError and HTTPError are OSErrors
+    raise _ollama_error(host, model, e) from None
 
 def _suggest_run_ollama_agent(host, model, system_prompt, user_prompt, tools,
                               handle_tool, verbose):
