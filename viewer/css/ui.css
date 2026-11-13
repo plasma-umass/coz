@@ -239,6 +239,14 @@ pre code {
   letter-spacing: 0;
 }
 
+.ai-model-error {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--danger-color, #ef4444);
+  overflow-wrap: anywhere;
+}
+
 .ai-status.configured {
   color: var(--secondary-color, #10b981);
 }

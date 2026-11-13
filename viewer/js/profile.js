@@ -210,6 +210,7 @@ function _addModelOption(el, value, label) {
     el.appendChild(opt);
 }
 function _setModelOptions(el, models) {
+    _setModelError('');
     el.innerHTML = '';
     for (let i = 0; i < models.length; i++) {
         _addModelOption(el, models[i].value, models[i].label);
@@ -265,6 +266,31 @@ function _getFetchedFlag(provider) {
     return false;
 }
 let _force_model_refresh = false;
+// Show (or, with '', hide) the note under the model dropdown. Uses
+// textContent: server errors can contain angle brackets, which innerHTML
+// would swallow as tags.
+function _setModelError(message) {
+    let el = document.getElementById('ai-model-error');
+    if (!el)
+        return;
+    el.textContent = message;
+    el.style.display = message ? '' : 'none';
+}
+// The model list couldn't be loaded: say why under the dropdown, and offer
+// any fallback models in it.
+function _showModelMessage(modelEl, message, fallback) {
+    if (fallback.length > 0) {
+        _setModelOptions(modelEl, fallback); // keeps the saved/default selection
+    }
+    else {
+        modelEl.innerHTML = '<option value="">No models available</option>';
+    }
+    _setModelError(message);
+}
+// True when the dropdown holds no selectable model (only a placeholder).
+function _hasNoModels(modelEl) {
+    return !Array.prototype.some.call(modelEl.options, function (o) { return o.value !== ''; });
+}
 function _fetchModels(provider, url, modelEl, fallback) {
     let isForced = _force_model_refresh;
     _force_model_refresh = false;
@@ -273,6 +299,7 @@ function _fetchModels(provider, url, modelEl, fallback) {
         _setModelOptions(modelEl, _provider_models[provider]);
         return;
     }
+    _setModelError('');
     if (isForced) {
         // Show loading state on manual refresh
         modelEl.innerHTML = '<option value="">Refreshing models...</option>';
@@ -294,57 +321,44 @@ function _fetchModels(provider, url, modelEl, fallback) {
     // Fetch from server
     let xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
+    // Show a failure when the user asked for a refresh, or when there's nothing
+    // else in the dropdown (otherwise keep the cached/fallback list on screen).
+    function showError(message) {
+        console.warn('[coz] ' + provider + ' models: ' + message);
+        if (getSelectedProvider() !== provider)
+            return;
+        if (isForced || _hasNoModels(modelEl)) {
+            _showModelMessage(modelEl, message, fallback);
+        }
+    }
     xhr.onload = function () {
         if (getSelectedProvider() !== provider)
             return;
-        if (xhr.status === 200) {
-            try {
-                let data = JSON.parse(xhr.responseText);
-                let models = data.models || [];
-                if (models.length > 0) {
-                    _provider_models[provider] = models;
-                    _setFetchedFlag(provider, true);
-                    _setCachedModels(provider, models);
-                    _setModelOptions(modelEl, models);
-                    return;
-                }
-                // API returned 0 models — show error if present
-                let error = data.error || 'No models returned';
-                console.warn('[coz] ' + provider + ' models fetch: ' + error);
-                if (isForced) {
-                    modelEl.innerHTML = '<option value="">Error: ' + error.substring(0, 60) + '</option>';
-                }
-            }
-            catch (e) {
-                console.warn('[coz] ' + provider + ' models parse error:', e);
-                if (isForced) {
-                    modelEl.innerHTML = '<option value="">Error parsing response</option>';
-                }
-            }
-        }
-        else {
-            console.warn('[coz] ' + provider + ' models HTTP ' + xhr.status);
-            if (isForced) {
-                modelEl.innerHTML = '<option value="">HTTP error ' + xhr.status + '</option>';
-            }
-        }
         _setFetchedFlag(provider, true);
-        // On non-forced, fallback was already shown; on forced error, add fallbacks below
-        if (isForced && fallback.length > 0) {
-            for (let i = 0; i < fallback.length; i++) {
-                _addModelOption(modelEl, fallback[i].value, fallback[i].label);
-            }
+        if (xhr.status !== 200) {
+            showError('Server error (HTTP ' + xhr.status + ')');
+            return;
         }
+        let data;
+        try {
+            data = JSON.parse(xhr.responseText);
+        }
+        catch (e) {
+            showError('Unreadable response from the coz server');
+            return;
+        }
+        let models = data.models || [];
+        if (models.length > 0) {
+            _provider_models[provider] = models;
+            _setCachedModels(provider, models);
+            _setModelOptions(modelEl, models);
+            return;
+        }
+        showError(data.error || 'No models available');
     };
     xhr.onerror = function () {
-        console.warn('[coz] ' + provider + ' models network error');
-        if (getSelectedProvider() === provider && isForced) {
-            modelEl.innerHTML = '<option value="">Network error</option>';
-            for (let i = 0; i < fallback.length; i++) {
-                _addModelOption(modelEl, fallback[i].value, fallback[i].label);
-            }
-        }
         _setFetchedFlag(provider, true);
+        showError("Can't reach the coz server");
     };
     xhr.send();
 }
