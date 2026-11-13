@@ -617,6 +617,280 @@ def _coz_plot_text(args):
     _output_json(args.json, profile_path, data, results, experiment_count,
                  runtime, samples, raw_experiments)
 
+######### AI model registry #########
+#
+# Every model ID coz knows about lives in viewer/models.json (shared with the
+# viewer); tests/test_models.py fails on model-ID literals anywhere else.
+# Providers retire IDs regularly, so:
+#   * known-dead IDs are mapped forward through the registry's 'retired' table;
+#   * when a provider rejects a model as unknown, the request is retried with a
+#     same-family replacement from the provider's live list (see
+#     _with_model_recovery); and
+#   * scripts/update_models.py checks the curated lists weekly and opens a PR.
+
+MODEL_PROVIDERS = ('anthropic', 'openai', 'bedrock', 'ollama')
+
+# Output budget per request. Current models can think before answering, and
+# thinking counts toward the limit. (Bedrock caps some Claude models at 64000.)
+_MAX_OUTPUT_TOKENS = 16000
+
+# Bound on the number of replacements tried after a model is rejected.
+_MAX_MODEL_REPLACEMENTS = 2
+
+class ModelNotFoundError(RuntimeError):
+  """The provider doesn't serve (or this account can't use) the model."""
+  def __init__(self, provider, model, detail):
+    super().__init__(f'Model "{model}" is not available from {provider}: {detail}')
+    self.provider = provider
+    self.model = model
+
+def _find_models_file():
+  here = dirname(realpath(__file__))
+  candidates = [
+    os.path.join(here, 'viewer', 'models.json'),
+    os.path.join(here, '..', 'share', 'coz', 'viewer', 'models.json'),
+  ]
+  viewer_dir = _find_viewer_directory()
+  if viewer_dir:
+    candidates.append(os.path.join(viewer_dir, 'models.json'))
+  for candidate in candidates:
+    if os.path.exists(candidate):
+      return abspath(candidate)
+  return None
+
+_model_registry_cache = None
+
+def _model_registry():
+  """The parsed viewer/models.json: {'providers': {...}, 'retired': {...}}."""
+  global _model_registry_cache
+  if _model_registry_cache is None:
+    import json as json_mod
+    path = _find_models_file()
+    if path is None:
+      raise RuntimeError('cannot find viewer/models.json (the AI model registry); '
+                         'is coz installed correctly?')
+    with open(path) as f:
+      _model_registry_cache = json_mod.load(f)
+  return _model_registry_cache
+
+def _default_model(provider):
+  return _model_registry()['providers'][provider]['default']
+
+def _curated_models(provider):
+  return [m['id'] for m in _model_registry()['providers'][provider]['models']]
+
+def _migrate_model(provider, model):
+  """Map a known-retired model ID to its replacement (following chains)."""
+  retired = _model_registry()['retired'].get(provider, {})
+  seen = set()
+  while model in retired and model not in seen:
+    seen.add(model)
+    model = retired[model]
+  return model
+
+def _model_family(model_id):
+  """The ID minus provider prefixes, versions, dates and 'latest', so that
+  claude-sonnet-4-5-20250929 and claude-sonnet-5-5 are both 'claude-sonnet'."""
+  import re
+  base = re.sub(r'^(?:[a-z]{2,6}\.)?anthropic\.', '', model_id)
+  base = re.sub(r'-v\d+(?::\d+)?$', '', base)
+  base = base.split(':')[0]  # Ollama tags (llama3.1:8b)
+  return '-'.join(p for p in base.split('-')
+                  if p and p != 'latest' and not p[0].isdigit())
+
+def _model_version_key(model_id):
+  import re
+  return [int(n) for n in re.findall(r'\d+', model_id)]
+
+def _compare_model_recency(a, b):
+  """Positive if a is newer than b ('latest' aliases outrank everything)."""
+  a_latest, b_latest = int('latest' in a), int('latest' in b)
+  if a_latest != b_latest:
+    return a_latest - b_latest
+  ka, kb = _model_version_key(a), _model_version_key(b)
+  for i in range(max(len(ka), len(kb))):
+    diff = (ka[i] if i < len(ka) else -1) - (kb[i] if i < len(kb) else -1)
+    if diff:
+      return diff
+  return 0
+
+def _rank_replacements(failed, available, default_model):
+  """What to try in place of a rejected model, best first: same-family models,
+  newest first, then the default (unless `available` shows it is gone)."""
+  import functools
+  family = _model_family(failed)
+  ranked = sorted((m for m in set(available) if m != failed and _model_family(m) == family),
+                  key=functools.cmp_to_key(lambda a, b: _compare_model_recency(b, a)))
+  default_exists = not available or default_model in available
+  if default_model != failed and default_exists and default_model not in ranked:
+    ranked.append(default_model)
+  return ranked
+
+# OpenAI lists many models that Chat Completions can't serve.
+_OPENAI_NON_CHAT = ('-pro', 'tts', 'transcribe', 'search', 'audio', 'realtime',
+                    'image', 'embedding', 'moderation', 'codex', 'instruct')
+
+def _is_openai_chat_model(model_id):
+  import re
+  return (re.match(r'(?:chatgpt-|gpt-|o\d)', model_id) is not None
+          and not any(s in model_id for s in _OPENAI_NON_CHAT))
+
+def _http_get_json(url, headers, timeout=10):
+  import json as json_mod
+  import urllib.request
+  req = urllib.request.Request(url, headers=dict(headers, Accept='application/json'))
+  with urllib.request.urlopen(req, timeout=timeout) as resp:
+    return json_mod.loads(resp.read())
+
+def _list_live_models(provider, api_key='', region='', host=''):
+  """Models the provider currently serves, as [{'value': id, 'label': name}].
+  Raises on failure. Listing models is free; no prompt is sent."""
+  if provider == 'anthropic':
+    key = api_key or os.environ.get('ANTHROPIC_API_KEY', '')
+    if not key:
+      raise RuntimeError('No API key')
+    models, after = [], ''
+    while True:
+      data = _http_get_json('https://api.anthropic.com/v1/models?limit=1000' + after,
+                            {'x-api-key': key, 'anthropic-version': '2023-06-01'})
+      models += [{'value': m['id'], 'label': m.get('display_name') or m['id']}
+                 for m in data.get('data', [])]
+      if not data.get('has_more'):
+        return models
+      import urllib.parse
+      after = '&after_id=' + urllib.parse.quote(data['last_id'])
+  if provider == 'openai':
+    key = api_key or os.environ.get('OPENAI_API_KEY', '')
+    if not key:
+      raise RuntimeError('No API key')
+    data = _http_get_json('https://api.openai.com/v1/models',
+                          {'Authorization': f'Bearer {key}'})
+    return [{'value': m['id'], 'label': m['id']} for m in data.get('data', [])
+            if _is_openai_chat_model(m.get('id', ''))]
+  if provider == 'bedrock':
+    return _list_bedrock_models(region or os.environ.get('AWS_REGION', '')
+                                or os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'))
+  if provider == 'ollama':
+    host = host or os.environ.get('OLLAMA_HOST') or 'http://localhost:11434'
+    data = _http_get_json(host.rstrip('/') + '/api/tags', {}, timeout=5)
+    return [{'value': m['name'], 'label': m['name'].replace(':latest', '')}
+            for m in data.get('models', []) if m.get('name')]
+  raise ValueError(f'Unknown provider: {provider}')
+
+def _list_bedrock_models(region):
+  import re
+  import boto3
+  # Let boto3 handle credentials via its default chain
+  client = boto3.client('bedrock', region_name=region)
+
+  # Build a map of model_id -> inference_profile_id from cross-region profiles.
+  # Prefer global. profiles, which route to any region at no premium.
+  profile_map = {}
+  try:
+    kwargs = {'typeEquals': 'SYSTEM_DEFINED', 'maxResults': 1000}
+    while True:
+      page = client.list_inference_profiles(**kwargs)
+      for p in page.get('inferenceProfileSummaries', []):
+        profile_id = p.get('inferenceProfileId', '')
+        for m in p.get('models', []):
+          mid = m.get('modelArn', '').split('/')[-1]
+          if mid and (mid not in profile_map or profile_id.startswith('global.')):
+            profile_map[mid] = profile_id
+      if not page.get('nextToken'):
+        break
+      kwargs['nextToken'] = page['nextToken']
+  except Exception:
+    pass  # Fallback: use raw model IDs
+
+  resp = client.list_foundation_models()
+  models = []
+  for m in resp.get('modelSummaries', []):
+    if 'TEXT' not in m.get('outputModalities', []):
+      continue
+    model_id = m.get('modelId', '')
+    # Skip context-size variants (e.g. model:0:18k), rerank/embedding models,
+    # and multimedia-only variants
+    if (re.search(r':\d+k$', model_id) or 'rerank' in model_id.lower()
+        or 'embed' in model_id.lower() or model_id.endswith(':mm')):
+      continue
+    label = (m.get('providerName', '') + ' ' + m.get('modelName', '')).strip()
+    # Use inference profile ID if available (required for newer models)
+    models.append({'value': profile_map.get(model_id, model_id), 'label': label})
+  # Sort: Anthropic first, then alphabetically by label
+  models.sort(key=lambda x: (0 if 'anthropic' in x['value'] else 1, x['label']))
+  return models
+
+def _replacement_candidates(provider, failed, **list_kwargs):
+  """Ranked replacements for a model the provider rejected."""
+  default = _default_model(provider)
+  curated = _curated_models(provider)
+  if provider == 'bedrock':
+    # Bedrock lists models as ACTIVE that a given account is refused, so rank
+    # from the curated list rather than the live one.
+    available = curated
+  else:
+    try:
+      live = [m['value'] for m in _list_live_models(provider, **list_kwargs)]
+    except Exception:
+      live = []
+    # Prefer undated aliases (claude-sonnet-5-5) over dated snapshots.
+    import re
+    available = [m for m in live if not re.search(r'\d{8}|\d{4}-\d{2}-\d{2}', m)] or live
+  return _rank_replacements(failed, available, default)
+
+def _with_model_recovery(provider, model, attempt, on_switch=None, **list_kwargs):
+  """Run attempt(model); if the provider rejects the model as unknown, retry
+  with up to _MAX_MODEL_REPLACEMENTS same-family replacements. on_switch(old,
+  new) is called once a replacement has succeeded. Returns attempt's result."""
+  try:
+    return attempt(model)
+  except ModelNotFoundError as e:
+    first_error = e
+  for replacement in _replacement_candidates(provider, model, **list_kwargs)[:_MAX_MODEL_REPLACEMENTS]:
+    try:
+      result = attempt(replacement)
+    except ModelNotFoundError:
+      continue
+    if on_switch:
+      on_switch(model, replacement)
+    return result
+  raise first_error
+
+def _anthropic_error(model, code, body):
+  """Turn an Anthropic HTTP error into the exception to raise."""
+  import json as json_mod
+  try:
+    err = json_mod.loads(body).get('error', {})
+  except ValueError:
+    err = {}
+  if code == 404 and err.get('type') == 'not_found_error':
+    return ModelNotFoundError('anthropic', model, err.get('message', 'not found'))
+  return RuntimeError(f'Anthropic API {code}: {body[:400]}')
+
+def _openai_error(model, code, body):
+  import json as json_mod
+  try:
+    err = json_mod.loads(body).get('error', {})
+  except ValueError:
+    err = {}
+  message = err.get('message', '') or ''
+  if err.get('code') == 'model_not_found' or (code == 404 and 'model' in message.lower()):
+    return ModelNotFoundError('openai', model, message or 'not found')
+  return RuntimeError(f'OpenAI API {code}: {body[:400]}')
+
+def _bedrock_error(model, error):
+  """Turn a botocore ClientError into the exception to raise."""
+  code = error.response.get('Error', {}).get('Code', '')
+  message = error.response.get('Error', {}).get('Message', '') or str(error)
+  lower = message.lower()
+  if (code == 'ResourceNotFoundException'
+      or (code == 'AccessDeniedException' and 'not available' in lower)
+      or (code == 'ValidationException'
+          and ('model identifier is invalid' in lower or 'end of its life' in lower
+               or 'legacy' in lower))):
+    return ModelNotFoundError('bedrock', model, message)
+  return RuntimeError(f'Bedrock API: {message}')
+
 def _find_viewer_directory():
   """Find the viewer directory relative to this script's location."""
   coz_prefix = dirname(realpath(sys.argv[0]))
@@ -752,184 +1026,43 @@ def _coz_plot(args):
         self.wfile.write(content)
         return
 
-      # Serve available Ollama models
-      if self.path.startswith('/ollama-models'):
-        import json as json_mod
-        import urllib.request
-        from urllib.parse import urlparse, parse_qs
-        parsed = urlparse(self.path)
-        params = parse_qs(parsed.query)
-        host = params.get('host', [llm_config['ollama_host']])[0]
-        url = host.rstrip('/') + '/api/tags'
-        try:
-          req = urllib.request.Request(url, headers={'Accept': 'application/json'})
-          with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json_mod.loads(resp.read())
-          models = []
-          for m in data.get('models', []):
-            name = m.get('name', '')
-            if name:
-              # Strip :latest suffix for cleaner display
-              label = name.replace(':latest', '')
-              models.append({'value': name, 'label': label})
-          result = json_mod.dumps({'models': models})
-        except Exception as e:
-          result = json_mod.dumps({'models': [], 'error': str(e)})
-        content = result.encode('utf-8')
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', len(content))
-        self.end_headers()
-        self.wfile.write(content)
-        return
-
-      # Serve available Anthropic models
-      if self.path.startswith('/anthropic-models'):
-        import json as json_mod
-        import urllib.request
-        from urllib.parse import urlparse, parse_qs
-        parsed = urlparse(self.path)
-        params = parse_qs(parsed.query)
-        api_key = params.get('api_key', [''])[0] or os.environ.get('ANTHROPIC_API_KEY', '')
-        if not api_key:
-          result = json_mod.dumps({'models': [], 'error': 'No API key'})
-        else:
+      # Serve the models a provider currently offers:
+      # /anthropic-models, /openai-models, /bedrock-models, /ollama-models
+      for provider in MODEL_PROVIDERS:
+        if self.path.startswith(f'/{provider}-models'):
+          import json as json_mod
+          import re
+          from urllib.parse import urlparse, parse_qs
+          params = parse_qs(urlparse(self.path).query)
           try:
-            req = urllib.request.Request(
-              'https://api.anthropic.com/v1/models?limit=100',
-              headers={
-                'x-api-key': api_key,
-                'anthropic-version': '2023-06-01',
-                'Accept': 'application/json'
-              }
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-              data = json_mod.loads(resp.read())
-            models = []
-            for m in data.get('data', []):
-              model_id = m.get('id', '')
-              display = m.get('display_name', model_id)
-              models.append({'value': model_id, 'label': display})
+            models = _list_live_models(
+              provider,
+              api_key=params.get('api_key', [''])[0],
+              region=params.get('region', [''])[0],
+              host=params.get('host', [llm_config['ollama_host']])[0])
+            if provider == 'openai':
+              # Curated models first (in registry order), then any newer
+              # chat models OpenAI lists that the registry doesn't know yet.
+              live = {m['value'] for m in models}
+              labels = {m['id']: m['label'] for m in _model_registry()['providers']['openai']['models']}
+              curated = [{'value': m, 'label': labels[m]} for m in labels if m in live]
+              newest = max(labels, key=_model_version_key)
+              extra = sorted((m['value'] for m in models
+                              if m['value'] not in labels
+                              and not re.search(r'\d{4}-\d{2}-\d{2}', m['value'])
+                              and _compare_model_recency(m['value'], newest) > 0),
+                             key=_model_version_key, reverse=True)
+              models = curated + [{'value': m, 'label': m} for m in extra]
             result = json_mod.dumps({'models': models})
           except Exception as e:
             result = json_mod.dumps({'models': [], 'error': str(e)})
-        content = result.encode('utf-8')
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', len(content))
-        self.end_headers()
-        self.wfile.write(content)
-        return
-
-      # Serve available OpenAI models
-      if self.path.startswith('/openai-models'):
-        import json as json_mod
-        import urllib.request
-        from urllib.parse import urlparse, parse_qs
-        parsed = urlparse(self.path)
-        params = parse_qs(parsed.query)
-        api_key = params.get('api_key', [''])[0] or os.environ.get('OPENAI_API_KEY', '')
-        if not api_key:
-          result = json_mod.dumps({'models': [], 'error': 'No API key'})
-        else:
-          try:
-            req = urllib.request.Request(
-              'https://api.openai.com/v1/models',
-              headers={
-                'Authorization': f'Bearer {api_key}',
-                'Accept': 'application/json'
-              }
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-              data = json_mod.loads(resp.read())
-            # Curated set of models known to work with chat completions
-            known_good = {
-              'gpt-4o', 'gpt-4o-mini',
-              'gpt-4-turbo', 'gpt-4-turbo-preview',
-              'gpt-4', 'gpt-4-0613',
-              'gpt-3.5-turbo', 'gpt-3.5-turbo-0125',
-              'o1', 'o1-mini', 'o1-preview',
-              'o3', 'o3-mini', 'o3-pro',
-              'o4-mini',
-              'chatgpt-4o-latest',
-            }
-            available_ids = {m.get('id', '') for m in data.get('data', [])}
-            models = []
-            for model_id in sorted(known_good):
-              if model_id in available_ids:
-                models.append({'value': model_id, 'label': model_id})
-            result = json_mod.dumps({'models': models})
-          except Exception as e:
-            result = json_mod.dumps({'models': [], 'error': str(e)})
-        content = result.encode('utf-8')
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', len(content))
-        self.end_headers()
-        self.wfile.write(content)
-        return
-
-      # Serve available Bedrock models
-      if self.path.startswith('/bedrock-models'):
-        import json as json_mod
-        from urllib.parse import urlparse, parse_qs
-        parsed = urlparse(self.path)
-        params = parse_qs(parsed.query)
-        region = (params.get('region', [''])[0]
-                  or os.environ.get('AWS_REGION', '')
-                  or os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'))
-        try:
-          import boto3
-          import re as _re
-          # Let boto3 handle credentials via its default chain
-          client = boto3.client('bedrock', region_name=region)
-
-          # Build a map of model_id -> inference_profile_id from cross-region profiles
-          profile_map = {}
-          try:
-            profiles_resp = client.list_inference_profiles(typeEquals='SYSTEM_DEFINED')
-            for p in profiles_resp.get('inferenceProfileSummaries', []):
-              profile_id = p.get('inferenceProfileId', '')
-              for m in p.get('models', []):
-                mid = m.get('modelArn', '').split('/')[-1] if 'modelArn' in m else ''
-                if mid:
-                  profile_map[mid] = profile_id
-          except Exception:
-            pass  # Fallback: use raw model IDs
-
-          resp = client.list_foundation_models()
-          models = []
-          for m in resp.get('modelSummaries', []):
-            if 'TEXT' not in m.get('outputModalities', []):
-              continue
-            model_id = m.get('modelId', '')
-            # Skip context-size variants (e.g. model:0:18k, model:0:200k)
-            if _re.search(r':\d+k$', model_id):
-              continue
-            # Skip rerank / embedding models
-            if 'rerank' in model_id.lower() or 'embed' in model_id.lower():
-              continue
-            # Skip multimedia-only variants
-            if model_id.endswith(':mm'):
-              continue
-            provider_name = m.get('providerName', '')
-            model_name = m.get('modelName', '')
-            label = (provider_name + ' ' + model_name).strip()
-            # Use inference profile ID if available (required for newer models)
-            value = profile_map.get(model_id, model_id)
-            models.append({'value': value, 'label': label})
-          # Sort: Anthropic first, then alphabetically by label
-          models.sort(key=lambda x: (0 if 'anthropic' in x['value'] else 1, x['label']))
-          result = json_mod.dumps({'models': models})
-        except Exception as e:
-          result = json_mod.dumps({'models': [], 'error': str(e)})
-        content = result.encode('utf-8')
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', len(content))
-        self.end_headers()
-        self.wfile.write(content)
-        return
+          content = result.encode('utf-8')
+          self.send_response(200)
+          self.send_header('Content-Type', 'application/json')
+          self.send_header('Content-Length', len(content))
+          self.end_headers()
+          self.wfile.write(content)
+          return
 
       # Serve LLM configuration
       if self.path == '/llm-config':
@@ -1095,18 +1228,21 @@ Based on the causal profiling data, suggest specific optimizations for the targe
           self.wfile.flush()
 
         try:
+          if provider not in MODEL_PROVIDERS:
+            raise ValueError(f'Unknown provider: {provider}')
+          list_kwargs = {}
           if provider == 'anthropic':
             key = api_key or os.environ.get('ANTHROPIC_API_KEY', '')
             if not key:
               raise ValueError('No Anthropic API key provided. Set ANTHROPIC_API_KEY env var or enter key in sidebar.')
-            for chunk in _stream_anthropic(key, model or 'claude-opus-4-20250514', system_prompt, user_prompt):
-              send_chunk({'chunk': chunk})
+            stream = lambda m: _stream_anthropic(key, m, system_prompt, user_prompt)
+            list_kwargs['api_key'] = key
           elif provider == 'openai':
             key = api_key or os.environ.get('OPENAI_API_KEY', '')
             if not key:
               raise ValueError('No OpenAI API key provided. Set OPENAI_API_KEY env var or enter key in sidebar.')
-            for chunk in _stream_openai(key, model or 'gpt-4o', system_prompt, user_prompt):
-              send_chunk({'chunk': chunk})
+            stream = lambda m: _stream_openai(key, m, system_prompt, user_prompt)
+            list_kwargs['api_key'] = key
           elif provider == 'bedrock':
             region = req.get('bedrock_region', '') or os.environ.get('AWS_REGION', '') or os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
             aws_creds = {
@@ -1114,13 +1250,38 @@ Based on the causal profiling data, suggest specific optimizations for the targe
               'aws_secret_access_key': req.get('aws_secret_key', '') or None,
               'aws_session_token': req.get('aws_session_token', '') or None,
             }
-            for chunk in _stream_bedrock(region, model or 'anthropic.claude-opus-4-20250514-v1:0', system_prompt, user_prompt, aws_creds):
-              send_chunk({'chunk': chunk})
-          elif provider == 'ollama':
-            for chunk in _stream_ollama(ollama_host, model or 'llama3', system_prompt, user_prompt):
-              send_chunk({'chunk': chunk})
+            stream = lambda m: _stream_bedrock(region, m, system_prompt, user_prompt, aws_creds)
           else:
-            raise ValueError(f'Unknown provider: {provider}')
+            stream = lambda m: _stream_ollama(ollama_host, m, system_prompt, user_prompt)
+
+          requested = model or _default_model(provider)
+          model = _migrate_model(provider, requested)
+
+          def open_stream(m):
+            # Model errors surface when the request is sent, i.e. on the
+            # first chunk, before anything has reached the client.
+            chunks = stream(m)
+            return next(chunks, ''), chunks
+
+          switched = []
+          def on_switch(old, new):
+            switched.append(new)
+            sys.stderr.write(f'[coz-server] {provider} model "{old}" is not available; using "{new}"\n')
+
+          if provider == 'ollama':
+            # Local models; picking a different one silently would surprise.
+            first, chunks = open_stream(model)
+          else:
+            first, chunks = _with_model_recovery(provider, model, open_stream,
+                                                 on_switch=on_switch, **list_kwargs)
+          used = switched[-1] if switched else model
+          if used != requested:
+            # Tell the viewer, so it selects and saves the working model.
+            send_chunk({'model_switched': {'from': requested, 'to': used}})
+          if first:
+            send_chunk({'chunk': first})
+          for chunk in chunks:
+            send_chunk({'chunk': chunk})
 
           send_chunk({'done': True})
         except BrokenPipeError:
@@ -1144,10 +1305,10 @@ Based on the causal profiling data, suggest specific optimizations for the targe
   def _stream_anthropic(key, model, system, user):
     """Stream text chunks from Anthropic API."""
     import json as json_mod
-    import urllib.request
+    import urllib.request, urllib.error
     req_body = json_mod.dumps({
       'model': model,
-      'max_tokens': 4096,
+      'max_tokens': _MAX_OUTPUT_TOKENS,
       'stream': True,
       'system': system,
       'messages': [{'role': 'user', 'content': user}]
@@ -1161,7 +1322,11 @@ Based on the causal profiling data, suggest specific optimizations for the targe
         'anthropic-version': '2023-06-01'
       }
     )
-    with urllib.request.urlopen(req, timeout=180) as resp:
+    try:
+      resp = urllib.request.urlopen(req, timeout=180)
+    except urllib.error.HTTPError as e:
+      raise _anthropic_error(model, e.code, e.read().decode('utf-8', errors='replace'))
+    with resp:
       for raw_line in resp:
         line = raw_line.decode('utf-8').strip()
         if line.startswith('data: '):
@@ -1180,10 +1345,11 @@ Based on the causal profiling data, suggest specific optimizations for the targe
   def _stream_openai(key, model, system, user):
     """Stream text chunks from OpenAI API."""
     import json as json_mod
-    import urllib.request
+    import urllib.request, urllib.error
     req_body = json_mod.dumps({
       'model': model,
-      'max_tokens': 4096,
+      # GPT-5 and o-series models reject max_tokens; reasoning counts toward this.
+      'max_completion_tokens': _MAX_OUTPUT_TOKENS,
       'stream': True,
       'messages': [
         {'role': 'system', 'content': system},
@@ -1198,7 +1364,11 @@ Based on the causal profiling data, suggest specific optimizations for the targe
         'Authorization': f'Bearer {key}'
       }
     )
-    with urllib.request.urlopen(req, timeout=180) as resp:
+    try:
+      resp = urllib.request.urlopen(req, timeout=180)
+    except urllib.error.HTTPError as e:
+      raise _openai_error(model, e.code, e.read().decode('utf-8', errors='replace'))
+    with resp:
       for raw_line in resp:
         line = raw_line.decode('utf-8').strip()
         if line.startswith('data: '):
@@ -1267,7 +1437,7 @@ Based on the causal profiling data, suggest specific optimizations for the targe
         modelId=model_id,
         system=[{'text': system}],
         messages=[{'role': 'user', 'content': [{'text': user}]}],
-        inferenceConfig={'maxTokens': 4096}
+        inferenceConfig={'maxTokens': _MAX_OUTPUT_TOKENS}
       )
       for event in resp['stream']:
         if 'contentBlockDelta' in event:
@@ -1283,10 +1453,13 @@ Based on the causal profiling data, suggest specific optimizations for the targe
       if 'inference profile' in str(e).lower() and '.' not in model.split('.')[0]:
         # Derive region prefix: us-west-2 -> us, eu-west-1 -> eu, ap-northeast-1 -> ap
         prefix = region.split('-')[0] if region else 'us'
-        for chunk in _do_stream(prefix + '.' + model):
-          yield chunk
+        try:
+          for chunk in _do_stream(prefix + '.' + model):
+            yield chunk
+        except ClientError as e2:
+          raise _bedrock_error(model, e2)
       else:
-        raise
+        raise _bedrock_error(model, e)
 
   class ThreadedHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
@@ -1613,13 +1786,13 @@ def _suggest_short(v):
     s = s[:57] + '...'
   return repr(s) if ' ' in s else s
 
-def _anthropic_tool_request(key, model, system, messages, tools, max_tokens=4096):
+def _anthropic_tool_request(key, model, system, messages, tools, max_tokens=None):
   """One non-streaming Anthropic messages API request with tools."""
   import json as json_mod
   import urllib.request, urllib.error
   body = json_mod.dumps({
     'model': model,
-    'max_tokens': max_tokens,
+    'max_tokens': max_tokens or _MAX_OUTPUT_TOKENS,
     'system': system,
     'messages': messages,
     'tools': tools,
@@ -1638,7 +1811,7 @@ def _anthropic_tool_request(key, model, system, messages, tools, max_tokens=4096
       return json_mod.loads(resp.read().decode('utf-8'))
   except urllib.error.HTTPError as e:
     body = e.read().decode('utf-8', errors='replace')
-    raise RuntimeError(f'Anthropic API {e.code}: {body[:400]}')
+    raise _anthropic_error(model, e.code, body)
 
 def _suggest_run_anthropic_agent(key, model, system_prompt, user_prompt, tools, handle_tool, verbose):
   """Drive a multi-turn tool-use loop until the model stops calling tools."""
@@ -1682,13 +1855,14 @@ def _openai_tool_schema(tools):
     for t in tools
   ]
 
-def _openai_tool_request(key, model, system, messages, tools, max_tokens=4096):
+def _openai_tool_request(key, model, system, messages, tools, max_tokens=None):
   """One non-streaming OpenAI chat completions request with tool calls."""
   import json as json_mod
   import urllib.request, urllib.error
   body = json_mod.dumps({
     'model': model,
-    'max_tokens': max_tokens,
+    # GPT-5 and o-series models reject max_tokens; reasoning counts toward this.
+    'max_completion_tokens': max_tokens or _MAX_OUTPUT_TOKENS,
     'messages': [{'role': 'system', 'content': system}] + messages,
     'tools': _openai_tool_schema(tools),
     'tool_choice': 'auto',
@@ -1706,7 +1880,7 @@ def _openai_tool_request(key, model, system, messages, tools, max_tokens=4096):
       return json_mod.loads(resp.read().decode('utf-8'))
   except urllib.error.HTTPError as e:
     body = e.read().decode('utf-8', errors='replace')
-    raise RuntimeError(f'OpenAI API {e.code}: {body[:400]}')
+    raise _openai_error(model, e.code, body)
 
 def _suggest_run_openai_agent(key, model, system_prompt, user_prompt, tools, handle_tool, verbose):
   """Drive an OpenAI tool-calling loop. Chat completions with tools=[...]."""
@@ -1787,7 +1961,7 @@ def _suggest_run_bedrock_agent(region, model, aws_creds, system_prompt, user_pro
       system=[{'text': system_prompt}],
       messages=messages,
       toolConfig=tool_config,
-      inferenceConfig={'maxTokens': 4096},
+      inferenceConfig={'maxTokens': _MAX_OUTPUT_TOKENS},
     )
 
   current_model = model
@@ -1807,10 +1981,12 @@ def _suggest_run_bedrock_agent(region, model, aws_creds, system_prompt, user_pro
         inference_profile_tried = True
         try:
           resp = _converse(current_model)
-        except (ClientError, BotoCoreError) as e2:
+        except ClientError as e2:
+          raise _bedrock_error(current_model, e2)
+        except BotoCoreError as e2:
           raise RuntimeError(f'Bedrock API: {e2}')
       else:
-        raise RuntimeError(f'Bedrock API: {e}')
+        raise _bedrock_error(current_model, e)
     except BotoCoreError as e:
       raise RuntimeError(f'Bedrock: {e}')
     out_msg = resp.get('output', {}).get('message', {}) or {}
@@ -2182,13 +2358,6 @@ def _suggest_user_prompt(roots, files, hint, kind, max_points):
   parts.append('Start by calling list_files with directory=".", then explore. Place points where a unit of work completes.')
   return '\n'.join(parts)
 
-_SUGGEST_DEFAULT_MODELS = {
-  'anthropic': 'claude-opus-4-7',
-  'openai': 'gpt-4o',
-  'bedrock': 'anthropic.claude-opus-4-20250514-v1:0',
-  'ollama': 'llama3.1',
-}
-
 def _coz_suggest_points(args):
   if not args.path:
     sys.stderr.write('error: specify at least one source path\n')
@@ -2196,7 +2365,15 @@ def _coz_suggest_points(args):
     sys.exit(1)
 
   provider = args.provider
-  model = args.model or _SUGGEST_DEFAULT_MODELS.get(provider)
+  try:
+    model = args.model or _default_model(provider)
+  except RuntimeError as e:
+    sys.stderr.write(f'error: {e}\n')
+    sys.exit(1)
+  migrated = _migrate_model(provider, model)
+  if migrated != model:
+    sys.stderr.write(f'note: model "{model}" has been retired; using "{migrated}"\n')
+    model = migrated
 
   # Per-provider credential / endpoint resolution.
   if provider == 'anthropic':
@@ -2240,22 +2417,41 @@ def _coz_suggest_points(args):
   handle_tool = _suggest_tool_handler(proposals, files, kind, max_points, args.verbose)
   user_prompt = _suggest_user_prompt(args.path, files, args.hint, kind, max_points)
 
-  try:
+  def run_agent(m):
     if provider == 'anthropic':
-      _suggest_run_anthropic_agent(key, model, _SUGGEST_SYSTEM_PROMPT, user_prompt,
+      _suggest_run_anthropic_agent(key, m, _SUGGEST_SYSTEM_PROMPT, user_prompt,
                                    _SUGGEST_TOOLS, handle_tool, args.verbose)
     elif provider == 'openai':
-      _suggest_run_openai_agent(key, model, _SUGGEST_SYSTEM_PROMPT, user_prompt,
+      _suggest_run_openai_agent(key, m, _SUGGEST_SYSTEM_PROMPT, user_prompt,
                                 _SUGGEST_TOOLS, handle_tool, args.verbose)
     elif provider == 'bedrock':
-      _suggest_run_bedrock_agent(region, model, aws_creds, _SUGGEST_SYSTEM_PROMPT, user_prompt,
+      _suggest_run_bedrock_agent(region, m, aws_creds, _SUGGEST_SYSTEM_PROMPT, user_prompt,
                                  _SUGGEST_TOOLS, handle_tool, args.verbose)
     elif provider == 'ollama':
-      _suggest_run_ollama_agent(host, model, _SUGGEST_SYSTEM_PROMPT, user_prompt,
+      _suggest_run_ollama_agent(host, m, _SUGGEST_SYSTEM_PROMPT, user_prompt,
                                 _SUGGEST_TOOLS, handle_tool, args.verbose)
+
+  list_kwargs = {'api_key': key} if provider in ('anthropic', 'openai') else {}
+  try:
+    if args.model or provider == 'ollama':
+      # Never swap out a model the user named (or a local one) on their behalf.
+      run_agent(model)
+    else:
+      _with_model_recovery(
+        provider, model, run_agent,
+        on_switch=lambda old, new: sys.stderr.write(
+          f'note: model "{old}" is not available; used "{new}" instead\n'),
+        **list_kwargs)
   except KeyboardInterrupt:
     sys.stderr.write('\ninterrupted\n')
     sys.exit(130)
+  except ModelNotFoundError as e:
+    sys.stderr.write(f'error: {e}\n')
+    if provider != 'ollama':
+      alternatives = _replacement_candidates(provider, model, **list_kwargs)[:3]
+      if alternatives:
+        sys.stderr.write('Try --model with one of: ' + ', '.join(alternatives) + '\n')
+    sys.exit(1)
   except RuntimeError as e:
     sys.stderr.write(f'error: {e}\n')
     sys.exit(1)

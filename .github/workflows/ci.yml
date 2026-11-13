@@ -256,6 +256,14 @@ jobs:
           build/lock_test_profile.jsonl
         retention-days: 7
 
+  model-registry:
+    # AI model IDs live only in viewer/models.json; see tests/test_models.py.
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Test the model registry and scripts/update_models.py
+      run: python3 -m unittest discover -s tests -p 'test_models.py' -v
+
   build-macos:
     runs-on: macos-latest
 
